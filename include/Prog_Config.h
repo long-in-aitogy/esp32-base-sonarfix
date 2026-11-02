@@ -28,7 +28,7 @@ inline constexpr int MUTEX_TIMEOUT_MS = 1500; // Thời gian tối đa để ch�
 // ================= CẤU HÌNH KẾT NỐI =================
 
 inline constexpr char WIFI_SSID[] = "AITOGY-VP";
-inline constexpr char WIFI_PASSWORD[] = "123456789";
+inline constexpr char WIFI_PASSWORD[] = "";
 
 
 inline constexpr uint8_t TX_TO_MODEM_RX = 17;
