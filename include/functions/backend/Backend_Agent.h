@@ -182,6 +182,10 @@ private:
                                 uint32_t nowMs) const;
     void appendSystemInfo(JsonDocument &doc, uint32_t nowMs,
                           const String &timestamp) const;
+    void appendStartupInfo(JsonObject system) const;
+    JsonObject appendSurveyInfo(JsonObject system, uint32_t nowMs) const;
+    void appendReceiverReadback(JsonObject system, JsonObject survey) const;
+    void appendResourceInfo(JsonObject system, const String &timestamp) const;
     void appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapshot &gnss,
                           uint32_t nowMs) const;
     void appendNtripStatus(JsonDocument &doc, const JsonObjectConst &service,

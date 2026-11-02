@@ -95,6 +95,18 @@ void BackendAgent::appendAutoBaseProgress(JsonDocument &doc,
 void BackendAgent::appendSystemInfo(JsonDocument &doc, uint32_t nowMs,
                                     const String &timestamp) const {
     JsonObject system = doc.createNestedObject("system_info");
+    appendStartupInfo(system);
+    JsonObject survey = appendSurveyInfo(system, nowMs);
+    appendReceiverReadback(system, survey);
+    appendResourceInfo(system, timestamp);
+    JsonObject deviceLock = system.createNestedObject("device_lock");
+    deviceLock["scoped"] = true;
+    deviceLock["all"] = stationLock_.all;
+    JsonArray lockedServers = deviceLock.createNestedArray("locked_servers");
+    for (uint8_t id = 1; id <= 2; ++id) if (isServerLocked(id)) lockedServers.add(id);
+}
+
+void BackendAgent::appendStartupInfo(JsonObject system) const {
     JsonObject startup = system.createNestedObject("base_startup");
     startup["state"] = baseStartupState_;
     if (!baseStartupError_.isEmpty()) startup["error"] = baseStartupError_;
@@ -103,6 +115,9 @@ void BackendAgent::appendSystemInfo(JsonDocument &doc, uint32_t nowMs,
         if (deserializeJson(savedSurvey, surveyInResult_) == DeserializationError::Ok)
             system["survey_in_result"].set(savedSurvey.as<JsonObjectConst>());
     }
+}
+
+JsonObject BackendAgent::appendSurveyInfo(JsonObject system, uint32_t nowMs) const {
     JsonObject survey = system.createNestedObject("survey_in_status");
     const bool readbackFresh = receiverBaseReadbackMs_ > 0
         && nowMs - receiverBaseReadbackMs_ <= 45000UL && surveyInReadbackHasPosition_;
@@ -120,6 +135,10 @@ void BackendAgent::appendSystemInfo(JsonDocument &doc, uint32_t nowMs,
         survey["readback_age_seconds"] = receiverBaseReadbackMs_ > 0
             ? static_cast<uint32_t>(nowMs - receiverBaseReadbackMs_) / 1000UL : UINT32_MAX;
     }
+    return survey;
+}
+
+void BackendAgent::appendReceiverReadback(JsonObject system, JsonObject survey) const {
     if (receiverBaseReadback_.length() > 2) {
         DynamicJsonDocument readbackDoc(1024);
         if (deserializeJson(readbackDoc, receiverBaseReadback_) == DeserializationError::Ok
@@ -136,6 +155,9 @@ void BackendAgent::appendSystemInfo(JsonDocument &doc, uint32_t nowMs,
                 ? static_cast<uint32_t>(millis() - receiverBaseReadbackMs_) / 1000UL : 0;
         }
     }
+}
+
+void BackendAgent::appendResourceInfo(JsonObject system, const String &timestamp) const {
     JsonObject cpu = system.createNestedObject("cpu");
     cpu["usage_percent"] = 0.0;
     cpu["frequency_mhz"] = ESP.getCpuFreqMHz();
@@ -169,11 +191,6 @@ void BackendAgent::appendSystemInfo(JsonDocument &doc, uint32_t nowMs,
     system["uptime_seconds"] = millis() / 1000UL;
     system["timestamp"] = timestamp.toInt();
     system["auth_license_bypass"] = false;
-    JsonObject deviceLock = system.createNestedObject("device_lock");
-    deviceLock["scoped"] = true;
-    deviceLock["all"] = stationLock_.all;
-    JsonArray lockedServers = deviceLock.createNestedArray("locked_servers");
-    for (uint8_t id = 1; id <= 2; ++id) if (isServerLocked(id)) lockedServers.add(id);
 }
 
 void BackendAgent::appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapshot &gnss,
