@@ -376,8 +376,8 @@ GnssTelemetrySnapshot getGnssTelemetrySnapshot() {
     copy = telemetry;
     portEXIT_CRITICAL(&telemetryMux);
     if (copy.lastGgaMs == 0 || millis() - copy.lastGgaMs > 15000UL) {
-        strncpy(copy.fixStatus, "NO_FIX", sizeof(copy.fixStatus) - 1);
-        copy.fixStatus[sizeof(copy.fixStatus) - 1] = '\0';
+        strncpy(copy.fixStatus, "NO_FIX", 6);
+        copy.fixStatus[6] = '\0';
     }
     return copy;
 }
