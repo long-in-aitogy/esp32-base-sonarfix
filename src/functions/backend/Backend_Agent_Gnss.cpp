@@ -28,12 +28,22 @@ bool BackendAgent::refreshUbloxReadback(String &error) {
     doc["chip"] = "Ublox";
     doc["revision"] = ++receiverBaseReadbackRevision_;
     doc["query"] = "CFG-TMODE3 / NAV-SVIN";
-    const char *kind = status.mode == 1 ? "survey_in" : status.mode == 2 ? "base" : "rover";
-    const String mode = status.mode == 1 ? "Survey-In (NAV-SVIN)"
-                                         : status.mode == 2 ? "Fixed LLA (CFG-TMODE3)"
-                                                            : "Rover (CFG-TMODE3)";
+
+    const char *kind = "rover";
+    if (status.mode == 1)
+        kind = "survey_in";
+    else if (status.mode == 2)
+        kind = "base";
+
+    const char *mode = "Rover (CFG-TMODE3)";
+    if (status.mode == 1)
+        mode = "Survey-In (NAV-SVIN)";
+    else if (status.mode == 2)
+        mode = "Fixed LLA (CFG-TMODE3)";
+
     doc["mode_kind"] = success ? kind : "unknown";
     doc["mode_raw"] = mode;
+    
     surveyInReadbackHasPosition_ = success && status.hasPosition;
     surveyInReadbackReady_ = success && status.valid && !status.active && status.hasPosition;
     if (!success) {
