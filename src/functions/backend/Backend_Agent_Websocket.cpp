@@ -202,50 +202,50 @@ void BackendAgentWebsocket::connectNow() {
     }
 }
 
+bool BackendAgentWebsocket::readFrame(uint8_t &opcode, String &payload) {
+    const uint8_t first = rx_[0];
+    const uint8_t second = rx_[1];
+    const bool masked = (second & 0x80) != 0;
+    uint64_t payloadLength = second & 0x7F;
+    size_t headerLength = 2;
+
+    if (payloadLength == 126) {
+        if (rx_.size() < 4) return false;
+        payloadLength = (static_cast<uint64_t>(rx_[2]) << 8) | rx_[3];
+        headerLength = 4;
+    } else if (payloadLength == 127) {
+        if (rx_.size() < 10) return false;
+        payloadLength = 0;
+        for (uint8_t i = 0; i < 8; ++i)
+            payloadLength = (payloadLength << 8) | rx_[2 + i];
+        headerLength = 10;
+    }
+
+    if (payloadLength > 32768) {
+        disconnect(false);
+        return false;
+    }
+    if (masked) headerLength += 4;
+    if (rx_.size() < headerLength + payloadLength) return false;
+
+    uint8_t mask[4] = {};
+    if (masked) memcpy(mask, rx_.data() + headerLength - 4, sizeof(mask));
+    opcode = first & 0x0F;
+    payload.reserve(static_cast<size_t>(payloadLength));
+    for (size_t i = 0; i < payloadLength; ++i) {
+        uint8_t byte = rx_[headerLength + i];
+        if (masked) byte ^= mask[i & 3];
+        payload += static_cast<char>(byte);
+    }
+    rx_.erase(rx_.begin(), rx_.begin() + headerLength + payloadLength);
+    return true;
+}
+
 void BackendAgentWebsocket::parseFrames() {
     while (rx_.size() >= 2 && connected_) {
-        const uint8_t first = rx_[0];
-        const uint8_t second = rx_[1];
-        const bool masked = (second & 0x80) != 0;
-        uint64_t payloadLength = second & 0x7F;
-        size_t headerLength = 2;
-
-        if (payloadLength == 126) {
-            if (rx_.size() < 4) return;
-            payloadLength = (static_cast<uint64_t>(rx_[2]) << 8) | rx_[3];
-            headerLength = 4;
-        } else if (payloadLength == 127) {
-            if (rx_.size() < 10) return;
-            payloadLength = 0;
-            for (uint8_t i = 0; i < 8; ++i) {
-                payloadLength = (payloadLength << 8) | rx_[2 + i];
-            }
-            headerLength = 10;
-        }
-
-        if (payloadLength > 32768) {
-            disconnect(false);
-            return;
-        }
-        if (masked) headerLength += 4;
-        if (rx_.size() < headerLength + payloadLength) return;
-
-        uint8_t mask[4] = {};
-        if (masked) {
-            const size_t maskOffset = headerLength - 4;
-            memcpy(mask, rx_.data() + maskOffset, sizeof(mask));
-        }
-        const uint8_t opcode = first & 0x0F;
+        uint8_t opcode = 0;
         String payload;
-        payload.reserve(static_cast<size_t>(payloadLength));
-        const size_t payloadOffset = headerLength;
-        for (size_t i = 0; i < payloadLength; ++i) {
-            uint8_t byte = rx_[payloadOffset + i];
-            if (masked) byte ^= mask[i & 3];
-            payload += static_cast<char>(byte);
-        }
-        rx_.erase(rx_.begin(), rx_.begin() + payloadOffset + payloadLength);
-
+        if (!readFrame(opcode, payload)) return;
         if (opcode == 0x8) {
             sendControl(0x8, nullptr, 0);
             disconnect(false);

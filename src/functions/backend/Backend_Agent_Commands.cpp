@@ -142,6 +142,42 @@ void BackendAgent::applyServiceStreamCommand(JsonObject payload) {
     saveStatePreferences();
 }
 
+bool BackendAgent::applyLockCommand(JsonObjectConst payload, String &error) {
+    if (!payload.containsKey("locked_servers")) {
+        requestWorkflowStop();
+        stationLock_.all = true;
+        stationLock_.servers = 0;
+        return true;
+    }
+
+    const JsonArrayConst ids = payload["locked_servers"].as<JsonArrayConst>();
+    if (ids.isNull()) {
+        error = "payload.locked_servers must contain only server IDs 1 or 2";
+        return false;
+    }
+
+    int serverIds[2] = {};
+    size_t count = 0;
+    uint8_t seen = 0;
+    for (JsonVariantConst id : ids) {
+        if (!id.is<int>() || id.as<int>() < 1 || id.as<int>() > 2) {
+            error = "payload.locked_servers must contain only server IDs 1 or 2";
+            return false;
+        }
+        const int serverId = id.as<int>();
+        const auto bit = static_cast<uint8_t>(1U << (serverId - 1));
+        if ((seen & bit) == 0 && count < 2) {
+            serverIds[count++] = serverId;
+            seen = static_cast<uint8_t>(seen | bit);
+        }
+    }
+    if (!stationLock_.setScoped(serverIds, count)) {
+        error = "payload.locked_servers must contain only server IDs 1 or 2";
+        return false;
+    }
+    return true;
+}
+
 bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const String &sensorType) {
     if (commands.isNull() || commands.size() == 0) {
         error = "missing payload.commands_b64";
@@ -243,31 +279,7 @@ void BackendAgent::handleCommand(const String &source, const String &message) {
     bool restartAfterCommand = false;
 
     if (command == "LOCK_DEVICE") {
-        if (payload.containsKey("locked_servers")) {
-            JsonArrayConst ids = payload["locked_servers"].as<JsonArrayConst>();
-            int serverIds[2] = {};
-            size_t count = 0;
-            if (ids.isNull()) {
-                success = false;
-            } else {
-                for (JsonVariantConst id : ids) {
-                    if (!id.is<int>() || id.as<int>() < 1 || id.as<int>() > 2) {
-                        success = false;
-                        break;
-                    }
-                    const int serverId = id.as<int>();
-                    if (count == 0 || serverIds[0] != serverId) {
-                        if (count < 2) serverIds[count++] = serverId;
-                    }
-                }
-            }
-            if (success) success = stationLock_.setScoped(serverIds, count);
-            if (!success) error = "payload.locked_servers must contain only server IDs 1 or 2";
-        } else {
-            requestWorkflowStop();
-            stationLock_.all = true;
-            stationLock_.servers = 0;
-        }
+        success = applyLockCommand(payload, error);
         if (success) {
             setAgentState(normalAgentState());
             // loopNTRIP applies the policy per endpoint. Rebuilding all sockets
