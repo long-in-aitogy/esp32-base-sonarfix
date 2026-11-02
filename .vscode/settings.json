@@ -4,6 +4,6 @@
     "sonarlint.pathToCompileCommands": "${workspaceFolder}/compile_commands.json",
     "sonarlint.connectedMode.project": {
         "connectionId": "long-in-aitogy",
-        "projectKey": "long-in-aitogy_esp32-um982-lora-base"
+        "projectKey": "long-in-aitogy_esp32-base-sonarfix"
     }
 }
