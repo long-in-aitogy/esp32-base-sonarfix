@@ -202,6 +202,23 @@ private:
     void executeCommand(const String &source, const String &command,
                         const String &commandId, JsonDocument &doc,
                         JsonObject payload);
+    bool executeLicenseCommand(JsonObject payload, String &error, String &detail,
+                               bool &restartAfterCommand);
+    bool executeServiceConfigCommand(JsonObject payload, String &error, String &detail);
+    bool executeRawCommand(JsonDocument &doc, JsonObject payload,
+                           String &error, String &detail);
+    bool executeAutoBaseCommand(JsonObject payload, String &error, String &detail);
+    bool executeReferenceCheckCommand(JsonObject payload, String &error, String &detail);
+    bool executeProvinceCommand(JsonObject payload, String &error, String &detail);
+    bool executeBasicCommand(const String &command, JsonObject payload,
+                            String &error, String &detail);
+    bool executeStreamCommand(JsonObject payload, String &error, String &detail);
+    bool executeBaseStatusCommand(String &error, String &detail);
+    bool executeStopWorkflowCommand(String &detail);
+    void finishCommand(const String &source, const String &command,
+                       const String &commandId, bool success,
+                       const String &error, const String &detail,
+                       bool restartAfterCommand);
     void handleControlAck(const String &source, const String &message, bool retained);
     bool applyLockCommand(JsonObjectConst payload, String &error);
     void recordCommandResult(const String &command, const String &source,
