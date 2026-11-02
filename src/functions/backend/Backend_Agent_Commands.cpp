@@ -165,7 +165,7 @@ bool BackendAgent::applyLockCommand(JsonObjectConst payload, String &error) {
             return false;
         }
         const int serverId = id.as<int>();
-        const uint8_t bit = static_cast<uint8_t>(1U << (serverId - 1));
+        const auto bit = static_cast<uint8_t>(1U << (serverId - 1));
         if ((seen & bit) == 0 && count < 2) {
             serverIds[count++] = serverId;
             seen = static_cast<uint8_t>(seen | bit);
