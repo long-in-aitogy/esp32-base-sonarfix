@@ -70,6 +70,42 @@ bool serverMatchesMountpoint(JsonObjectConst service, uint8_t id,
     return !configured.isEmpty() && configured == mountpoint;
 }
 
+bool applyTargetedStreamState(JsonObject service, int serverId, bool active,
+                              const String &address, const String &mountpoint) {
+    if (serverId == 1 || serverId == 2) {
+        setStreamServerState(service, static_cast<uint8_t>(serverId), active, mountpoint);
+        return true;
+    }
+    if (address.length() > 0) {
+        bool targeted = false;
+        for (uint8_t id = 1; id <= 2; ++id) {
+            if (!serverMatchesAddress(service, id, address)) continue;
+            setStreamServerState(service, id, active, mountpoint);
+            targeted = true;
+        }
+        return targeted;
+    }
+    if (mountpoint.length() > 0) {
+        bool targeted = false;
+        for (uint8_t id = 1; id <= 2; ++id) {
+            if (!serverMatchesMountpoint(service, id, mountpoint)) continue;
+            setStreamServerState(service, id, active, mountpoint);
+            targeted = true;
+        }
+        return targeted;
+    }
+    if (active) return false;
+    for (uint8_t id = 1; id <= 2; ++id)
+        setStreamServerState(service, id, active, mountpoint);
+    return true;
+}
+
+void applyGlobalStreamState(JsonObject service, bool active, const String &mountpoint) {
+    service["stream_active"] = active;
+    if (mountpoint.length() > 0 && active) service["active_mountpoint"] = mountpoint;
+    if (!active) service.remove("active_mountpoint");
+}
+
 }
 
 void BackendAgent::recordCommandResult(const String &command, const String &source,
@@ -123,36 +159,8 @@ void BackendAgent::applyServiceStreamCommand(JsonObject payload) {
     address = normalizedStreamValue(address, false);
     const int serverId = streamServerId(payload);
 
-    bool targetedServer = false;
-    if (serverId == 1 || serverId == 2) {
-        setStreamServerState(service, static_cast<uint8_t>(serverId), active, mountpoint);
-        targetedServer = true;
-    } else if (address.length() > 0) {
-        for (uint8_t id = 1; id <= 2; ++id) {
-            if (serverMatchesAddress(service, id, address)) {
-                setStreamServerState(service, id, active, mountpoint);
-                targetedServer = true;
-            }
-        }
-    } else if (mountpoint.length() > 0) {
-        for (uint8_t id = 1; id <= 2; ++id) {
-            if (serverMatchesMountpoint(service, id, mountpoint)) {
-                setStreamServerState(service, id, active, mountpoint);
-                targetedServer = true;
-            }
-        }
-    } else if (!active) {
-        for (uint8_t id = 1; id <= 2; ++id) {
-            setStreamServerState(service, id, active, mountpoint);
-            targetedServer = true;
-        }
-    }
-
-    if (!targetedServer) {
-        service["stream_active"] = active;
-        if (mountpoint.length() > 0 && active) service["active_mountpoint"] = mountpoint;
-        if (!active) service.remove("active_mountpoint");
-    }
+    if (!applyTargetedStreamState(service, serverId, active, address, mountpoint))
+        applyGlobalStreamState(service, active, mountpoint);
     service["stream_active"] = BackendAgent::effectiveStreamActive(service, 1, false)
         || BackendAgent::effectiveStreamActive(service, 2, false);
     serviceConfig_.clear();
