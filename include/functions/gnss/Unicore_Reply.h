@@ -38,7 +38,7 @@ struct UnicoreReply {
     }
 
     static bool equal(const char *text, size_t length, const char *expected) {
-        if (length != std::strlen(expected)) return false;
+        if (length != strnlen(expected, length)) return false;
         for (size_t i = 0; i < length; ++i)
             if (std::tolower(static_cast<unsigned char>(text[i])) !=
                 std::tolower(static_cast<unsigned char>(expected[i]))) return false;

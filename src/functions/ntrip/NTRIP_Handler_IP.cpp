@@ -441,7 +441,7 @@ int bootstrapUM980() {
     delay(10);
   }
 
-  Serial1.write(nmeaCmdUnlog, strlen(nmeaCmdUnlog)); // Gửi lệnh UNLOG
+  Serial1.write(nmeaCmdUnlog, strnlen(nmeaCmdUnlog, 8)); // Gửi lệnh UNLOG
 
   #ifdef PROGRAM_DEBUG
   WaitStartTime = millis();
@@ -458,14 +458,14 @@ int bootstrapUM980() {
   while (!Serial1.available() && millis() - WaitStartTime < 2000) {
     delay(10);
   }
-  Serial1.write(rtcmSetBaudCom2, strlen(rtcmSetBaudCom2)); // Đặt baud COM2 bằng lệnh ASCII.
+  Serial1.write(rtcmSetBaudCom2, strnlen(rtcmSetBaudCom2, 21)); // Đặt baud COM2 bằng lệnh ASCII.
 
   // thiết lập chế độ base
   WaitStartTime = millis();
   while (!Serial1.available() && millis() - WaitStartTime < 2000) {
     delay(10);
   }
-  Serial1.write(nmeaCmdSetBase, strlen(nmeaCmdSetBase)); // Bắt đầu survey-in bằng lệnh ASCII.
+  Serial1.write(nmeaCmdSetBase, strnlen(nmeaCmdSetBase, 25)); // Bắt đầu survey-in bằng lệnh ASCII.
 
   #ifdef PROGRAM_DEBUG
   WaitStartTime = millis();
@@ -482,7 +482,7 @@ int bootstrapUM980() {
   while (!Serial1.available() && millis() - WaitStartTime < 2000) {
     delay(10);
   }
-  Serial1.write(rtcm1084SetOutputCom2, strlen(rtcm1084SetOutputCom2)); // Gửi lệnh RTCM để thiết lập đầu ra COM2
+  Serial1.write(rtcm1084SetOutputCom2, strnlen(rtcm1084SetOutputCom2, 18)); // Gửi lệnh RTCM để thiết lập đầu ra COM2
 
   #ifdef PROGRAM_DEBUG
   WaitStartTime = millis();
@@ -499,7 +499,7 @@ int bootstrapUM980() {
   while (!Serial1.available() && millis() - WaitStartTime < 2000) {
     delay(10);
   }
-  Serial1.write(rtcm1074SetOutputCom2, strlen(rtcm1074SetOutputCom2)); // Gửi lệnh RTCM để thiết lập đầu ra COM2
+  Serial1.write(rtcm1074SetOutputCom2, strnlen(rtcm1074SetOutputCom2, 18)); // Gửi lệnh RTCM để thiết lập đầu ra COM2
 
   #ifdef PROGRAM_DEBUG
   WaitStartTime = millis();
