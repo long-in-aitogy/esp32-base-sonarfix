@@ -2,21 +2,22 @@
 
 ## Backend agent ownership
 
-`include/functions/Backend_Agent.h` defines the public agent interface. Its
-implementation is split by responsibility under `src/functions/`:
+`include/functions/backend/Backend_Agent.h` defines the public agent interface. Its
+implementation is split by responsibility under `src/functions/backend/`:
 
 | File | Responsibility |
 | --- | --- |
-| `Backend_Agent.cpp` | Startup, saved state, transport lifecycle and data queues |
-| `Backend_Agent_Commands.cpp` | Backend command validation, execution and results |
-| `Backend_Agent_Workflows.cpp` | Auto Base, reference checks and GNSS command exchanges |
-| `Backend_Agent_Gnss.cpp` | Periodic receiver readback and saved Survey-In results |
-| `Backend_Agent_Status.cpp` | Status and health payloads |
-| `Backend_Agent_Projection.cpp` | Coordinate transformation and province projections |
-| `Backend_Agent_Websocket.cpp` | RFC6455 handshake, framing and TCP reconnects |
+| `backend/Backend_Agent.cpp` | Startup, saved state, transport lifecycle and data queues |
+| `backend/Backend_Agent_Commands.cpp` | Backend command validation, execution and results |
+| `backend/Backend_Agent_Workflows.cpp` | Auto Base, reference checks and GNSS command exchanges |
+| `backend/Backend_Agent_Gnss.cpp` | Periodic receiver readback and saved Survey-In results |
+| `backend/Backend_Agent_Status.cpp` | Status and health payloads |
+| `backend/Backend_Agent_Projection.cpp` | Coordinate transformation and province projections |
+| `backend/Backend_Agent_Websocket.cpp` | RFC6455 handshake, framing and TCP reconnects |
 
-`Backend_Agent_Internal.h` and `Backend_Agent_Websocket.h` are implementation
-headers. Keep transport framing out of command handling and status formatting.
+`include/functions/backend/Backend_Agent_Internal.h` and
+`include/functions/backend/Backend_Agent_Websocket.h` are implementation headers. Keep
+transport framing out of command handling and status formatting.
 Survey-In status uses receiver readback; the removed GGA polling state must not
 be reintroduced to make RTCM-only mode depend on NMEA.
 

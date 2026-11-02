@@ -3,8 +3,9 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include "functions/Station_Lock.h"
-#include "functions/gnss_cmd_builder.h"
+#include "functions/backend/Station_Lock.h"
+#include "functions/gnss/gnss_cmd_builder.h"
+#include "functions/gnss/Ubx_Base_Status.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
@@ -118,6 +119,10 @@ private:
 
     void loadPreferences();
     bool saveStatePreferences();
+    void saveDetectedChip(const char *chipType);
+    bool probeUnicore(Stream &stream, String &identityLine);
+    bool probeUblox(Stream &stream);
+    bool probePassiveUblox(Stream &stream);
     void ensureDefaultServiceConfig();
     String normalAgentState() const;
     void setupWebsocket();
@@ -140,6 +145,22 @@ private:
     bool stopNtripRoverLocked();
     bool applyBaseCoordinates(double latitude, double longitude, double altitude);
     bool refreshReceiverReadback(String &error);
+    bool refreshUbloxReadback(String &error);
+    void updateUbloxSurveyState(const UbxBaseStatus &status);
+    void logUbloxReadback(const UbxBaseStatus &status);
+    void appendUbloxPosition(DynamicJsonDocument &doc, const UbxBaseStatus &status,
+                             const String &mode);
+    bool refreshUnicoreReadback(String &error);
+    bool prepareStartupConfig(DynamicJsonDocument &config, JsonObject &base,
+                              bool &saved, String &method, String &error);
+    bool readStartupReceiverMode(GnssCmdBuilder::GnssSensorType detected, String &error);
+    bool buildStartupCommands(JsonObject base, GnssCmdBuilder::GnssSensorType detected,
+                              bool restoreFixed, GnssCmdBuilder::CommandList &commands,
+                              double &fixedLatitude, double &fixedLongitude,
+                              double &fixedAltitude, bool &ellipsoid, String &error);
+    bool verifyStartupReadback(GnssCmdBuilder::GnssSensorType detected, bool restoreFixed,
+                               double fixedLatitude, double fixedLongitude,
+                               double fixedAltitude, bool ellipsoid, String &error);
     void saveSurveyResult(JsonObjectConst bestPosition, const String &mode);
     void pollGnssStatus();
     bool transformToVn2000(double latitude, double longitude, double altitude,
@@ -160,6 +181,7 @@ private:
     void handleWebsocketText(const String &message);
     void handleCommand(const String &source, const String &message);
     void handleControlAck(const String &source, const String &message, bool retained);
+    bool applyLockCommand(JsonObjectConst payload, String &error);
     void recordCommandResult(const String &command, const String &source,
                              const String &status, const String &detail,
                              const String &commandId);

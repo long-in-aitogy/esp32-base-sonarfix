@@ -13,8 +13,8 @@ Firmware version remains V2.3.5.
 ```sh
 pio run -e tdm240x_dev_general
 c++ -std=c++17 -fsanitize=address,undefined -g -Itest/host -Iinclude \
-  test/host/base_checks.cpp src/functions/Unicore_Log.cpp src/functions/gnss_cmd_builder.cpp \
-  src/functions/ublox_commands.cpp src/functions/unicore_commands.cpp \
+  test/host/base_checks.cpp src/functions/gnss/Unicore_Log.cpp src/functions/gnss/gnss_cmd_builder.cpp \
+  src/functions/gnss/ublox_commands.cpp src/functions/gnss/unicore_commands.cpp \
   -o /tmp/base-checks
 /tmp/base-checks
 c++ -std=c++17 -Wall -Wextra -Werror -Iinclude \

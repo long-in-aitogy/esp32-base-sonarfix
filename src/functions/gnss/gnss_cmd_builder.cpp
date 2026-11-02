@@ -1,6 +1,6 @@
-#include "functions/gnss_cmd_builder.h"
-#include "functions/ublox_commands.h"
-#include "functions/unicore_commands.h"
+#include "functions/gnss/gnss_cmd_builder.h"
+#include "functions/gnss/ublox_commands.h"
+#include "functions/gnss/unicore_commands.h"
 #include "Prog_Config.h"
 #include <array>
 #include <algorithm>

@@ -1,13 +1,13 @@
-#include "functions/Backend_Agent.h"
-#include "Backend_Agent_Internal.h"
-#include "Backend_Agent_Websocket.h"
+#include "functions/backend/Backend_Agent.h"
+#include "functions/backend/Backend_Agent_Internal.h"
+#include "functions/backend/Backend_Agent_Websocket.h"
 
 #include "Prog_Config.h"
-#include "functions/MQTT_Manager.h"
-#include "functions/NTRIP_Handler_IP.h"
-#include "functions/RTCM_Receiver.h"
-#include "functions/Device_Token.h"
-#include "functions/Unicore_Identification.h"
+#include "functions/mqtt/MQTT_Manager.h"
+#include "functions/ntrip/NTRIP_Handler_IP.h"
+#include "functions/ntrip/RTCM_Receiver.h"
+#include "functions/backend/Device_Token.h"
+#include "functions/gnss/Unicore_Identification.h"
 #include "hardware/Connection_type.h"
 #include "hardware/Sim_handler.h"
 #include "hardware/Wifi_handler.h"
@@ -517,90 +517,90 @@ void BackendAgent::setDetectedChipIfUnknown(const String &chipType) {
     }
 }
 
-bool BackendAgent::detectGnssChip(Stream &stream, bool force) {
-    if (!force && sensorType_ != "UNKNOWN" && !sensorType_.isEmpty()) {
-        return true;
-    }
+void BackendAgent::saveDetectedChip(const char *chipType) {
+    sensorType_ = chipType;
+    saveStatePreferences();
+    markStatusDirty();
+}
 
-    while (stream.available()) stream.read();
-
-    // Probe identity without changing the receiver's output configuration.
+bool BackendAgent::probeUnicore(Stream &stream, String &identityLine) {
     stream.print("VERSIONA\r\n");
     UnicoreIdentification identity;
-    uint32_t startMs = millis();
-    bool foundUnicore = false;
-    while (millis() - startMs < 1000 && !foundUnicore) {
+    const uint32_t startMs = millis();
+    while (millis() - startMs < 1000) {
         while (stream.available()) {
             if (identity.feed(static_cast<uint8_t>(stream.read()))) {
-                foundUnicore = true;
-                break;
+                identityLine = identity.line;
+                return true;
             }
         }
         delay(10);
     }
+    return false;
+}
 
-    if (foundUnicore) {
-        sensorType_ = "Unicorecomm";
-        saveStatePreferences();
-        Serial.printf("[GNSS] => Phat hien chip: Unicorecomm (phan hoi: %s)\n",
-                      identity.line);
-        markStatusDirty();
-        return true;
-    }
-
-    // 2. Active probe: U-blox (ZED-F9P, NEO-M8P...) via UBX-MON-VER
+bool BackendAgent::probeUblox(Stream &stream) {
     while (stream.available()) stream.read();
     const uint8_t ubxMonVer[] = {0xB5, 0x62, 0x0A, 0x04, 0x00, 0x00, 0x0E, 0x34};
     stream.write(ubxMonVer, sizeof(ubxMonVer));
 
-    startMs = millis();
+    const uint32_t startMs = millis();
     uint8_t ubxMatch = 0;
-    bool foundUblox = false;
     while (millis() - startMs < 400) {
         while (stream.available()) {
-            uint8_t b = static_cast<uint8_t>(stream.read());
+            const uint8_t b = static_cast<uint8_t>(stream.read());
             if (ubxMatch == 0 && b == 0xB5) ubxMatch = 1;
             else if (ubxMatch == 1 && b == 0x62) ubxMatch = 2;
             else if (ubxMatch == 2 && b == 0x0A) ubxMatch = 3;
-            else if (ubxMatch == 3 && b == 0x04) {
-                foundUblox = true;
-                break;
-            } else {
-                ubxMatch = (b == 0xB5) ? 1 : 0;
-            }
+            else if (ubxMatch == 3 && b == 0x04) return true;
+            else ubxMatch = (b == 0xB5) ? 1 : 0;
         }
-        if (foundUblox) break;
         // Stop early after 150 ms if no partial UBX header or unread data remains.
-        if (millis() - startMs > 150 && ubxMatch == 0 && !stream.available()) break;
+        if (millis() - startMs > 150 && ubxMatch == 0 && !stream.available()) return false;
         delay(10);
     }
+    return false;
+}
 
-    if (foundUblox) {
-        sensorType_ = "Ublox";
-        saveStatePreferences();
-        Serial.println("[GNSS] => Phat hien chip: Ublox (ZED-F9P qua UBX-MON-VER)");
-        markStatusDirty();
-        return true;
-    }
-
-    // 3. Identify u-blox from a proprietary PUBX sentence in the incoming stream.
-    startMs = millis();
-    String passiveStr = "";
+bool BackendAgent::probePassiveUblox(Stream &stream) {
+    const uint32_t startMs = millis();
+    String passiveStr;
     while (millis() - startMs < 300) {
         while (stream.available()) {
-            uint8_t b = static_cast<uint8_t>(stream.read());
+            const uint8_t b = static_cast<uint8_t>(stream.read());
             if (b >= 32 && b <= 126) passiveStr += static_cast<char>(b);
             if (passiveStr.length() >= 512) break;
         }
-        if (passiveStr.indexOf("$PUBX") >= 0) {
-            sensorType_ = "Ublox";
-            saveStatePreferences();
-            Serial.println("[GNSS] => Phat hien chip: Ublox (qua $PUBX NMEA)");
-            markStatusDirty();
-            return true;
-        }
-        if (millis() - startMs > 150 && passiveStr.isEmpty() && !stream.available()) break;
+        if (passiveStr.indexOf("$PUBX") >= 0) return true;
+        if (millis() - startMs > 150 && passiveStr.isEmpty() && !stream.available()) return false;
         delay(10);
+    }
+    return false;
+}
+
+bool BackendAgent::detectGnssChip(Stream &stream, bool force) {
+    if (!force && sensorType_ != "UNKNOWN" && !sensorType_.isEmpty()) return true;
+
+    while (stream.available()) stream.read();
+
+    String identityLine;
+    if (probeUnicore(stream, identityLine)) {
+        saveDetectedChip("Unicorecomm");
+        Serial.printf("[GNSS] => Phat hien chip: Unicorecomm (phan hoi: %s)\n",
+                      identityLine.c_str());
+        return true;
+    }
+
+    if (probeUblox(stream)) {
+        saveDetectedChip("Ublox");
+        Serial.println("[GNSS] => Phat hien chip: Ublox (ZED-F9P qua UBX-MON-VER)");
+        return true;
+    }
+
+    if (probePassiveUblox(stream)) {
+        saveDetectedChip("Ublox");
+        Serial.println("[GNSS] => Phat hien chip: Ublox (qua $PUBX NMEA)");
+        return true;
     }
 
     return false;

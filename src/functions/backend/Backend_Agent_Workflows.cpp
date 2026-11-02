@@ -1,15 +1,15 @@
-#include "functions/Backend_Agent.h"
-#include "Backend_Agent_Internal.h"
+#include "functions/backend/Backend_Agent.h"
+#include "functions/backend/Backend_Agent_Internal.h"
 #include "Prog_Config.h"
-#include "functions/NTRIP_Handler_IP.h"
-#include "functions/RTCM_Receiver.h"
-#include "functions/Base_Sample.h"
+#include "functions/ntrip/NTRIP_Handler_IP.h"
+#include "functions/ntrip/RTCM_Receiver.h"
+#include "functions/backend/Base_Sample.h"
 #include <cmath>
 #include <cstring>
 #include <vector>
 
-#include "functions/Ubx_Reply.h"
-#include "functions/Unicore_Reply.h"
+#include "functions/gnss/Ubx_Reply.h"
+#include "functions/gnss/Unicore_Reply.h"
 #include <cstdio>
 
 using namespace BackendAgentInternal;

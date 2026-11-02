@@ -1,6 +1,6 @@
-#include "functions/Ublox_Readback.h"
-#include "functions/Ubx_Reply.h"
-#include "functions/RTCM_Receiver.h"
+#include "functions/gnss/Ublox_Readback.h"
+#include "functions/gnss/Ubx_Reply.h"
+#include "functions/ntrip/RTCM_Receiver.h"
 #include "Prog_Config.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>

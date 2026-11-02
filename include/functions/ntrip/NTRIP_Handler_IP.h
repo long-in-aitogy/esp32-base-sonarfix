@@ -6,7 +6,7 @@
 #include <Arduino.h>
 #include "Top_Lvl_Config.h"
 #include "hardware/Connection_type.h"
-#include "functions/gnss_cmd_builder.h"
+#include "functions/gnss/gnss_cmd_builder.h"
 
 extern SemaphoreHandle_t rtcmBufferMutex;
 extern SemaphoreHandle_t tcpStreamMutex;

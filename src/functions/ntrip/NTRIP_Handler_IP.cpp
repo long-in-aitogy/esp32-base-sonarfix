@@ -1,12 +1,12 @@
 #define NTRIP_HANDLER_IP_CODE
 
-#include "functions/NTRIP_Handler_IP.h"
+#include "functions/ntrip/NTRIP_Handler_IP.h"
 
 #include "Prog_Config.h"
-#include "functions/Backend_Agent.h"
-#include "functions/RTCM_Receiver.h"
-#include "functions/unicore_commands.h"
-#include "functions/Unicore_Identification.h"
+#include "functions/backend/Backend_Agent.h"
+#include "functions/ntrip/RTCM_Receiver.h"
+#include "functions/gnss/unicore_commands.h"
+#include "functions/gnss/Unicore_Identification.h"
 #include "hardware/Sim_handler.h"
 #include "hardware/Wifi_handler.h"
 

@@ -63,10 +63,11 @@ Loại GNSS được cấu hình từ CORS; cùng một firmware hỗ trợ cả
 ├──src/                             # Mã nguồn chính của chương trình.
 |    ├── main.cpp                       # Điểm vào chính của chương trình, chứa hàm setup() và loop()
 |    ├── helper.cpp                     # Các hàm phụ trợ để xử lý dữ liệu, kết nối, v.v.
-|    ├── functions/                      # Thư mục con chứa các hàm được tổ chức theo chức năng (MQTT, NTRIP, NMEA parsing)
-|    |  ├── MQTT_Manager.cpp                     # Hàm xử lý kết nối và gửi dữ liệu qua MQTT
-|    |  ├── NTRIP_Handler_IP.cpp                 # Hàm xử lý kết nối và nhận dữ liệu từ NTRIP Caster qua IP
-|    |  └── NMEA_Parser.cpp                      # Hàm xử lý phân tích chuỗi NMEA
+|    ├── functions/                      # Các hàm được tổ chức theo backend, GNSS, NTRIP và MQTT
+|    |  ├── backend/                      # Agent backend, command handling và workflow
+|    |  ├── gnss/                         # Lệnh, phản hồi và readback GNSS
+|    |  ├── ntrip/                        # NTRIP và RTCM transport
+|    |  └── mqtt/                         # MQTT manager
 |    └──hardware/                       # Thư mục con chứa các hàm liên quan đến phần cứng (wifi, 4g)
 |       ├── WiFi_handler.cpp                     # Hàm xử lý kết nối WiFi
 |       └── Sim_handler.cpp                      # Hàm xử lý kết nối 4G

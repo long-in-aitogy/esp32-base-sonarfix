@@ -1,9 +1,9 @@
-#include "functions/MQTT_Manager.h"
+#include "functions/mqtt/MQTT_Manager.h"
 #include "Top_Lvl_Config.h"
 #include "Prog_Config.h"
-#include "functions/Backend_Agent.h"
-#include "functions/cmd_handler.h"
-#include "functions/MqttWrite.h"
+#include "functions/backend/Backend_Agent.h"
+#include "functions/backend/cmd_handler.h"
+#include "functions/mqtt/MqttWrite.h"
 #include <Preferences.h>
 #include <cstring>
 #include "helper.h"

@@ -1,12 +1,17 @@
-#include "functions/gnss_cmd_builder.h"
-#include "functions/ublox_commands.h"
+#include "functions/gnss/gnss_cmd_builder.h"
+#include "functions/gnss/ublox_commands.h"
 #include "Prog_Config.h"
 #include <array>
 #include <algorithm>
 #include <cstring>
 
 namespace UbloxCommands {
-using namespace GnssCmdBuilder;
+    using GnssCmdBuilder::Command;
+    using GnssCmdBuilder::CommandList;
+    using GnssCmdBuilder::MsmLevel;
+    using GnssCmdBuilder::GnssOptions;
+    using GnssCmdBuilder::OutputMode;
+    
     constexpr std::array<uint8_t, 21> UBLOX_SAVE_CONFIG = {
         0xB5, 0x62, 0x06, 0x09, 0x0D, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF,
         0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x1D, 0xAB};

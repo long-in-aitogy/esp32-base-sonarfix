@@ -1,8 +1,8 @@
-#include "functions/RTCM_Receiver.h"
+#include "functions/ntrip/RTCM_Receiver.h"
 
 #include "HardwareSerial.h"
 #include "Prog_Config.h"
-#include "functions/Backend_Agent.h"
+#include "functions/backend/Backend_Agent.h"
 #include <cstdio>
 
 namespace {

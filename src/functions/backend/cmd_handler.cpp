@@ -1,9 +1,9 @@
-#include "functions/cmd_handler.h"
+#include "functions/backend/cmd_handler.h"
 #include <vector>
 #include <Preferences.h>
 #include "Prog_Config.h"
-#include "functions/gnss_cmd_builder.h"
-#include "functions/Backend_Agent.h"
+#include "functions/gnss/gnss_cmd_builder.h"
+#include "functions/backend/Backend_Agent.h"
 #include <cstring>
 
 extern SemaphoreHandle_t rtcmBufferMutex;

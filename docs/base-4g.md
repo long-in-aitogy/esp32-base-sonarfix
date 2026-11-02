@@ -156,7 +156,7 @@ Chạy kiểm tra host, không cần gắn ESP32:
 
 ```sh
 c++ -std=c++17 -fsanitize=address,undefined -g -Itest/host -Iinclude \
-  test/host/base_checks.cpp src/functions/Unicore_Log.cpp src/functions/gnss_cmd_builder.cpp src/functions/ublox_commands.cpp src/functions/unicore_commands.cpp \
+  test/host/base_checks.cpp src/functions/gnss/Unicore_Log.cpp src/functions/gnss/gnss_cmd_builder.cpp src/functions/gnss/ublox_commands.cpp src/functions/gnss/unicore_commands.cpp \
   -o /tmp/esp32-base-checks
 /tmp/esp32-base-checks
 python3 -B test/host/check_cors.py /path/to/cors /tmp/esp32-base-checks

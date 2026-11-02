@@ -1,7 +1,7 @@
-#include "functions/Unicore_Readback.h"
-#include "functions/Unicore_Reply.h"
-#include "functions/Unicore_Log.h"
-#include "functions/RTCM_Receiver.h"
+#include "functions/gnss/Unicore_Readback.h"
+#include "functions/gnss/Unicore_Reply.h"
+#include "functions/gnss/Unicore_Log.h"
+#include "functions/ntrip/RTCM_Receiver.h"
 #include "Prog_Config.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>

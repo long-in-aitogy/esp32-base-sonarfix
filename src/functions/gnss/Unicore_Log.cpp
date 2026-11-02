@@ -1,4 +1,4 @@
-#include "functions/Unicore_Log.h"
+#include "functions/gnss/Unicore_Log.h"
 
 #include <cstdint>
 
@@ -10,7 +10,7 @@ size_t checksumMarker(const char *line, size_t length) {
     return marker == 0 ? length : marker - 1;
 }
 
-int hexValue(char c) {
+inline int hexValue(char c) {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'A' && c <= 'F') return c - 'A' + 10;
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
