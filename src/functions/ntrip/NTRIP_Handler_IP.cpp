@@ -550,7 +550,7 @@ int bootstrapUM980() {
   while (!Serial1.available() && millis() - WaitStartTime < 2000) {
     delay(10);
   }
-  Serial1.write(rtcm1087SetOutputCom2, strlen(rtcm1087SetOutputCom2)); // Gửi lệnh RTCM để thiết lập đầu ra COM2
+  Serial1.write(rtcm1087SetOutputCom2, strnlen(rtcm1087SetOutputCom2, 18)); // Gửi lệnh RTCM để thiết lập đầu ra COM2
 
   #ifdef PROGRAM_DEBUG
   WaitStartTime = millis();
@@ -567,7 +567,7 @@ int bootstrapUM980() {
   while (!Serial1.available() && millis() - WaitStartTime < 2000) {
     delay(10);
   }
-  Serial1.write(rtcm1077SetOutputCom2, strlen(rtcm1077SetOutputCom2)); // Gửi lệnh RTCM để thiết lập đầu ra COM2
+  Serial1.write(rtcm1077SetOutputCom2, strnlen(rtcm1077SetOutputCom2, 18)); // Gửi lệnh RTCM để thiết lập đầu ra COM2
 
   #ifdef PROGRAM_DEBUG
   WaitStartTime = millis();
@@ -584,7 +584,7 @@ int bootstrapUM980() {
   while (!Serial1.available() && millis() - WaitStartTime < 2000) {
     delay(10);
   }
-  Serial1.write(rtcm1127SetOutputCom2, strlen(rtcm1127SetOutputCom2)); // Gửi lệnh RTCM để thiết lập đầu ra COM2
+  Serial1.write(rtcm1127SetOutputCom2, strnlen(rtcm1127SetOutputCom2, 18)); // Gửi lệnh RTCM để thiết lập đầu ra COM2
 
   #ifdef PROGRAM_DEBUG
   WaitStartTime = millis();
@@ -621,7 +621,7 @@ int bootstrapUM980() {
   while (!Serial1.available() && millis() - WaitStartTime < 2000) {
     delay(10);
   }
-  Serial1.write(cmdSaveConfig, strlen(cmdSaveConfig)); // Gửi lệnh lưu cấu hình
+  Serial1.write(cmdSaveConfig, strnlen(cmdSaveConfig, 13)); // Gửi lệnh lưu cấu hình
 
   #ifdef PROGRAM_DEBUG
   WaitStartTime = millis();
