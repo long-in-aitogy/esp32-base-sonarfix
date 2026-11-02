@@ -14,6 +14,64 @@ using namespace BackendAgentInternal;
 
 extern SemaphoreHandle_t rtcmBufferMutex;
 
+namespace {
+
+String normalizedStreamValue(String value, bool stripLeadingSlash) {
+    value.trim();
+    if (stripLeadingSlash) {
+        while (value.startsWith("/")) value.remove(0, 1);
+    }
+    value.toLowerCase();
+    return value;
+}
+
+int streamServerId(JsonObjectConst payload) {
+    int serverId = payload["server_id"] | 0;
+    if (serverId != 1 && serverId != 2) serverId = payload["server_idx"] | 0;
+    if (serverId != 1 && serverId != 2) serverId = payload["server"] | 0;
+    return serverId;
+}
+
+void setStreamServerState(JsonObject service, uint8_t id, bool active,
+                          const String &mountpoint) {
+    const String prefix = String("server") + String(id);
+    const bool onDemand = jsonBool(
+        service, prefix + "_stream_on_demand",
+        jsonBool(service, "stream_on_demand", false));
+    if (!active && !onDemand) return;
+    service[(prefix + "_stream_active").c_str()] = active;
+    if (active && mountpoint.length() > 0) {
+        service["active_mountpoint"] = mountpoint;
+        return;
+    }
+    if (!active) {
+        const String configured = jsonString(service, String("mountpoint") + String(id));
+        const String current = jsonString(service, "active_mountpoint");
+        if (mountpoint.isEmpty() || mountpoint.equalsIgnoreCase(configured)
+            || current.equalsIgnoreCase(configured)) {
+            service.remove("active_mountpoint");
+        }
+    }
+}
+
+bool serverMatchesAddress(JsonObjectConst service, uint8_t id, const String &address) {
+    const String prefix = String("server") + String(id);
+    String configured = jsonString(service, prefix + "_host",
+                                   jsonString(service, String("serverhost") + String(id)));
+    configured = normalizedStreamValue(configured, false);
+    return !configured.isEmpty()
+        && (address.indexOf(configured) >= 0 || configured.indexOf(address) >= 0);
+}
+
+bool serverMatchesMountpoint(JsonObjectConst service, uint8_t id,
+                             const String &mountpoint) {
+    String configured = normalizedStreamValue(
+        jsonString(service, String("mountpoint") + String(id)), true);
+    return !configured.isEmpty() && configured == mountpoint;
+}
+
+}
+
 void BackendAgent::recordCommandResult(const String &command, const String &source,
                                        const String &status, const String &detail,
                                        const String &commandId) {
@@ -57,75 +115,35 @@ void BackendAgent::applyServiceStreamCommand(JsonObject payload) {
     }
     JsonObject service = serviceDoc.as<JsonObject>();
     const bool active = payload["active"] | false;
-    String mountpoint = payload["mountpoint"] | String();
+    String mountpoint = normalizedStreamValue(payload["mountpoint"] | String(), true);
     String address = payload["address"] | String();
     if (address.isEmpty()) address = payload["caster_host"] | String();
     if (address.isEmpty()) address = payload["ip"] | String();
     if (address.isEmpty()) address = payload["host"] | String();
-    mountpoint.trim();
-    while (mountpoint.startsWith("/")) mountpoint.remove(0, 1);
-    mountpoint.toLowerCase();
-    address.trim();
-    address.toLowerCase();
-    int serverId = payload["server_id"] | 0;
-    if (serverId != 1 && serverId != 2) {
-        serverId = payload["server_idx"] | 0;
-    }
-    if (serverId != 1 && serverId != 2) {
-        serverId = payload["server"] | 0;
-    }
-
-    auto setServerState = [&](const uint8_t id) {
-        const String prefix = String("server") + String(id);
-        const bool onDemand = jsonBool(
-            service,
-            prefix + "_stream_on_demand",
-            jsonBool(service, "stream_on_demand", false));
-        // Ignore stop requests for servers configured to stream continuously.
-        if (!active && !onDemand) return;
-        service[(prefix + "_stream_active").c_str()] = active;
-        if (active && mountpoint.length() > 0) {
-            service["active_mountpoint"] = mountpoint;
-        } else if (!active) {
-            const String configured = jsonString(service, String("mountpoint") + String(id));
-            if (mountpoint.isEmpty() || mountpoint.equalsIgnoreCase(configured)
-                || jsonString(service, "active_mountpoint").equalsIgnoreCase(configured)) {
-                service.remove("active_mountpoint");
-            }
-        }
-    };
+    address = normalizedStreamValue(address, false);
+    const int serverId = streamServerId(payload);
 
     bool targetedServer = false;
     if (serverId == 1 || serverId == 2) {
-        setServerState(static_cast<uint8_t>(serverId));
+        setStreamServerState(service, static_cast<uint8_t>(serverId), active, mountpoint);
         targetedServer = true;
     } else if (address.length() > 0) {
         for (uint8_t id = 1; id <= 2; ++id) {
-            const String prefix = String("server") + String(id);
-            String configured = jsonString(service, prefix + "_host",
-                                           jsonString(service, String("serverhost") + String(id)));
-            configured.trim();
-            configured.toLowerCase();
-            if (!configured.isEmpty()
-                && (address.indexOf(configured) >= 0 || configured.indexOf(address) >= 0)) {
-                setServerState(id);
+            if (serverMatchesAddress(service, id, address)) {
+                setStreamServerState(service, id, active, mountpoint);
                 targetedServer = true;
             }
         }
     } else if (mountpoint.length() > 0) {
         for (uint8_t id = 1; id <= 2; ++id) {
-            const String prefix = String("server") + String(id);
-            String configured = jsonString(service, String("mountpoint") + String(id));
-            while (configured.startsWith("/")) configured.remove(0, 1);
-            configured.toLowerCase();
-            if (!configured.isEmpty() && configured == mountpoint) {
-                setServerState(id);
+            if (serverMatchesMountpoint(service, id, mountpoint)) {
+                setStreamServerState(service, id, active, mountpoint);
                 targetedServer = true;
             }
         }
     } else if (!active) {
         for (uint8_t id = 1; id <= 2; ++id) {
-            setServerState(id);
+            setStreamServerState(service, id, active, mountpoint);
             targetedServer = true;
         }
     }
