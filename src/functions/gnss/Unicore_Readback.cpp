@@ -14,6 +14,55 @@ extern SemaphoreHandle_t gnssSerialMutex;
 
 namespace UnicoreReadback {
 namespace {
+bool appendUnicoreCandidate(char value, const char *prefix, String &candidate,
+                            String &response) {
+    if (value == prefix[0]) {
+        candidate = String(value);
+        return false;
+    }
+    if (value == '\r' || value == '\n') {
+        if (candidate.startsWith(prefix)) response = candidate;
+        candidate = "";
+        return !response.isEmpty();
+    }
+    if (!candidate.isEmpty() && candidate.length() < 383) {
+        candidate += value;
+    } else if (candidate.length() >= 383) {
+        candidate = "";
+    }
+    return false;
+}
+
+bool processUnicoreQueryByte(uint8_t byte, const char *prefix, UnicoreReply &reply,
+                             String &candidate, String &response, String &error) {
+    const char value = static_cast<char>(byte);
+    bufferGnssQueryByte(byte);
+    const bool acknowledged = reply.feed(byte);
+    if (acknowledged && reply.state == UnicoreReply::State::Error) {
+        Serial.printf("[GNSS][READBACK][ACK] %s\n", reply.line);
+        error = String("Unicore rejected query: ") + reply.line;
+        return false;
+    }
+    if (acknowledged) Serial.printf("[GNSS][READBACK][ACK] %s\n", reply.line);
+    appendUnicoreCandidate(value, prefix, candidate, response);
+    return true;
+}
+
+void collectUnicoreResponse(const char *prefix, UnicoreReply &reply,
+                            String &response, String &error, uint32_t &receivedBytes) {
+    String candidate;
+    candidate.reserve(160);
+    const uint32_t started = millis();
+    while (millis() - started < 3000UL && response.isEmpty() && error.isEmpty()) {
+        while (Serial1.available() > 0) {
+            const uint8_t value = static_cast<uint8_t>(Serial1.read());
+            ++receivedBytes;
+            if (!processUnicoreQueryByte(value, prefix, reply, candidate, response, error)) break;
+        }
+        if (response.isEmpty() && error.isEmpty()) vTaskDelay(pdMS_TO_TICKS(5));
+    }
+}
+
 bool queryUnicoreLine(const char *query, const char *prefix, String &response, String &error) {
     if (!rtcmBufferMutex
         || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE) {
@@ -38,38 +87,9 @@ bool queryUnicoreLine(const char *query, const char *prefix, String &response, S
         && Serial1.write(
             reinterpret_cast<const uint8_t *>(command.c_str()), command.length()) == command.length();
     Serial1.flush();
-    String candidate;
-    candidate.reserve(160);
     uint32_t receivedBytes = 0;
     const uint32_t started = millis();
-    while (written && millis() - started < 3000UL && response.isEmpty() && error.isEmpty()) {
-        while (Serial1.available() > 0) {
-            const char value = static_cast<char>(Serial1.read());
-            bufferGnssQueryByte(static_cast<uint8_t>(value));
-            ++receivedBytes;
-            if (reply.feed(static_cast<uint8_t>(value))) {
-                Serial.printf("[GNSS][READBACK][ACK] %s\n", reply.line);
-                if (reply.state == UnicoreReply::State::Error) {
-                    error = String("Unicore rejected query: ") + reply.line;
-                    break;
-                }
-            }
-            if (value == prefix[0]) {
-                candidate = String(value);
-            } else if (value == '\r' || value == '\n') {
-                if (candidate.startsWith(prefix)) {
-                    response = candidate;
-                    break;
-                }
-                candidate = "";
-            } else if (!candidate.isEmpty() && candidate.length() < 383) {
-                candidate += value;
-            } else if (candidate.length() >= 383) {
-                candidate = "";
-            }
-        }
-        if (response.isEmpty()) vTaskDelay(pdMS_TO_TICKS(5));
-    }
+    if (written) collectUnicoreResponse(prefix, reply, response, error, receivedBytes);
     xSemaphoreGive(gnssSerialMutex);
     xSemaphoreGive(rtcmBufferMutex);
 
