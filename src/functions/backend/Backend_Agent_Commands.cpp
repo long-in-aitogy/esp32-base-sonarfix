@@ -272,6 +272,12 @@ void BackendAgent::handleCommand(const String &source, const String &message) {
     }
 
     recordCommandResult(command, source, "running", "", commandId);
+    executeCommand(source, command, commandId, doc, payload);
+}
+
+void BackendAgent::executeCommand(const String &source, const String &command,
+                                  const String &commandId, JsonDocument &doc,
+                                  JsonObject payload) {
     setAgentState("configuring");
     String error;
     bool success = true;

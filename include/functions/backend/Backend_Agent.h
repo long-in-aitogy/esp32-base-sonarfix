@@ -199,6 +199,9 @@ private:
 
     void handleWebsocketText(const String &message);
     void handleCommand(const String &source, const String &message);
+    void executeCommand(const String &source, const String &command,
+                        const String &commandId, JsonDocument &doc,
+                        JsonObject payload);
     void handleControlAck(const String &source, const String &message, bool retained);
     bool applyLockCommand(JsonObjectConst payload, String &error);
     void recordCommandResult(const String &command, const String &source,
