@@ -135,8 +135,9 @@ bool BackendAgent::verifyStartupReadback(GnssCmdBuilder::GnssSensorType detected
                                           bool ellipsoid, String &error) {
     DynamicJsonDocument readback(2048);
     deserializeJson(readback, receiverBaseReadback_.c_str());
-    const String expected = restoreFixed ? "base" : "survey_in";
-    if (String(readback["mode_kind"] | "") != expected) {
+    
+    if (const String expected = restoreFixed ? "base" : "survey_in";
+            String(readback["mode_kind"] | "") != expected) {
         error = "Receiver mode does not match startup configuration";
         return false;
     }
@@ -200,8 +201,8 @@ bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
     JsonObject base;
     bool saved = false;
     String method;
-    String configError;
-    if (!prepareStartupConfig(config, base, saved, method, configError))
+    if (String configError;
+            !prepareStartupConfig(config, base, saved, method, configError))
         return fail(configError);
     if (stationLock_.all) {
         baseStartupState_ = "locked";
@@ -213,8 +214,7 @@ bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
         markStatusDirty();
         return true;
     }
-    String queryError;
-    if (!readStartupReceiverMode(detected, queryError))
+    if (String queryError; !readStartupReceiverMode(detected, queryError))
         return fail(queryError.isEmpty() ? String("Receiver mode could not be read") : queryError);
     const bool restoreFixed = method == "FIXED_LLA";
     if (!restoreFixed && !method.isEmpty() && method != "SURVEY_IN")
@@ -222,10 +222,10 @@ bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
     CommandList commands;
     double fixedLatitude = 0, fixedLongitude = 0, fixedAltitude = 0;
     bool ellipsoid = false;
-    String commandError;
-    if (!buildStartupCommands(base, detected, restoreFixed, commands,
-                              fixedLatitude, fixedLongitude, fixedAltitude,
-                              ellipsoid, commandError))
+    if (String commandError;
+            !buildStartupCommands(base, detected, restoreFixed, commands,
+            fixedLatitude, fixedLongitude, fixedAltitude,
+            ellipsoid, commandError))
         return fail(commandError);
     if (!commands.empty() && !writeGnssCommands(commands)) return fail("Receiver rejected startup configuration");
     if (!saved) {
