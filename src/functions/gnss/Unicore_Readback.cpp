@@ -35,7 +35,7 @@ bool appendUnicoreCandidate(char value, const char *prefix, String &candidate,
 
 bool processUnicoreQueryByte(uint8_t byte, const char *prefix, UnicoreReply &reply,
                              String &candidate, String &response, String &error) {
-    const char value = static_cast<char>(byte);
+    const auto value = static_cast<char>(byte);
     bufferGnssQueryByte(byte);
     const bool acknowledged = reply.feed(byte);
     if (acknowledged && reply.state == UnicoreReply::State::Error) {
@@ -55,7 +55,7 @@ void collectUnicoreResponse(const char *prefix, UnicoreReply &reply,
     const uint32_t started = millis();
     while (millis() - started < 3000UL && response.isEmpty() && error.isEmpty()) {
         while (Serial1.available() > 0) {
-            const uint8_t value = static_cast<uint8_t>(Serial1.read());
+            const auto value = static_cast<uint8_t>(Serial1.read());
             ++receivedBytes;
             if (!processUnicoreQueryByte(value, prefix, reply, candidate, response, error)) break;
         }
