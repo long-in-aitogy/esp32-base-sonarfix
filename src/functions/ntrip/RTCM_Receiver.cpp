@@ -137,7 +137,7 @@ void parseNmeaSentence(const String &rawSentence) {
     char *fields[32] = {};
     size_t fieldCount = 0;
     char *cursor = line + 1;
-    while (fieldCount < (sizeof(fields) / sizeof(fields[0]))) {
+    while (fieldCount < (std::size(fields))) {
         fields[fieldCount++] = cursor;
         char *comma = strchr(cursor, ',');
         if (!comma) break;
