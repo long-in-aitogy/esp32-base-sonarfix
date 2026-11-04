@@ -287,35 +287,46 @@ void normalizeEndpoint(NtripEndpoint &endpoint) {
 void loadEndpoint(NtripEndpoint &endpoint, uint8_t index, JsonObjectConst service,
                   bool hasServiceConfig, const LegacyNtripConfig &legacy) {
     const String suffix = String(index + 1);
-    const String genericUser = index == 0 ? "user" : "user2";
-    const String genericPassword = index == 0 ? "password" : "password2";
-    const String genericMountpoint = index == 0 ? "mountpoint" : "mountpoint2";
-    endpoint.enabled = hasServiceConfig
-        ? jsonBool(service, "server" + suffix + "_enabled", false)
-        : index == 0 && !legacy.host.isEmpty();
-    endpoint.host = hasServiceConfig ? endpointHost(service, index)
-        : (index == 0 ? legacy.host : String());
-    endpoint.port = hasServiceConfig ? endpointPort(service, index, legacy.port)
-        : (index == 0 ? legacy.port : 2101);
-    endpoint.mountpoint = hasServiceConfig
-        ? jsonString(service, "mountpoint" + suffix,
+    String genericUser = "user2";
+    String genericPassword = "password2";
+    String genericMountpoint = "mountpoint2";
+    String legacyHost;
+    String legacyMountpoint;
+    String legacyPassword;
+    uint16_t legacyPort = 2101;
+    if (index == 0) {
+        genericUser = "user";
+        genericPassword = "password";
+        genericMountpoint = "mountpoint";
+        legacyHost = legacy.host;
+        legacyMountpoint = legacy.mountpoint;
+        legacyPassword = legacy.password;
+        legacyPort = legacy.port;
+    }
+
+    if (hasServiceConfig) {
+        endpoint.enabled = jsonBool(service, "server" + suffix + "_enabled", false);
+        endpoint.host = endpointHost(service, index);
+        endpoint.port = endpointPort(service, index, legacy.port);
+        endpoint.mountpoint = jsonString(service, "mountpoint" + suffix,
             jsonString(service, "mp" + suffix,
-                jsonString(service, genericMountpoint, String())))
-        : (index == 0 ? legacy.mountpoint : String());
-    endpoint.username = hasServiceConfig
-        ? jsonString(service, "username" + suffix,
+                jsonString(service, genericMountpoint, String())));
+        endpoint.username = jsonString(service, "username" + suffix,
             jsonString(service, "user" + suffix,
-                jsonString(service, genericUser, "source")))
-        : "source";
-    endpoint.password = hasServiceConfig
-        ? jsonString(service, "password" + suffix,
+                jsonString(service, genericUser, "source")));
+        endpoint.password = jsonString(service, "password" + suffix,
             jsonString(service, "pass" + suffix,
-                jsonString(service, genericPassword,
-                    index == 0 ? legacy.password : String())))
-        : (index == 0 ? legacy.password : String());
-    endpoint.version = hasServiceConfig
-        ? static_cast<uint8_t>(service["ntrip_version" + suffix] | 1)
-        : 1;
+                jsonString(service, genericPassword, legacyPassword)));
+        endpoint.version = static_cast<uint8_t>(service["ntrip_version" + suffix] | 1);
+    } else {
+        endpoint.enabled = index == 0 && !legacy.host.isEmpty();
+        endpoint.host = legacyHost;
+        endpoint.port = legacyPort;
+        endpoint.mountpoint = legacyMountpoint;
+        endpoint.username = "source";
+        endpoint.password = legacyPassword;
+        endpoint.version = 1;
+    }
     normalizeEndpoint(endpoint);
 }
 
