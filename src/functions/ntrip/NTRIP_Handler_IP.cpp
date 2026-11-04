@@ -41,6 +41,30 @@ namespace {
     0xB5, 0x62, 0x0A, 0x04, 0x00, 0x00, 0x0E, 0x34
   };
 
+  void waitForUm980Input()
+  {
+    const unsigned long started = millis();
+    while (!Serial1.available() && millis() - started < 2000) delay(10);
+  }
+
+  void logUm980Response()
+  {
+#ifdef PROGRAM_DEBUG
+    waitForUm980Input();
+    const String response = Serial1.readStringUntil('\n');
+    Serial.println("[NMEA CMD] Response: " + response);
+#endif
+  }
+
+  inline void sendUm980Command(const char *command, size_t maxLength, bool logResponse,
+                               uint32_t pauseMs)
+  {
+    waitForUm980Input();
+    Serial1.write(command, strnlen(command, maxLength));
+    if (logResponse) logUm980Response();
+    if (pauseMs > 0) delay(pauseMs);
+  }
+
   void clearGnssInput()
   {
     while (Serial1.available() > 0) {
@@ -434,176 +458,17 @@ Client &activeNtripClient() {
 }
 
 int bootstrapUM980() {
-  // Gửi lệnh ASCII cấu hình output và survey-in cho Unicore trên COM2.
-  // Nhánh khởi tạo này chỉ gửi UART và ghi log, chưa kiểm tra ACK của từng lệnh.
-  unsigned long WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-
-  Serial1.write(nmeaCmdUnlog, strnlen(nmeaCmdUnlog, 8)); // Gửi lệnh UNLOG
-
-  #ifdef PROGRAM_DEBUG
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  String nmeaResponse = Serial1.readStringUntil('\n'); // Đọc phản hồi từ GNSS
-  Serial.println("[NMEA CMD] Response: " + nmeaResponse);
-  #endif
-  delay(20);
-
-  // cài baud rate cho COM2
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  Serial1.write(rtcmSetBaudCom2, strnlen(rtcmSetBaudCom2, 21)); // Đặt baud COM2 bằng lệnh ASCII.
-
-  // thiết lập chế độ base
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  Serial1.write(nmeaCmdSetBase, strnlen(nmeaCmdSetBase, 25)); // Bắt đầu survey-in bằng lệnh ASCII.
-
-  #ifdef PROGRAM_DEBUG
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  nmeaResponse = Serial1.readStringUntil('\n'); // Đọc phản hồi từ GNSS
-  Serial.println("[NMEA CMD] Response: " + nmeaResponse);
-  #endif
-  delay(20);
-
-  // gửi rtcm 1084 ra COM2
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  Serial1.write(rtcm1084SetOutputCom2, strnlen(rtcm1084SetOutputCom2, 18)); // Gửi lệnh RTCM để thiết lập đầu ra COM2
-
-  #ifdef PROGRAM_DEBUG
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  nmeaResponse = Serial1.readStringUntil('\n'); // Đọc phản hồi từ GNSS
-  Serial.println("[NMEA CMD] Response: " + nmeaResponse);
-  #endif
-  delay(20);
-
-  // gửi rtcm 1074 ra COM2
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  Serial1.write(rtcm1074SetOutputCom2, strnlen(rtcm1074SetOutputCom2, 18)); // Gửi lệnh RTCM để thiết lập đầu ra COM2
-
-  #ifdef PROGRAM_DEBUG
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  nmeaResponse = Serial1.readStringUntil('\n'); // Đọc phản hồi từ GNSS
-  Serial.println("[NMEA CMD] Response: " + nmeaResponse);
-  #endif
-  delay(20);
-
-  // gửi rtcm 1006 ra COM2
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  Serial1.write(rtcm1006SetOutputCom2, strnlen(rtcm1006SetOutputCom2, 18)); // Gửi lệnh RTCM để thiết lập đầu ra COM2
-
-  #ifdef PROGRAM_DEBUG
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  nmeaResponse = Serial1.readStringUntil('\n'); // Đọc phản hồi từ GNSS
-  Serial.println("[NMEA CMD] Response: " + nmeaResponse);
-  #endif
-  delay(20);
-
-  // gửi rtcm 1124 ra COM2
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  Serial1.write(rtcm1124SetOutputCom2, strnlen(rtcm1124SetOutputCom2, 18)); // Gửi lệnh RTCM để thiết lập đầu ra COM2
-
-  #ifdef PROGRAM_DEBUG
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  nmeaResponse = Serial1.readStringUntil('\n'); // Đọc phản hồi từ GNSS
-  Serial.println("[NMEA CMD] Response: " + nmeaResponse);
-  #endif
-  delay(20);
-
-  // gửi rtcm 1087 ra COM2
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  Serial1.write(rtcm1087SetOutputCom2, strnlen(rtcm1087SetOutputCom2, 18)); // Gửi lệnh RTCM để thiết lập đầu ra COM2
-
-  #ifdef PROGRAM_DEBUG
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  nmeaResponse = Serial1.readStringUntil('\n'); // Đọc phản hồi từ GNSS
-  Serial.println("[NMEA CMD] Response: " + nmeaResponse);
-  #endif
-  delay(20);
-
-  // gửi rtcm 1077 ra COM2
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  Serial1.write(rtcm1077SetOutputCom2, strnlen(rtcm1077SetOutputCom2, 18)); // Gửi lệnh RTCM để thiết lập đầu ra COM2
-
-  #ifdef PROGRAM_DEBUG
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  nmeaResponse = Serial1.readStringUntil('\n'); // Đọc phản hồi từ GNSS
-  Serial.println("[NMEA CMD] Response: " + nmeaResponse);
-  #endif
-  delay(20);
-
-  // gửi rtcm 1127 ra COM2
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  Serial1.write(rtcm1127SetOutputCom2, strnlen(rtcm1127SetOutputCom2, 18)); // Gửi lệnh RTCM để thiết lập đầu ra COM2
-
-  #ifdef PROGRAM_DEBUG
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  nmeaResponse = Serial1.readStringUntil('\n'); // Đọc phản hồi từ GNSS
-  Serial.println("[NMEA CMD] Response: " + nmeaResponse);
-  #endif
-  delay(20);
-
-  #ifdef PROGRAM_DEBUG
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  nmeaResponse = Serial1.readStringUntil('\n'); // Đọc phản hồi từ GNSS
-  Serial.println("[NMEA CMD] Response: " + nmeaResponse);
-  #endif
+  sendUm980Command(nmeaCmdUnlog, 8, true, 20);
+  sendUm980Command(rtcmSetBaudCom2, 21, false, 0);
+  sendUm980Command(nmeaCmdSetBase, 25, true, 20);
+  sendUm980Command(rtcm1084SetOutputCom2, 18, true, 20);
+  sendUm980Command(rtcm1074SetOutputCom2, 18, true, 20);
+  sendUm980Command(rtcm1006SetOutputCom2, 18, true, 20);
+  sendUm980Command(rtcm1124SetOutputCom2, 18, true, 20);
+  sendUm980Command(rtcm1087SetOutputCom2, 18, true, 20);
+  sendUm980Command(rtcm1077SetOutputCom2, 18, true, 20);
+  sendUm980Command(rtcm1127SetOutputCom2, 18, true, 20);
+  logUm980Response();
   delay(20);
 
   // Send ephemeris output commands before saving the receiver configuration.
@@ -616,22 +481,7 @@ int bootstrapUM980() {
     delay(100);
   }
 
-  // lưu cấu hình
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  Serial1.write(cmdSaveConfig, strnlen(cmdSaveConfig, 13)); // Gửi lệnh lưu cấu hình
-
-  #ifdef PROGRAM_DEBUG
-  WaitStartTime = millis();
-  while (!Serial1.available() && millis() - WaitStartTime < 2000) {
-    delay(10);
-  }
-  nmeaResponse = Serial1.readStringUntil('\n'); // Đọc phản hồi từ GNSS
-  Serial.println("[NMEA CMD] Response: " + nmeaResponse);
-  #endif
-  delay(20);
+  sendUm980Command(cmdSaveConfig, 13, true, 20);
   return 0;
 }
 
