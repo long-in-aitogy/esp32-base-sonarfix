@@ -6,6 +6,7 @@
 #include "functions/backend/Station_Lock.h"
 #include "functions/gnss/gnss_cmd_builder.h"
 #include "functions/gnss/Ubx_Base_Status.h"
+#include "functions/gnss/Unicore_Reply.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
@@ -139,9 +140,38 @@ private:
     void requestWorkflowStop();
     bool writeGnssCommands(const GnssCmdBuilder::CommandList &commands);
     bool writeUnicoreCommand(const uint8_t *data, size_t length, String &error);
+    bool waitForUnicoreReply(UnicoreReply &reply, bool written);
+    void handleUnicoreAck(const UnicoreReply &reply, const uint8_t *data, size_t length);
+    bool exchangeUbloxRoverCommand(const GnssCmdBuilder::Command &command, bool poll);
+    bool configureUbloxRover();
+    bool waitForRoverGga(uint32_t startedMs);
     void setWorkflowProgress(const String &phase, uint8_t step, uint8_t total,
                              const String &details = String());
     bool runAutoBaseWorkflow(JsonObject payload);
+    bool prepareAutoBaseConfig(JsonObject payload, String &host, uint16_t &port,
+                               String &username, String &password, String &mountpoint,
+                               uint8_t &ntripVersion, uint32_t &timeoutSeconds,
+                               uint8_t &fixedStreakRequired);
+    bool startAutoBaseRover(const String &host, uint16_t port, const String &username,
+                            const String &password, const String &mountpoint,
+                            uint8_t ntripVersion);
+    bool waitForAutoBaseFix(uint32_t timeoutSeconds, uint8_t fixedStreakRequired,
+                            bool &cancelled, String &failureReason);
+    bool collectAutoBaseSamples(int configuredSamples, std::vector<double> &latitudes,
+                                std::vector<double> &longitudes,
+                                std::vector<double> &altitudes, bool &cancelled,
+                                String &failureReason);
+    bool resolveAutoBaseProjection(JsonObject payload, double rawLongitude,
+                                   double &centralMeridianDeg, double &scale,
+                                   String &provinceName, String &provinceCode,
+                                   String &failureReason);
+    String buildAutoBaseResult(double finalLatitude, double finalLongitude,
+                               double finalAltitude, double rawLatitude,
+                               double rawLongitude, double rawAltitude,
+                               bool transformed, bool transportRestored,
+                               size_t sampleCount, const String &projectionSource,
+                               const String &provinceCode, const String &provinceName,
+                               double centralMeridianDeg, double scale);
     bool runReferenceCheckWorkflow(JsonObject payload);
     bool prepareReferenceCheckConfig(JsonObject payload, JsonObject &reference,
                                      double &referenceLatitude, double &referenceLongitude,
