@@ -1,6 +1,7 @@
 #include "functions/backend/Backend_Agent_Websocket.h"
 #include "functions/backend/Backend_Agent.h"
 
+#include <cstddef>
 #include <cstring>
 #if !defined(NATIVE_BUILD)
 #include <esp_random.h>
@@ -230,7 +231,8 @@ bool BackendAgentWebsocket::readFrame(uint8_t &opcode, String &payload) {
 
     uint8_t mask[4] = {};
     if (masked) memcpy(mask, rx_.data() + headerLength - 4, sizeof(mask));
-    opcode = first & 0x0F;
+    opcode = std::to_integer<uint8_t>(
+        static_cast<std::byte>(first) & static_cast<std::byte>(0x0F));
     payload.reserve(static_cast<size_t>(payloadLength));
     for (size_t i = 0; i < payloadLength; ++i) {
         uint8_t byte = rx_[headerLength + i];
