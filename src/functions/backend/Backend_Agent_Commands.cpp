@@ -40,7 +40,7 @@ void setStreamServerState(JsonObject service, uint8_t id, bool active,
         jsonBool(service, "stream_on_demand", false));
     if (!active && !onDemand) return;
     service[(prefix + "_stream_active").c_str()] = active;
-    if (active && mountpoint.length() > 0) {
+    if (active && !mountpoint.isEmpty()) {
         service["active_mountpoint"] = mountpoint;
         return;
     }
@@ -76,7 +76,7 @@ bool applyTargetedStreamState(JsonObject service, int serverId, bool active,
         setStreamServerState(service, static_cast<uint8_t>(serverId), active, mountpoint);
         return true;
     }
-    if (address.length() > 0) {
+    if (!address.isEmpty()) {
         bool targeted = false;
         for (uint8_t id = 1; id <= 2; ++id) {
             if (!serverMatchesAddress(service, id, address)) continue;
@@ -85,7 +85,7 @@ bool applyTargetedStreamState(JsonObject service, int serverId, bool active,
         }
         return targeted;
     }
-    if (mountpoint.length() > 0) {
+    if (!mountpoint.isEmpty()) {
         bool targeted = false;
         for (uint8_t id = 1; id <= 2; ++id) {
             if (!serverMatchesMountpoint(service, id, mountpoint)) continue;
@@ -102,7 +102,7 @@ bool applyTargetedStreamState(JsonObject service, int serverId, bool active,
 
 void applyGlobalStreamState(JsonObject service, bool active, const String &mountpoint) {
     service["stream_active"] = active;
-    if (mountpoint.length() > 0 && active) service["active_mountpoint"] = mountpoint;
+    if (!mountpoint.isEmpty() && active) service["active_mountpoint"] = mountpoint;
     if (!active) service.remove("active_mountpoint");
 }
 
