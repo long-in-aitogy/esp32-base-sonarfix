@@ -1,4 +1,5 @@
 #include "functions/system/cmd_handler.h"
+#include <array>
 #include <vector>
 #include <Preferences.h>
 #include "Prog_Config.h"
@@ -307,13 +308,13 @@ cmd_action_t handleEspValueSet(const std::vector<String> &cmdWords) {
         || cmdWords[0] != "SET") {
         return CMD_ACTION_NONE;
     }
-    static constexpr cmd_helper::PreferenceMapping settings[] = {
+    static constexpr std::array<cmd_helper::PreferenceMapping, 6> settings = {{
         {"WIFI SSID", "WIFI_SSID"}, {"WIFI PASS", "WIFI_PASS"},
         {"4G APN", "APN"}, {"4G USER", "GPRS_USER"},
         {"4G PASS", "GPRS_PASS"}, {"BACKEND HOST", "BACKEND_HOST"},
-    };
+    }};
     const String setting = cmdWords[1] + " " + cmdWords[2];
-    const char *key = cmd_helper::findPreferenceKey(setting, settings, std::size(settings));
+    const char *key = cmd_helper::findPreferenceKey(setting, settings.data(), settings.size());
     if (key != nullptr) {
         if (setting != "BACKEND HOST") {
             Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh " + setting);
