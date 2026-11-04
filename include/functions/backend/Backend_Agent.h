@@ -165,6 +165,10 @@ private:
                                    double &centralMeridianDeg, double &scale,
                                    String &provinceName, String &provinceCode,
                                    String &failureReason);
+    bool completeAutoBaseSetup(JsonObject payload, const std::vector<double> &latitudes,
+                               const std::vector<double> &longitudes,
+                               const std::vector<double> &altitudes,
+                               String &resultJson, String &failureReason);
     String buildAutoBaseResult(double finalLatitude, double finalLongitude,
                                double finalAltitude, double rawLatitude,
                                double rawLongitude, double rawAltitude,

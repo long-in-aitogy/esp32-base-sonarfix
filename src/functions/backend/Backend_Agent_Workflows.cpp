@@ -505,6 +505,106 @@ String BackendAgent::buildAutoBaseResult(
     return serialized;
 }
 
+bool BackendAgent::completeAutoBaseSetup(
+    JsonObject payload, const std::vector<double> &latitudes,
+    const std::vector<double> &longitudes, const std::vector<double> &altitudes,
+    String &resultJson, String &failureReason) {
+    double rawLatitude = 0.0;
+    double rawLongitude = 0.0;
+    double rawAltitude = 0.0;
+    for (size_t index = 0; index < latitudes.size(); ++index) {
+        rawLatitude += latitudes[index];
+        rawLongitude += longitudes[index];
+        rawAltitude += altitudes[index];
+    }
+    rawLatitude /= latitudes.size();
+    rawLongitude /= longitudes.size();
+    rawAltitude /= altitudes.size();
+
+    double centralMeridianDeg = 0.0;
+    double scale = 0.0;
+    String provinceName;
+    String provinceCode;
+    if (!resolveAutoBaseProjection(payload, rawLongitude, centralMeridianDeg, scale,
+                                   provinceName, provinceCode, failureReason)) {
+        return false;
+    }
+
+    bool transformed = false;
+    double finalLatitude = rawLatitude;
+    double finalLongitude = rawLongitude;
+    double finalAltitude = rawAltitude;
+    double northing = 0.0;
+    double easting = 0.0;
+    if (payload["enable_itrf_vn2000_transform"] | true) {
+        transformed = transformToVn2000(rawLatitude, rawLongitude, rawAltitude,
+                                         centralMeridianDeg, scale, finalLatitude,
+                                         finalLongitude, finalAltitude, northing, easting);
+    }
+
+    setAgentState("auto_setup_base");
+    DynamicJsonDocument baseProgress(2048);
+    baseProgress["averaged_coord"]["lat"] = finalLatitude;
+    baseProgress["averaged_coord"]["lon"] = finalLongitude;
+    baseProgress["averaged_coord"]["alt"] = finalAltitude;
+    baseProgress["sample_count"] = latitudes.size();
+    baseProgress["transform_applied"] = transformed;
+    const String requestedProvince = payload["province_code"] | String();
+    const char *projectionSource = requestedProvince.isEmpty() ? "lon_fallback" : "manual_province";
+    baseProgress["projection_source"] = projectionSource;
+    baseProgress["province_code"] = provinceCode;
+    baseProgress["province_name"] = provinceName;
+    baseProgress["central_meridian_deg"] = centralMeridianDeg;
+    baseProgress["k0"] = scale;
+    String baseProgressJson;
+    serializeJson(baseProgress, baseProgressJson);
+    setWorkflowProgress("set_base", 4, 4, baseProgressJson);
+
+    if (!stopNtripRoverLocked()) {
+        failureReason = "cannot acquire transport lock to stop CORS rover session";
+        return false;
+    }
+    if (!applyBaseCoordinates(finalLatitude, finalLongitude, finalAltitude)) {
+        failureReason = "cannot configure GNSS base mode";
+        return false;
+    }
+
+    DynamicJsonDocument baseConfig(CONFIG_DOCUMENT_SIZE);
+    JsonObject coordinates = baseConfig.createNestedObject("coords");
+    coordinates["lat"] = finalLatitude;
+    coordinates["lon"] = finalLongitude;
+    coordinates["alt"] = finalAltitude;
+    baseConfig["altitude_reference"] = "ELLIPSOID";
+    baseConfig["base_setup_method"] = "AUTO_CORS";
+    baseConfig["auto_configured"] = true;
+    baseConfig["fixed_samples_only"] = true;
+    baseConfig["itrf_vn2000_transform_applied"] = transformed;
+    baseConfig["central_meridian_deg"] = centralMeridianDeg;
+    baseConfig["k0"] = scale;
+    baseConfig["projection_source"] = projectionSource;
+    baseConfig["province_code"] = provinceCode;
+    baseConfig["province_name"] = provinceName;
+    baseConfig["vn2000_northing"] = northing;
+    baseConfig["vn2000_easting"] = easting;
+    JsonObject raw = baseConfig.createNestedObject("auto_base_raw_itrf_llh");
+    raw["lat"] = rawLatitude;
+    raw["lon"] = rawLongitude;
+    raw["alt"] = rawAltitude;
+    baseConfig_.clear();
+    serializeJson(baseConfig, baseConfig_);
+    saveStatePreferences();
+    const bool transportRestored = restartConfiguredNtrip();
+    setAgentState(normalAgentState());
+    resultJson = buildAutoBaseResult(
+        finalLatitude, finalLongitude, finalAltitude, rawLatitude, rawLongitude, rawAltitude,
+        transformed, transportRestored, latitudes.size(), projectionSource,
+        provinceCode, provinceName, centralMeridianDeg, scale);
+    Serial.printf("[AUTO BASE] KET QUA: THANH CONG; samples=%u; lat=%.10f; lon=%.10f; alt=%.4f\n",
+                  static_cast<unsigned>(latitudes.size()), finalLatitude, finalLongitude,
+                  finalAltitude);
+    return true;
+}
+
 bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
     String host;
     uint16_t port = 0;
@@ -574,102 +674,13 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
         return false;
     }
 
-    double rawLatitude = 0.0;
-    double rawLongitude = 0.0;
-    double rawAltitude = 0.0;
-    for (size_t index = 0; index < latitudes.size(); ++index) {
-        rawLatitude += latitudes[index];
-        rawLongitude += longitudes[index];
-        rawAltitude += altitudes[index];
-    }
-    rawLatitude /= latitudes.size();
-    rawLongitude /= longitudes.size();
-    rawAltitude /= altitudes.size();
-
-    double centralMeridianDeg = 0.0;
-    double scale = 0.0;
-    String provinceName;
-    String provinceCode;
-    if (!resolveAutoBaseProjection(payload, rawLongitude, centralMeridianDeg, scale,
-                                   provinceName, provinceCode, failureReason)) {
+    String resultJson;
+    if (!completeAutoBaseSetup(payload, latitudes, longitudes, altitudes,
+                               resultJson, failureReason)) {
         finish(false, false, failureReason);
         return false;
     }
-
-    bool transformed = false;
-    double finalLatitude = rawLatitude;
-    double finalLongitude = rawLongitude;
-    double finalAltitude = rawAltitude;
-    double northing = 0.0;
-    double easting = 0.0;
-    const bool enableTransform = payload["enable_itrf_vn2000_transform"] | true;
-    if (enableTransform) {
-        transformed = transformToVn2000(rawLatitude, rawLongitude, rawAltitude,
-                                         centralMeridianDeg, scale, finalLatitude,
-                                         finalLongitude, finalAltitude, northing, easting);
-    }
-
-    setAgentState("auto_setup_base");
-    DynamicJsonDocument baseProgress(2048);
-    baseProgress["averaged_coord"]["lat"] = finalLatitude;
-    baseProgress["averaged_coord"]["lon"] = finalLongitude;
-    baseProgress["averaged_coord"]["alt"] = finalAltitude;
-    baseProgress["sample_count"] = latitudes.size();
-    baseProgress["transform_applied"] = transformed;
-    const String requestedProvince = payload["province_code"] | String();
-    baseProgress["projection_source"] = requestedProvince.isEmpty() ? "lon_fallback" : "manual_province";
-    baseProgress["province_code"] = provinceCode;
-    baseProgress["province_name"] = provinceName;
-    baseProgress["central_meridian_deg"] = centralMeridianDeg;
-    baseProgress["k0"] = scale;
-    String baseProgressJson;
-    serializeJson(baseProgress, baseProgressJson);
-    setWorkflowProgress("set_base", 4, 4, baseProgressJson);
-
-    if (!stopNtripRoverLocked()) {
-        finish(false, false, "cannot acquire transport lock to stop CORS rover session");
-        return false;
-    }
-    if (!applyBaseCoordinates(finalLatitude, finalLongitude, finalAltitude)) {
-        finish(false, false, "cannot configure GNSS base mode");
-        return false;
-    }
-
-    DynamicJsonDocument baseConfig(CONFIG_DOCUMENT_SIZE);
-    JsonObject coordinates = baseConfig.createNestedObject("coords");
-    coordinates["lat"] = finalLatitude;
-    coordinates["lon"] = finalLongitude;
-    coordinates["alt"] = finalAltitude;
-    baseConfig["altitude_reference"] = "ELLIPSOID";
-    baseConfig["base_setup_method"] = "AUTO_CORS";
-    baseConfig["auto_configured"] = true;
-    baseConfig["fixed_samples_only"] = true;
-    baseConfig["itrf_vn2000_transform_applied"] = transformed;
-    baseConfig["central_meridian_deg"] = centralMeridianDeg;
-    baseConfig["k0"] = scale;
-    baseConfig["projection_source"] = requestedProvince.isEmpty() ? "lon_fallback" : "manual_province";
-    baseConfig["province_code"] = provinceCode;
-    baseConfig["province_name"] = provinceName;
-    baseConfig["vn2000_northing"] = northing;
-    baseConfig["vn2000_easting"] = easting;
-    JsonObject raw = baseConfig.createNestedObject("auto_base_raw_itrf_llh");
-    raw["lat"] = rawLatitude;
-    raw["lon"] = rawLongitude;
-    raw["alt"] = rawAltitude;
-    baseConfig_.clear();
-    serializeJson(baseConfig, baseConfig_);
-    saveStatePreferences();
-    const bool transportRestored = restartConfiguredNtrip();
-    setAgentState(normalAgentState());
-
-    const String completedJson = buildAutoBaseResult(
-        finalLatitude, finalLongitude, finalAltitude, rawLatitude, rawLongitude, rawAltitude,
-        transformed, transportRestored, latitudes.size(),
-        requestedProvince.isEmpty() ? "lon_fallback" : "manual_province",
-        provinceCode, provinceName, centralMeridianDeg, scale);
-    setWorkflowProgress("completed", 4, 4, completedJson);
-    Serial.printf("[AUTO BASE] KET QUA: THANH CONG; samples=%u; lat=%.10f; lon=%.10f; alt=%.4f\n",
-                  static_cast<unsigned>(latitudes.size()), finalLatitude, finalLongitude, finalAltitude);
+    setWorkflowProgress("completed", 4, 4, resultJson);
     saveStatePreferences();
     return true;
 }
