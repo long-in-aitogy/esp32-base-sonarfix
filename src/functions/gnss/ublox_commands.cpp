@@ -3,6 +3,7 @@
 #include "Prog_Config.h"
 #include <array>
 #include <algorithm>
+#include <cstddef>
 #include <cstring>
 
 namespace UbloxCommands {
@@ -301,8 +302,9 @@ namespace UbloxCommands {
         size_t offset = 0;
         while (offset + 8 <= length && data[offset] == 0xB5 && data[offset + 1] == 0x62) {
             if (!processUbloxPacket(data + offset, length - offset)) return;
-            const size_t payloadLength = data[offset + 4]
-                | (static_cast<size_t>(data[offset + 5]) << 8);
+            const size_t payloadLength = std::to_integer<size_t>(
+                static_cast<std::byte>(data[offset + 4]))
+                | (std::to_integer<size_t>(static_cast<std::byte>(data[offset + 5])) << 8);
             offset += payloadLength + 8;
         }
     }
