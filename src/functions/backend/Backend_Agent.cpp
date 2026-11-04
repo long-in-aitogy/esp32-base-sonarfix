@@ -874,7 +874,7 @@ void BackendAgent::loop() {
     publishStatus(false);
 }
 
-void BackendAgent::retryUnknownChipProbe() {
+inline void BackendAgent::retryUnknownChipProbe() {
     // Retry an unidentified receiver every 8 seconds while no base workflow is running.
     if (sensorType_ != "UNKNOWN" && !sensorType_.isEmpty()) return;
 
