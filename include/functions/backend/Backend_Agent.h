@@ -130,6 +130,7 @@ private:
     void refreshWebsocket();
     void loopWebsocket();
     void drainDataQueues();
+    void retryUnknownChipProbe();
     void evaluateControlPlaneFailover();
     bool startWorkflow(const String &kind, const String &payload);
     void runWorkflow();
