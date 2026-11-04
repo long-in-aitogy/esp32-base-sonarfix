@@ -121,9 +121,11 @@ JsonObject BackendAgent::appendSurveyInfo(JsonObject system, uint32_t nowMs) con
     JsonObject survey = system.createNestedObject("survey_in_status");
     const bool readbackFresh = receiverBaseReadbackMs_ > 0
         && nowMs - receiverBaseReadbackMs_ <= 45000UL && surveyInReadbackHasPosition_;
-    survey["state"] = !surveyInMonitoring_ ? "not_monitoring"
-        : !readbackFresh ? "awaiting_readback"
-        : surveyInReadbackReady_ ? "base_ready" : "waiting_base";
+    const char *surveyState = "waiting_base";
+    if (!surveyInMonitoring_) surveyState = "not_monitoring";
+    else if (!readbackFresh) surveyState = "awaiting_readback";
+    else if (surveyInReadbackReady_) surveyState = "base_ready";
+    survey["state"] = surveyState;
     if (surveyInMonitoring_) {
         if (surveyInStartedMs_ > 0)
             survey["elapsed_since_ack_seconds"] =
@@ -284,7 +286,7 @@ void BackendAgent::appendNtripStatus(JsonDocument &doc, const JsonObjectConst &s
 
 void BackendAgent::appendTransportStatus(JsonDocument &doc,
                                          const GnssTelemetrySnapshot &gnss,
-                                         uint32_t nowMs, int32_t signal) const {
+                                         [[maybe_unused]] uint32_t nowMs, int32_t signal) const {
     const bool mqtt_connected = mqttConnected();
     const bool websocket = websocketConnected();
     JsonObject antenna = doc.createNestedObject("antenna_status");
@@ -294,7 +296,10 @@ void BackendAgent::appendTransportStatus(JsonDocument &doc,
     JsonObject transport = doc.createNestedObject("transport_status");
     transport["mqtt_connected"] = mqtt_connected;
     transport["websocket_connected"] = websocket;
-    transport["active_channel"] = websocket ? "websocket" : mqtt_connected ? "mqtt" : "none";
+    const char *activeChannel = "none";
+    if (websocket) activeChannel = "websocket";
+    else if (mqtt_connected) activeChannel = "mqtt";
+    transport["active_channel"] = activeChannel;
     transport["mqtt_broker"] = readPreference("MQTT_SERVER", MQTT_SERVER);
     transport["websocket_host"] = readPreference("BACKEND_HOST", BACKEND_HOST);
     transport["control_plane_fail_open"] = controlPlaneFailOpen_;
