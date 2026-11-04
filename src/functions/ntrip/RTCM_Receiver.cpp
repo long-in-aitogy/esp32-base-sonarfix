@@ -260,6 +260,22 @@ bool processRtcmByte(uint8_t value, String &rtcmOutput) {
     return true;
 }
 
+bool processUbxHeaderByte(uint8_t value) {
+    if (ubxHeaderLength == 1 && value != 0x62) {
+        ubxHeaderLength = 0;
+        return false;
+    }
+
+    ubxHeader[ubxHeaderLength++] = value;
+    if (ubxHeaderLength != sizeof(ubxHeader)) return true;
+
+    const size_t payloadLength = size_t(ubxHeader[4])
+        | (size_t(ubxHeader[5]) << 8);
+    ubxHeaderLength = 0;
+    if (payloadLength <= 8192) ubxBytesRemaining = payloadLength + 2;
+    return true;
+}
+
 void consumeByte(uint8_t value, String &rtcmOutput) {
     // UBX payload is binary and may contain '$', LF or 0xD3. Skip the whole
     // frame before looking for NMEA/RTCM, including across UART read chunks.
@@ -267,20 +283,7 @@ void consumeByte(uint8_t value, String &rtcmOutput) {
         --ubxBytesRemaining;
         return;
     }
-    if (ubxHeaderLength > 0) {
-        if (ubxHeaderLength == 1 && value != 0x62) {
-            ubxHeaderLength = 0;
-            // Reconsider this byte as a possible NMEA/RTCM/UBX start.
-        } else {
-            ubxHeader[ubxHeaderLength++] = value;
-            if (ubxHeaderLength == sizeof(ubxHeader)) {
-                const size_t payloadLength = size_t(ubxHeader[4]) | (size_t(ubxHeader[5]) << 8);
-                ubxHeaderLength = 0;
-                if (payloadLength <= 8192) ubxBytesRemaining = payloadLength + 2;
-            }
-            return;
-        }
-    }
+    if (ubxHeaderLength > 0 && processUbxHeaderByte(value)) return;
     if (rtcmLength > 0 && processRtcmByte(value, rtcmOutput)) return;
 
     if (nmeaBuffer.length() > 0) {
