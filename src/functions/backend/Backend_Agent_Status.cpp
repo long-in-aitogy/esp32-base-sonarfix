@@ -285,16 +285,16 @@ void BackendAgent::appendNtripStatus(JsonDocument &doc, const JsonObjectConst &s
 void BackendAgent::appendTransportStatus(JsonDocument &doc,
                                          const GnssTelemetrySnapshot &gnss,
                                          uint32_t nowMs, int32_t signal) const {
-    const bool mqtt = mqttConnected();
+    const bool mqtt_connected = mqttConnected();
     const bool websocket = websocketConnected();
     JsonObject antenna = doc.createNestedObject("antenna_status");
     const bool gnssOk = gnss.hasData && nowMs - gnss.lastDataMs <= 15000UL;
     antenna["state"] = gnssOk ? "OK" : "FAULT";
     if (!gnssOk) antenna["message"] = "Không nhận được dữ liệu GNSS trong 15 giây";
     JsonObject transport = doc.createNestedObject("transport_status");
-    transport["mqtt_connected"] = mqtt;
+    transport["mqtt_connected"] = mqtt_connected;
     transport["websocket_connected"] = websocket;
-    transport["active_channel"] = websocket ? "websocket" : mqtt ? "mqtt" : "none";
+    transport["active_channel"] = websocket ? "websocket" : mqtt_connected ? "mqtt" : "none";
     transport["mqtt_broker"] = readPreference("MQTT_SERVER", MQTT_SERVER);
     transport["websocket_host"] = readPreference("BACKEND_HOST", BACKEND_HOST);
     transport["control_plane_fail_open"] = controlPlaneFailOpen_;
