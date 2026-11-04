@@ -188,7 +188,7 @@ LegacyNtripConfig loadLegacyNtripConfig() {
 }
 
 String endpointHost(JsonObjectConst service, uint8_t index) {
-    const String suffix = String(index + 1);
+    const auto suffix = String(index + 1);
     const String generic = index == 0 ? "ip" : "ip2";
     const String fallback = index == 0 ? jsonString(service, "host", String()) : String();
     return jsonString(service, "serverhost" + suffix,
@@ -198,7 +198,7 @@ String endpointHost(JsonObjectConst service, uint8_t index) {
 }
 
 uint16_t endpointPort(JsonObjectConst service, uint8_t index, uint16_t legacyPort) {
-    const String suffix = String(index + 1);
+    const auto suffix = String(index + 1);
     const String generic = index == 0 ? "port" : "port2";
     const uint16_t fallback = index == 0 ? legacyPort : 2101;
     return static_cast<uint16_t>(service["port" + suffix]
@@ -286,7 +286,7 @@ void normalizeEndpoint(NtripEndpoint &endpoint) {
 
 void loadEndpoint(NtripEndpoint &endpoint, uint8_t index, JsonObjectConst service,
                   bool hasServiceConfig, const LegacyNtripConfig &legacy) {
-    const String suffix = String(index + 1);
+    const auto suffix = String(index + 1);
     String genericUser = "user2";
     String genericPassword = "password2";
     String genericMountpoint = "mountpoint2";
@@ -397,7 +397,7 @@ void sendRoverGgaIfAvailable(Client &client, const bool force = false) {
         }
         return;
     }
-    const String outbound = String(snapshot.lastGga) + "\r\n";
+    const auto outbound = String(snapshot.lastGga) + "\r\n";
     if (client.print(outbound) != outbound.length()) {
         Serial.println("[NTRIP ROVER] Loi ghi GGA len socket caster");
         roverLastGgaMs = millis();
