@@ -98,7 +98,6 @@ namespace GnssCmdBuilder {
     Command buildUbloxOutputConfigCommand(const GnssOptions &options) {
         return UbloxCommands::buildOutputConfigCommand(options);
     }
-    void routeUbloxOutput(uint8_t *data, size_t length) { UbloxCommands::routeUbloxOutput(data, length); }
 #if PROGRAM_DEBUG
     String debugCommand(const Command &command)
     {
