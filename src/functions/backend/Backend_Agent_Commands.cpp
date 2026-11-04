@@ -3,6 +3,7 @@
 #include "Prog_Config.h"
 #include "functions/ntrip/NTRIP_Handler_IP.h"
 #include "functions/ntrip/RTCM_Receiver.h"
+#include <array>
 #include <cmath>
 #include <cstring>
 
@@ -352,25 +353,25 @@ bool BackendAgent::executeServiceConfigCommand(JsonObject payload, String &error
     const JsonArrayConst removedServers = payload["removed_servers"].as<JsonArrayConst>();
     for (JsonVariantConst removed : removedServers) {
         if (!removed.is<int>() || removed.as<int>() <= 2) continue;
-        const String suffix = String(removed.as<int>());
-        const String keys[] = {
+        const auto suffix = String(removed.as<int>());
+        const std::array<String, 9> keys = {{
             "server" + suffix + "_enabled", "server" + suffix + "_stream_on_demand",
             "server" + suffix + "_stream_active", "serverhost" + suffix,
             "port" + suffix, "mountpoint" + suffix, "username" + suffix,
             "password" + suffix, "ntrip_version" + suffix
-        };
+        }};
         for (const String &key : keys) service.remove(key.c_str());
     }
     service.remove("removed_servers");
-    const bool onDemand = jsonBool(service, "stream_on_demand", false);
+    const auto onDemand = jsonBool(service, "stream_on_demand", false);
     if (!onDemand) service["stream_active"] = true;
     else if (service["stream_active"].isNull()) service["stream_active"] = false;
-    const bool globalActive = jsonBool(service, "stream_active", false);
+    const auto globalActive = jsonBool(service, "stream_active", false);
     for (uint8_t id = 1; id <= 2; ++id) {
-        const String prefix = String("server") + String(id);
-        const String onDemandKey = prefix + "_stream_on_demand";
-        const String activeKey = prefix + "_stream_active";
-        const bool serverOnDemand = jsonBool(service, onDemandKey, onDemand);
+        const auto prefix = String("server") + String(id);
+        const auto onDemandKey = prefix + "_stream_on_demand";
+        const auto activeKey = prefix + "_stream_active";
+        const auto serverOnDemand = jsonBool(service, onDemandKey, onDemand);
         service[onDemandKey.c_str()] = serverOnDemand;
         if (!serverOnDemand) service[activeKey.c_str()] = true;
         else if (service[activeKey.c_str()].isNull()) service[activeKey.c_str()] = globalActive;
