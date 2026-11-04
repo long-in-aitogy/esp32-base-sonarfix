@@ -585,8 +585,13 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
     return true;
 }
 
-bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload) {
-    JsonObject reference = payload["reference_coords"].as<JsonObject>();
+bool BackendAgent::prepareReferenceCheckConfig(
+    JsonObject payload, JsonObject &reference, double &referenceLatitude,
+    double &referenceLongitude, double &referenceAltitude, double &restoreLatitude,
+    double &restoreLongitude, double &restoreAltitude, String &host, uint16_t &port,
+    String &username, String &password, String &mountpoint, uint32_t &timeoutSeconds,
+    uint16_t &requestedSamples) {
+    reference = payload["reference_coords"].as<JsonObject>();
     DynamicJsonDocument storedBase(CONFIG_DOCUMENT_SIZE);
     const bool baseParsed = deserializeJson(storedBase, baseConfig_) == DeserializationError::Ok
         && storedBase.is<JsonObject>();
@@ -594,21 +599,170 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload) {
     JsonObject storedCoordinates = storedBaseObject["coords"].as<JsonObject>();
     if (storedCoordinates.isNull()) storedCoordinates = storedBaseObject;
 
-    const double referenceLatitude = reference["lat"] | NAN;
-    const double referenceLongitude = reference["lon"] | NAN;
-    const double referenceAltitude = reference["alt"] | NAN;
-    const double restoreLatitude = storedCoordinates["lat"] | NAN;
-    const double restoreLongitude = storedCoordinates["lon"] | NAN;
-    const double restoreAltitude = storedCoordinates["alt"] | NAN;
-    const String host = payload["ip"] | String();
-    const uint16_t port = static_cast<uint16_t>(payload["port"] | 0);
-    const String username = payload["user"] | String();
-    const String password = payload["password"] | String();
-    const String mountpoint = payload["mountpoint"] | String();
-    const uint32_t timeoutSeconds = constrain(
+    referenceLatitude = reference["lat"] | NAN;
+    referenceLongitude = reference["lon"] | NAN;
+    referenceAltitude = reference["alt"] | NAN;
+    restoreLatitude = storedCoordinates["lat"] | NAN;
+    restoreLongitude = storedCoordinates["lon"] | NAN;
+    restoreAltitude = storedCoordinates["alt"] | NAN;
+    host = payload["ip"] | String();
+    port = static_cast<uint16_t>(payload["port"] | 0);
+    username = payload["user"] | String();
+    password = payload["password"] | String();
+    mountpoint = payload["mountpoint"] | String();
+    timeoutSeconds = constrain(
         static_cast<uint32_t>(payload["timeout"] | 300UL), 30UL, 86400UL);
-    const uint16_t requestedSamples = static_cast<uint16_t>(constrain(
+    requestedSamples = static_cast<uint16_t>(constrain(
         static_cast<int>(payload["samples"] | 60), 5, 120));
+
+    return baseParsed && !reference.isNull()
+        && std::isfinite(referenceLatitude) && std::isfinite(referenceLongitude)
+        && std::isfinite(referenceAltitude) && referenceLatitude >= -90.0
+        && referenceLatitude <= 90.0 && referenceLongitude >= -180.0
+        && referenceLongitude <= 180.0 && std::isfinite(restoreLatitude)
+        && std::isfinite(restoreLongitude) && std::isfinite(restoreAltitude)
+        && !host.isEmpty() && !username.isEmpty() && !password.isEmpty()
+        && !mountpoint.isEmpty() && port != 0 && port <= 65535;
+}
+
+inline bool BackendAgent::startReferenceRover(const String &host, const uint16_t port,
+                                              const String &username, const String &password,
+                                              const String &mountpoint) {
+    if (!tcpStreamMutex
+        || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE) {
+        return false;
+    }
+    stopNtrip();
+    const bool started = startNtripRover(host, port, username, password, mountpoint, 1);
+    xSemaphoreGive(tcpStreamMutex);
+    return started;
+}
+
+bool BackendAgent::waitForReferenceFix(const uint32_t timeoutSeconds, String &failureReason) {
+    const uint32_t waitStartedMs = millis();
+    uint32_t nextSecondMs = waitStartedMs;
+    while (millis() - waitStartedMs < timeoutSeconds * 1000UL) {
+        if (workflowCancelRequested_) {
+            failureReason = "cancelled by user";
+            return false;
+        }
+        if (loopNtripRoverLocked() == 504) {
+            failureReason = "CORS reference connection lost";
+            return false;
+        }
+        const uint32_t now = millis();
+        if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
+            nextSecondMs = now + 1000UL;
+            const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
+            const bool fixed = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
+            DynamicJsonDocument details(512);
+            details["fix_status"] = snapshot.fixStatus;
+            details["elapsed"] = (now - waitStartedMs) / 1000UL;
+            String serialized;
+            serializeJson(details, serialized);
+            setWorkflowProgress("reference_check_wait_fix", 2, 4, serialized);
+            if (fixed) return true;
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    failureReason = "RTK fix timeout";
+    return false;
+}
+
+bool BackendAgent::collectReferenceSamples(const uint16_t requestedSamples,
+                                            std::vector<double> &latitudes,
+                                            std::vector<double> &longitudes,
+                                            std::vector<double> &altitudes,
+                                            String &failureReason) {
+    latitudes.reserve(requestedSamples);
+    longitudes.reserve(requestedSamples);
+    altitudes.reserve(requestedSamples);
+    const uint32_t averageStartedMs = millis();
+    uint32_t nextSecondMs = averageStartedMs;
+    const uint32_t averagingSeconds = requestedSamples > 60U ? requestedSamples : 60U;
+    while (millis() - averageStartedMs < averagingSeconds * 1000UL
+           && latitudes.size() < requestedSamples) {
+        if (workflowCancelRequested_) {
+            failureReason = "cancelled by user";
+            return false;
+        }
+        if (loopNtripRoverLocked() == 504) {
+            failureReason = "CORS reference connection lost while averaging";
+            return false;
+        }
+        const uint32_t now = millis();
+        if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
+            nextSecondMs = now + 1000UL;
+            const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
+            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
+            if (usable && std::isfinite(snapshot.latitude) && std::isfinite(snapshot.longitude)
+                && std::isfinite(snapshot.altitude) && snapshot.latitude >= -90.0
+                && snapshot.latitude <= 90.0 && snapshot.longitude >= -180.0
+                && snapshot.longitude <= 180.0) {
+                latitudes.push_back(snapshot.latitude);
+                longitudes.push_back(snapshot.longitude);
+                altitudes.push_back(snapshot.altitude);
+            }
+            DynamicJsonDocument details(768);
+            details["samples_collected"] = latitudes.size();
+            details["samples_target"] = requestedSamples;
+            details["fix_status"] = snapshot.fixStatus;
+            String serialized;
+            serializeJson(details, serialized);
+            setWorkflowProgress("reference_check_averaging", 3, 4, serialized);
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    if (latitudes.size() < 5) {
+        failureReason = "insufficient valid reference samples";
+        return false;
+    }
+    return true;
+}
+
+String BackendAgent::buildReferenceCheckResult(JsonObject reference, const double measuredLatitude,
+                                                const double measuredLongitude,
+                                                const double measuredAltitude,
+                                                const size_t sampleCount) {
+    const double meanLatitudeRad = (measuredLatitude + (reference["lat"] | NAN))
+        * 3.14159265358979323846 / 360.0;
+    DynamicJsonDocument result(2048);
+    result["reference_coord"]["lat"] = reference["lat"];
+    result["reference_coord"]["lon"] = reference["lon"];
+    result["reference_coord"]["alt"] = reference["alt"];
+    result["measured_coord"]["lat"] = measuredLatitude;
+    result["measured_coord"]["lon"] = measuredLongitude;
+    result["measured_coord"]["alt"] = measuredAltitude;
+    result["delta_n_m"] = (measuredLatitude - (reference["lat"] | NAN))
+        * 3.14159265358979323846 / 180.0 * 6378137.0;
+    result["delta_e_m"] = (measuredLongitude - (reference["lon"] | NAN))
+        * 3.14159265358979323846 / 180.0 * 6378137.0 * cos(meanLatitudeRad);
+    result["delta_u_m"] = measuredAltitude - (reference["alt"] | NAN);
+    result["sample_count"] = sampleCount;
+    String resultJson;
+    serializeJson(result, resultJson);
+    return resultJson;
+}
+
+bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload) {
+    JsonObject reference;
+    double referenceLatitude = NAN;
+    double referenceLongitude = NAN;
+    double referenceAltitude = NAN;
+    double restoreLatitude = NAN;
+    double restoreLongitude = NAN;
+    double restoreAltitude = NAN;
+    String host;
+    uint16_t port = 0;
+    String username;
+    String password;
+    String mountpoint;
+    uint32_t timeoutSeconds = 0;
+    uint16_t requestedSamples = 0;
+    const bool validConfig = prepareReferenceCheckConfig(
+        payload, reference, referenceLatitude, referenceLongitude, referenceAltitude,
+        restoreLatitude, restoreLongitude, restoreAltitude, host, port, username, password,
+        mountpoint, timeoutSeconds, requestedSamples);
 
     auto cleanup = [&]() {
         const bool roverStopped = stopNtripRoverLocked();
@@ -636,14 +790,7 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload) {
         saveStatePreferences();
     };
 
-    if (!baseParsed || reference.isNull()
-        || !std::isfinite(referenceLatitude) || !std::isfinite(referenceLongitude)
-        || !std::isfinite(referenceAltitude) || referenceLatitude < -90.0
-        || referenceLatitude > 90.0 || referenceLongitude < -180.0
-        || referenceLongitude > 180.0 || !std::isfinite(restoreLatitude)
-        || !std::isfinite(restoreLongitude) || !std::isfinite(restoreAltitude)
-        || host.isEmpty() || username.isEmpty() || password.isEmpty()
-        || mountpoint.isEmpty() || port == 0 || port > 65535) {
+    if (!validConfig) {
         finish(false, false, "missing or invalid reference/CORS configuration");
         return false;
     }
@@ -655,49 +802,17 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload) {
         return false;
     }
 
-    bool roverStarted = false;
-    if (tcpStreamMutex
-        && xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
-        stopNtrip();
-        roverStarted = startNtripRover(host, port, username, password, mountpoint, 1);
-        xSemaphoreGive(tcpStreamMutex);
-    }
-    if (!roverStarted) {
+    if (!startReferenceRover(host, port, username, password, mountpoint)) {
         finish(false, false, "cannot connect to CORS reference mountpoint");
         return false;
     }
 
     setAgentState("reference_check_wait_fix");
     setWorkflowProgress("reference_check_wait_fix", 2, 4);
-    const uint32_t waitStartedMs = millis();
-    uint32_t nextSecondMs = waitStartedMs;
-    bool fixed = false;
-    while (millis() - waitStartedMs < timeoutSeconds * 1000UL) {
-        if (workflowCancelRequested_) {
-            finish(false, true, "cancelled by user");
-            return false;
-        }
-        if (loopNtripRoverLocked() == 504) {
-            finish(false, false, "CORS reference connection lost");
-            return false;
-        }
-        const uint32_t now = millis();
-        if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
-            nextSecondMs = now + 1000UL;
-            const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-            fixed = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
-            DynamicJsonDocument details(512);
-            details["fix_status"] = snapshot.fixStatus;
-            details["elapsed"] = (now - waitStartedMs) / 1000UL;
-            String serialized;
-            serializeJson(details, serialized);
-            setWorkflowProgress("reference_check_wait_fix", 2, 4, serialized);
-            if (fixed) break;
-        }
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-    if (!fixed) {
-        finish(false, false, "RTK fix timeout");
+    String failureReason;
+    if (!waitForReferenceFix(timeoutSeconds, failureReason)) {
+        finish(false, failureReason == "cancelled by user",
+               failureReason);
         return false;
     }
 
@@ -706,47 +821,10 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload) {
     std::vector<double> latitudes;
     std::vector<double> longitudes;
     std::vector<double> altitudes;
-    latitudes.reserve(requestedSamples);
-    longitudes.reserve(requestedSamples);
-    altitudes.reserve(requestedSamples);
-    const uint32_t averageStartedMs = millis();
-    nextSecondMs = averageStartedMs;
-    const uint32_t referenceAveragingSeconds = requestedSamples > 60U ? requestedSamples : 60U;
-    while (millis() - averageStartedMs < referenceAveragingSeconds * 1000UL
-           && latitudes.size() < requestedSamples) {
-        if (workflowCancelRequested_) {
-            finish(false, true, "cancelled by user");
-            return false;
-        }
-        if (loopNtripRoverLocked() == 504) {
-            finish(false, false, "CORS reference connection lost while averaging");
-            return false;
-        }
-        const uint32_t now = millis();
-        if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
-            nextSecondMs = now + 1000UL;
-            const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
-            if (usable && std::isfinite(snapshot.latitude) && std::isfinite(snapshot.longitude)
-                && std::isfinite(snapshot.altitude) && snapshot.latitude >= -90.0
-                && snapshot.latitude <= 90.0 && snapshot.longitude >= -180.0
-                && snapshot.longitude <= 180.0) {
-                latitudes.push_back(snapshot.latitude);
-                longitudes.push_back(snapshot.longitude);
-                altitudes.push_back(snapshot.altitude);
-            }
-            DynamicJsonDocument details(768);
-            details["samples_collected"] = latitudes.size();
-            details["samples_target"] = requestedSamples;
-            details["fix_status"] = snapshot.fixStatus;
-            String serialized;
-            serializeJson(details, serialized);
-            setWorkflowProgress("reference_check_averaging", 3, 4, serialized);
-        }
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-    if (latitudes.size() < 5) {
-        finish(false, false, "insufficient valid reference samples");
+    if (!collectReferenceSamples(requestedSamples, latitudes, longitudes, altitudes,
+                                 failureReason)) {
+        finish(false, failureReason == "cancelled by user",
+               failureReason);
         return false;
     }
 
@@ -766,23 +844,8 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload) {
         return false;
     }
 
-    const double meanLatitudeRad = (measuredLatitude + referenceLatitude)
-        * 3.14159265358979323846 / 360.0;
-    DynamicJsonDocument result(2048);
-    result["reference_coord"]["lat"] = referenceLatitude;
-    result["reference_coord"]["lon"] = referenceLongitude;
-    result["reference_coord"]["alt"] = referenceAltitude;
-    result["measured_coord"]["lat"] = measuredLatitude;
-    result["measured_coord"]["lon"] = measuredLongitude;
-    result["measured_coord"]["alt"] = measuredAltitude;
-    result["delta_n_m"] = (measuredLatitude - referenceLatitude)
-        * 3.14159265358979323846 / 180.0 * 6378137.0;
-    result["delta_e_m"] = (measuredLongitude - referenceLongitude)
-        * 3.14159265358979323846 / 180.0 * 6378137.0 * cos(meanLatitudeRad);
-    result["delta_u_m"] = measuredAltitude - referenceAltitude;
-    result["sample_count"] = latitudes.size();
-    String resultJson;
-    serializeJson(result, resultJson);
+    const String resultJson = buildReferenceCheckResult(
+        reference, measuredLatitude, measuredLongitude, measuredAltitude, latitudes.size());
 
     if (!cleanup()) {
         setAgentState(normalAgentState());

@@ -10,6 +10,7 @@
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
+#include <vector>
 
 class BackendAgentWebsocket;
 struct GnssTelemetrySnapshot;
@@ -142,6 +143,22 @@ private:
                              const String &details = String());
     bool runAutoBaseWorkflow(JsonObject payload);
     bool runReferenceCheckWorkflow(JsonObject payload);
+    bool prepareReferenceCheckConfig(JsonObject payload, JsonObject &reference,
+                                     double &referenceLatitude, double &referenceLongitude,
+                                     double &referenceAltitude, double &restoreLatitude,
+                                     double &restoreLongitude, double &restoreAltitude,
+                                     String &host, uint16_t &port, String &username,
+                                     String &password, String &mountpoint,
+                                     uint32_t &timeoutSeconds, uint16_t &requestedSamples);
+    inline bool startReferenceRover(const String &host, uint16_t port, const String &username,
+                                   const String &password, const String &mountpoint);
+    bool waitForReferenceFix(uint32_t timeoutSeconds, String &failureReason);
+    bool collectReferenceSamples(uint16_t requestedSamples, std::vector<double> &latitudes,
+                                 std::vector<double> &longitudes,
+                                 std::vector<double> &altitudes, String &failureReason);
+    String buildReferenceCheckResult(JsonObject reference, double measuredLatitude,
+                                     double measuredLongitude, double measuredAltitude,
+                                     size_t sampleCount);
     bool restartConfiguredNtrip();
     int loopNtripRoverLocked();
     bool stopNtripRoverLocked();
