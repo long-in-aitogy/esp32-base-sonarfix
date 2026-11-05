@@ -1,14 +1,14 @@
-#include "functions/Station_Lock.h"
-#include "functions/Unicore_Output.h"
-#include "functions/Base_Sample.h"
-#include "functions/Device_Token.h"
-#include "functions/gnss_cmd_builder.h"
-#include "functions/Ubx_Reply.h"
-#include "functions/Unicore_Reply.h"
-#include "functions/Unicore_Identification.h"
-#include "functions/Unicore_Log.h"
-#include "functions/unicore_commands.h"
-#include "functions/Ubx_Base_Status.h"
+#include "functions/backend/Station_Lock.h"
+#include "functions/gnss/Unicore_Output.h"
+#include "functions/backend/Base_Sample.h"
+#include "functions/backend/Device_Token.h"
+#include "functions/gnss/gnss_cmd_builder.h"
+#include "functions/gnss/Ubx_Reply.h"
+#include "functions/gnss/Unicore_Reply.h"
+#include "functions/gnss/Unicore_Identification.h"
+#include "functions/gnss/Unicore_Log.h"
+#include "functions/gnss/unicore_commands.h"
+#include "functions/gnss/Ubx_Base_Status.h"
 #include <cassert>
 #include <iostream>
 #include <string>
@@ -205,6 +205,15 @@ int main(int argc, char **argv) {
         const std::string line(command.begin(), command.end());
         assert(line.find(" COM2 1\r\n") != std::string::npos);
     }
+    for (double latitude : {21.084990131093591, -21.084990131093591, 21.0849901310}) {
+        const auto commands = commandListToBytes(buildBaseFixedLlaCommand(latitude, 105.78665745895107,
+            12.5, 0.01, GnssSensorType::Unicore, uart));
+        const std::string wire(commands.begin(), commands.end());
+        const std::string expected = latitude < 0
+            ? "mode base -21.0849901310 105.7866574589 12.5000\r\n"
+            : "mode base 21.0849901310 105.7866574589 12.5000\r\n";
+        assert(wire.find(expected) != std::string::npos);
+    }
     uart.ports = {"UART1"};
     uart.outputMode = OutputMode::RtcmOnly;
     for (const auto type : {GnssSensorType::Ublox, GnssSensorType::Unicore}) {
@@ -295,6 +304,35 @@ int main(int argc, char **argv) {
         checkPackets(output);
         assert(output == buildUbloxOutputConfigCommand(uart));
     }
+
+    // Independent u-blox HPG 1.32 keys; exercise multi-port VALSET splitting.
+    GnssOptions allPorts;
+    allPorts.ports = {"UART1", "UART2", "USB"};
+    allPorts.outputMode = OutputMode::RtcmOnly;
+    allPorts.msmLevel = MsmLevel::Both;
+    allPorts.gal = true; allPorts.bds = false;
+    const auto multiPortOutput = buildUbloxOutputConfigCommand(allPorts);
+    checkPackets(multiPortOutput);
+    size_t valsets = 0, outputKeys = 0;
+    bool galileoMsm4 = false, galileoMsm7 = false, beidouMsm7Disabled = false;
+    for (size_t offset = 0; offset < multiPortOutput.size();) {
+        const uint8_t *packet = multiPortOutput.data() + offset;
+        const size_t length = packet[4] | (size_t(packet[5]) << 8);
+        if (packet[2] == 6 && packet[3] == 0x8A) {
+            ++valsets;
+            assert((length - 4) / 5 <= 64);
+            outputKeys += (length - 4) / 5;
+            for (size_t i = 10; i < length + 6; i += 5) {
+                const uint32_t key = UbxBaseStatus::u32(packet + i);
+                if (key == 0x20910369) galileoMsm4 = packet[i + 4] == 1;
+                if (key == 0x20910319) galileoMsm7 = packet[i + 4] == 1;
+                if (key == 0x209102D7) beidouMsm7Disabled = packet[i + 4] == 0;
+            }
+        }
+        offset += length + 8;
+    }
+    assert(valsets == 2 && outputKeys == 93);
+    assert(galileoMsm4 && galileoMsm7 && beidouMsm7Disabled);
 
     // Route hexadecimal packets from stdin and emit the resulting bytes for comparison.
     if (argc > 1) {

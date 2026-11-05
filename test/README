@@ -9,3 +9,67 @@ in the development cycle.
 
 More information about PlatformIO Unit Testing:
 - https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
+
+Host checks (run from geodetic/esp32, no device required):
+
+c++ -std=c++17 -fsanitize=address,undefined -g -Itest/host -Iinclude \
+  test/host/base_checks.cpp src/functions/gnss/gnss_cmd_builder.cpp \
+  src/functions/gnss/ublox_commands.cpp src/functions/gnss/unicore_commands.cpp \
+  -o /tmp/esp32-base-checks
+/tmp/esp32-base-checks
+python3 -B test/host/check_cors.py ../.. /tmp/esp32-base-checks
+python3 -B test/host/check_gnss_stream.py
+python3 -B test/host/check_rover_gga.py
+python3 -B test/host/check_gga_position.py
+python3 -B test/host/check_wifi_handover.py
+python3 -B test/host/check_auto_base_location.py
+python3 -B test/host/check_vn2000.py
+c++ -std=c++17 -fsanitize=address,undefined -Itest/host -Iinclude \
+  test/host/mqtt_write_checks.cpp -o /tmp/esp32-mqtt-checks
+/tmp/esp32-mqtt-checks
+c++ -std=c++17 -fsanitize=address,undefined -Itest/host -Iinclude \
+  test/host/wifi_profiles_checks.cpp -o /tmp/esp32-wifi-checks
+/tmp/esp32-wifi-checks
+
+Shared codec and MQTT dispatch checks:
+
+c++ -std=c++17 -DNATIVE_BUILD -fsanitize=address,undefined \
+  -Itest/host -Iinclude test/host/codec_checks.cpp \
+  src/functions/backend/Backend_Agent_Codec.cpp -o /tmp/esp32-codec-checks
+/tmp/esp32-codec-checks
+python3 -B test/host/check_mqtt_dispatch.py
+
+wifi_profiles_checks.cpp validates credentials using Wifi_Credentials.h;
+it does not restore the removed AP or multiple-network profile feature.
+check_wifi_handover.py reads the current Network_Manager.cpp implementation.
+check_status_flash.py requires a real flashed device and a closed Serial Monitor;
+it observes startup logs and does not upload firmware. The PlatformIO tests
+in init_preference and test_sim run on hardware, not as host checks.
+
+VS Code uses PlatformIO-generated IntelliSense configuration. These host
+files do not need to be added to the production compilation database.
+
+u-blox configuration verification (no device required):
+
+python3 -B test/host/check_ublox_verification.py
+c++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude \
+  test/host/config_verification_checks.cpp -o /tmp/esp32-config-verification
+/tmp/esp32-config-verification
+
+Upstream-cleanup regression checks (native C++, ASan/UBSan):
+  python3 -B test/host/check_status_stream.py
+  python3 -B test/host/check_websocket_frames.py
+The optional first argument is a previous firmware root. Status JSON is compared
+across versions; stream commands use expected outcomes because the old handler
+contains dangling JSON keys. WebSocket checks run unchanged on either version.
+
+NTRIP reconnect status and transition-only logging:
+  python3 -B test/host/check_ntrip_reconnect.py
+
+Workflow Base-mode restoration and CORS-to-UART delivery:
+  python3 -B test/host/check_workflow_restore.py
+
+Run `python3 geodetic/esp32/test/host/check_nvs_inventory.py` for real JSON field values, nested secret masking and pagination.
+Run `python3 geodetic/esp32/test/host/check_wifi_nvs.py` for Wi-Fi NVS reuse and missing-key persistence.
+Run `python3 geodetic/esp32/test/host/check_projection_audit.py` for fixed M3/M6 RTCM1025 packets in both decoders, raw evidence preservation and report memory/serialization.
+Run `python3 geodetic/esp32/test/host/check_workflow_progress.py` for JSON key ownership and Vietnamese workflow reports under ASan/UBSan.

@@ -2,31 +2,58 @@
 
 ## Backend agent ownership
 
-`include/functions/Backend_Agent.h` defines the public agent interface. Its
-implementation is split by responsibility under `src/functions/`:
+`include/functions/backend/Backend_Agent.h` defines the public agent interface. Its
+implementation is split by responsibility under `src/functions/backend/`:
 
 | File | Responsibility |
 | --- | --- |
-| `Backend_Agent.cpp` | Startup, saved state, transport lifecycle and data queues |
+| `Backend_Agent.cpp` | Agent startup, transport lifecycle and data queues |
+| `Backend_Agent_Storage.cpp` | NVS migration, saved identity/configuration and persistence |
+| `Backend_Agent_Startup.cpp` | Receiver mode restoration and startup configuration |
 | `Backend_Agent_Commands.cpp` | Backend command validation, execution and results |
 | `Backend_Agent_Workflows.cpp` | Auto Base, reference checks and GNSS command exchanges |
-| `Backend_Agent_Gnss.cpp` | Periodic receiver readback and saved Survey-In results |
+| `Backend_Agent_Gnss.cpp` | GNSS command writes, ACK/readback, Rover transition and Survey-In status |
+| `Backend_Agent_Codec.cpp` | Shared Base64/URL encoding, token fingerprints and legacy license compatibility |
 | `Backend_Agent_Status.cpp` | Status and health payloads |
 | `Backend_Agent_Projection.cpp` | Coordinate transformation and province projections |
 | `Backend_Agent_Websocket.cpp` | RFC6455 handshake, framing and TCP reconnects |
 
-`Backend_Agent_Internal.h` and `Backend_Agent_Websocket.h` are implementation
-headers. Keep transport framing out of command handling and status formatting.
+Under `include/functions/backend/`, `Backend_Agent_Internal.h`, `Backend_Agent_Codec.h` and
+`Backend_Agent_Websocket.h` are implementation headers. Keep transport framing out of command handling and status formatting.
 Survey-In status uses receiver readback; the removed GGA polling state must not
 be reintroduced to make RTCM-only mode depend on NMEA.
 
+## Function directory groups
+
+Both `src/functions/` and `include/functions/` use `backend/`, `gnss/`,
+`mqtt/` and `ntrip/`. Hardware and maths retain their existing directories.
+Source files include headers by their full path from `include/`; no forwarding
+headers or recursive include search paths are required. Host harnesses and
+build instructions use the same layout.
+
+## Firmware ownership
+
+- `src/main.cpp`: hardware initialization, task startup and worker loops.
+- `src/hardware/Network_Manager.cpp`: boot connectivity, Wi-Fi/SIM handover,
+  recovery timing and transport client selection. Its MQTT-side helpers run
+  with `tcpStreamMutex` held; maintenance acquires that mutex itself.
+- `src/functions/gnss/Gnss_Detection.cpp`: receiver identity probes and baud scan.
+- `src/functions/ntrip/NTRIP_Handler_IP.cpp`: caster endpoints, authentication,
+  correction streaming and temporary rover sessions.
+
+The unused `bootstrapUM980`/`bootstrapUblox` UART configuration paths were
+removed. Receiver startup is owned by `Backend_Agent_Startup.cpp`; do not add
+another configuration path inside NTRIP. Write-only disconnect counters were
+also removed. Moved NVS, receiver detection and network handover bodies were
+compared against the previous source; command bytes, saved keys, probe timing
+and socket shutdown order are preserved.
+
 ## Verify a cleanup
 
-Run the build and host checks in [base-4g.md](base-4g.md#kiểm-tra), plus:
+Build the firmware as described in [base-4g.md](base-4g.md#kiểm-tra):
 
 ```sh
-python3 -B test/host/check_gnss_stream.py
-python3 -B test/host/check_rover_gga.py
+pio run -e tdm240x_dev_general
 git diff --check
 ```
 
@@ -54,3 +81,69 @@ rerun the checks rather than replacing the target file with an old snapshot.
 PR #103 already merged the previous CORS synchronization. PR #66 still points
 to an older branch with overlapping changes. The new cleanup is prepared on a
 separate branch; changing or closing that PR is a separate repository action.
+
+## Main review — 31 October 2026
+
+Fetched `long-in-aitogy/esp32-um-ubx-base/main` and reviewed its current tip,
+`844c63598f8d33a597c7ba8a07decd59e176dd0f` (7 October 2026, #88).
+Its final change replaces compile-time GNSS chip selection with runtime
+selection, adds `GNSS SET CHIP`, and persists `GNSS_MDL_TYPE`. These paths
+already exist in this CORS firmware under `GnssCmdBuilder`,
+`handleGnssBaseCommand`, `handleGnssSetCommand`, and receiver detection.
+The earlier firmware sync at `180c3aa` also contains this exact main tip.
+No incoming main changes remain to port at this review; retain CORS receiver
+detection, command validation, routing, ACK checks and saved settings.
+
+Continued cleanup in this CORS working tree: share service JSON conversion
+between backend agent and NTRIP, and share base command finalization within
+each receiver implementation. JSON keys, fallback rules, command order and
+delays are preserved. Shared JSON conversions were verified during development.
+
+## Codec and GNSS ownership cleanup
+
+NTRIP authentication and WebSocket nonces share the Base64 encoder. Token
+fingerprints, raw-command decoding, URL encoding, delay markers and legacy
+license compatibility are isolated from the agent loop in the codec module.
+Legacy license calculations and receiver command/ACK/readback bodies were
+compared with the prior source without changing their algorithms or timing.
+
+Workflow code owns Auto Base/reference orchestration. GNSS command exchange,
+UART ownership and reply validation live with receiver operations. MQTT
+routing returns early for non-legacy topics and rejected inputs; its five-second
+reconnect backoff and subscription topics remain unchanged. Host checks for
+codec vectors and MQTT dispatch are documented in `test/README`.
+
+## Selective upstream cleanup — 4 November 2026
+
+Reviewed `long-in-aitogy/esp32-um-ubx-base/develop` at
+`9f1433fed8dad32abdbac937f0b2bbbc9185a4f7`. The CORS port adopts the status
+section extraction from `9eca28c`/`30e144b`, stream-command helpers from
+`c6ea725`/`e4da8f5`, and the WebSocket frame-reader separation from `cd51797`.
+Existing CORS field contents, status ordering, GNSS quality units, NVS and
+verification reports, frame validation and transport behavior are retained.
+Auto Base datum conversion, M3/M6 support and review-before-apply are unchanged.
+
+The main status builder drops from 386 to 43 lines, stream dispatch from 92 to
+24, and the WebSocket dispatch loop from 60 to 19. This is separation of
+responsibilities, not an overall source-line reduction. No directory migration
+or new runtime dependency is introduced.
+
+The port also fixes dynamic JSON key ownership in stream/service configuration:
+pass `String` keys directly so ArduinoJson copies them. Passing a temporary or
+local string's `c_str()` links memory that can expire before serialization.
+The native sanitizer exposed this in both the previous CORS stream handler and
+the upstream helper. Consequently, before/after JSON equivalence is checked for
+status; stream commands use explicit expected outcomes under sanitizers.
+
+The Unicore query extraction in `74502f6` was not adopted: it changes when the
+inner receive loop stops after a complete response. Legacy bootstrap length
+changes and broad command/startup decomposition were also left out of this port.
+
+Verification: `test/host/check_status_stream.py` executes 144 status cases and
+44 stream commands using the actual implementation and ArduinoJson;
+`test/host/check_websocket_frames.py` covers partial/coalesced input, header
+validation, the 32 KB limit, ping/close and command delivery. Both support an
+optional previous firmware root. The same WebSocket checks pass before and
+after extraction; all status JSON matches the pre-refactor snapshot. Existing
+Auto Base, mixed GNSS stream and MQTT dispatch checks and the PlatformIO build
+are the remaining regression gates. Hardware behavior has not been measured.

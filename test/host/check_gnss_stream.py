@@ -1,11 +1,10 @@
 """Exercise the actual mixed UART stream parser with interleaved UBX/RTCM/NMEA."""
 from pathlib import Path
 import subprocess
-import sys
 import tempfile
 
 root = Path(__file__).resolve().parents[2]
-source = Path(sys.argv[1]).read_text() if len(sys.argv) > 1 else (root / "src/functions/RTCM_Receiver.cpp").read_text()
+source = (root / "src/functions/ntrip/RTCM_Receiver.cpp").read_text()
 parser = source.split("void resetRtcmParser()", 1)[1].split("\n} // namespace", 1)[0]
 harness = r'''
 #include <cassert>

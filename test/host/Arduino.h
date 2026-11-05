@@ -27,6 +27,7 @@ public:
     bool endsWith(const String &suffix) const {
         return size() >= suffix.size() && compare(size() - suffix.size(), suffix.size(), suffix) == 0;
     }
+    String substring(size_t start, size_t end = npos) const { return substr(start, end == npos ? npos : end - start); }
     void trim() {
         const auto start = find_first_not_of(" \r\n\t");
         *this = start == npos ? String() : String(substr(start, find_last_not_of(" \r\n\t") - start + 1));

@@ -2,6 +2,7 @@
 #define PROG_CONFIG_H
 
 #include <cstdint>
+#include <string_view>
 #include "Top_Lvl_Config.h"
 #include <Preferences.h>
 
@@ -26,9 +27,15 @@ inline constexpr uint8_t GNSS_UNICORE_PORT = 0;
 inline constexpr int MUTEX_TIMEOUT_MS = 1500; // Thời gian tối đa để chờ mutex (ms)
 
 // ================= CẤU HÌNH KẾT NỐI =================
+// Giá trị mặc định khi chưa có cấu hình NVS hoặc sau lệnh reset phần tương ứng.
+// Sửa header/nạp firmware/reboot không ghi đè cấu hình đã lưu.
+// Muốn dùng lại mặc định mới: gửi lệnh xóa/reset cấu hình NVS tương ứng.
+inline constexpr char CONNECTION_PREFERENCE[] = "4G"; // "4G" hoặc "WIFI".
+static_assert(std::string_view(CONNECTION_PREFERENCE) == "4G" || std::string_view(CONNECTION_PREFERENCE) == "WIFI",
+              "CONNECTION_PREFERENCE must be 4G or WIFI");
 
-inline constexpr char WIFI_SSID[] = "AITOGY-VP";
-inline constexpr char WIFI_PASSWORD[] = "123456789";
+inline constexpr char WIFI_SSID[] = "";
+inline constexpr char WIFI_PASSWORD[] = "";
 
 
 inline constexpr uint8_t TX_TO_MODEM_RX = 17;
@@ -36,7 +43,7 @@ inline constexpr uint8_t RX_TO_MODEM_TX = 16;
 inline constexpr uint8_t MODEM_DC_PIN = 15;
 inline constexpr uint8_t MODEM_DTR_PIN = 4;
 
-inline constexpr char APN[] = "v-internet"; // Thay bằng APN của nhà mạng bạn
+inline constexpr char APN[] = "v-internet"; // APN cụ thể; "auto" để chọn theo nhà mạng
 inline constexpr char GPRS_USER[] = "";     // Thường để trống
 inline constexpr char GPRS_PASS[] = "";
 
@@ -45,19 +52,19 @@ inline constexpr char GPRS_PASS[] = "";
 inline constexpr int NTRIP_MODE = 1;
 inline constexpr char NTRIP_CASTER_ADDRESS[] = "aitogy.com.vn";
 inline constexpr uint16_t NTRIP_CASTER_PORT = 2101;
-inline constexpr char NTRIP_MOUNTPOINT[] = "/test";
+inline constexpr char NTRIP_MOUNTPOINT[] = "test_esp";
 inline constexpr char NTRIP_AUTH_BASE_STATION[] = "12345";
 
 // ================ CẤU HÌNH MQTT =================
 
-inline constexpr char MQTT_SERVER[] = "45.117.179.134";
+inline constexpr char MQTT_SERVER[] = "aitogy.click";
 inline constexpr uint16_t MQTT_PORT = 1883;
 inline constexpr char MQTT_USER[] = "mqttUser";
 inline constexpr char MQTT_PASS[] = "MqttPassword123$%^";
 
 // Firmware version and backend connection/status defaults.
 // Backend host and port can be overridden in Preferences.
-inline constexpr char AGENT_VERSION[] = "V2.3.5";
+inline constexpr char AGENT_VERSION[] = "V2.4.2";
 inline constexpr char BACKEND_HOST[] = "base.aitogy.com";
 inline constexpr uint16_t BACKEND_WEBSOCKET_PORT = 8000;
 inline constexpr uint32_t BACKEND_STATUS_INTERVAL_MS = 5000;
