@@ -13,6 +13,20 @@ constexpr char BACKEND_PREFS_NAMESPACE[] = "backend";
 constexpr char BACKEND_PREFS_PARTITION[] = "agent_state";
 Preferences backendPrefs;
 bool useDedicatedBackendPrefs = false;
+
+String restoreWorkflowProgress(const String &saved) {
+    DynamicJsonDocument progress(CONFIG_DOCUMENT_SIZE);
+    if (deserializeJson(progress, saved) != DeserializationError::Ok) return "{}";
+
+    // Only completed reports survive boot. A running workflow owns a RAM-only task.
+    const String phase = progress["phase"] | String();
+    if (phase == "ready_for_review" || phase == "completed" || phase == "failed"
+        || phase == "stopped" || phase == "reference_check_completed"
+        || phase == "reference_check_failed") {
+        return saved;
+    }
+    return "{}";
+}
 } // namespace
 
 const char *backendPreferencesPartition() {
@@ -120,7 +134,7 @@ void BackendAgent::loadPreferences() {
     serviceConfig_ = statePrefs.getString("SERVICE_JSON", "{}");
     licenseToken_ = statePrefs.getString("LICENSE_KEY", "");
     lastCommandResult_ = statePrefs.getString("CMD_RESULT", "{}");
-    autoBaseProgress_ = statePrefs.getString("PROGRESS_JSON", "{}");
+    autoBaseProgress_ = restoreWorkflowProgress(statePrefs.getString("PROGRESS_JSON", "{}"));
     surveyInResult_ = statePrefs.isKey("SURVEY_RESULT") ? statePrefs.getString("SURVEY_RESULT") : "{}";
     statePrefs.end();
     prefs.begin("myPrefs", true);

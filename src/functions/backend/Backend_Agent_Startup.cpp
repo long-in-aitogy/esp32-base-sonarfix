@@ -92,6 +92,22 @@ bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
         markStatusDirty();
         return true;
     }
+    if (!method.isEmpty() && method != "FIXED_LLA" && method != "SURVEY_IN")
+        return fail("Unsupported saved Base mode");
+    const bool replaceFixedWithSurveyIn = method == "FIXED_LLA";
+    if (!saved || replaceFixedWithSurveyIn) {
+        // A saved Fixed LLA belongs to the previous power session. Start a fresh
+        // Survey-In after reboot so stale coordinates are never sent again.
+        base["base_setup_method"] = "SURVEY_IN";
+        base["survey_in_duration"] = AUTO_SURVEY_IN_SECONDS;
+        base["survey_in_accuracy"] = 5;
+        base["mode"] = "BASE";
+        base.remove("coords");
+        base.remove("lat");
+        base.remove("lon");
+        base.remove("alt");
+        base.remove("accuracy");
+    }
     // A mode readback cannot prove that the antenna has not moved.
     // Every Survey-In boot sends a fresh survey configuration.
     bool receiverRead = false;
@@ -99,14 +115,7 @@ bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
     receiverRead = readStartupReceiverMode(detected, queryError);
     // Do not guess a mode when a receiver cannot be read reliably.
     if (!receiverRead) return fail(queryError.isEmpty() ? String("Receiver mode could not be read") : queryError);
-    const bool restoreFixed = method == "FIXED_LLA";
-    if (!restoreFixed && !method.isEmpty() && method != "SURVEY_IN")
-        return fail("Unsupported saved Base mode");
     if (!saved) {
-        base["base_setup_method"] = "SURVEY_IN";
-        base["survey_in_duration"] = AUTO_SURVEY_IN_SECONDS;
-        base["survey_in_accuracy"] = 5;
-        base["mode"] = "BASE";
         JsonObject options = base.createNestedObject("gnss_options");
         options["output_mode"] = "rtcm_only";
         options["msm_level"] = "both";
@@ -122,55 +131,30 @@ bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
     options.gps = systems["gps"] | true; options.glo = systems["glo"] | true;
     options.gal = systems["gal"] | true; options.bds = systems["bds"] | true;
     options.qzss = systems["qzss"] | true; options.sbas = systems["sbas"] | true;
-    CommandList commands;
-    if (restoreFixed) {
-        JsonObjectConst coords = base["coords"].as<JsonObjectConst>();
-        if (coords.isNull()) coords = base;
-        const double lat = configNumber(coords["lat"], NAN), lon = configNumber(coords["lon"], NAN), alt = configNumber(coords["alt"], NAN);
-        const double accuracy = configNumber(base["accuracy"], 0.01);
-        if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(alt)
-            || std::abs(lat) > 90 || std::abs(lon) > 180 || alt < -12000 || alt > 100000
-            || !std::isfinite(accuracy) || accuracy < 0.0001 || accuracy > 10000)
-            return fail("Saved Fixed LLA coordinates or accuracy are invalid");
-        if (detected == GnssSensorType::Unicore) {
-            const String reference = base["altitude_reference"] | "LEGACY";
-            if (reference != "ELLIPSOID" && reference != "LEGACY")
-                return fail("Unsupported saved altitude reference");
-            if (reference == "ELLIPSOID") {
-                const String zero = "config undulation 0.0\r\n";
-                commands.push_back(Command(zero.begin(), zero.end()));
-            }
-        }
-        const CommandList fixed = buildBaseFixedLlaCommand(lat, lon, alt, accuracy, detected, options);
-        commands.insert(commands.end(), fixed.begin(), fixed.end());
-    } else {
-        const double duration = AUTO_SURVEY_IN_SECONDS;
-        const double accuracy = configNumber(base["survey_in_accuracy"], 5.0);
-        const double maxDuration = detected == GnssSensorType::Unicore ? 3600 : 604800;
-        if (!std::isfinite(duration) || std::floor(duration) != duration || duration < 1 || duration > maxDuration
-            || !std::isfinite(accuracy) || accuracy < 0.001 || accuracy > 10000)
-            return fail("Saved Survey-In parameters are invalid");
-        surveyInTargetSeconds_ = duration;
-        surveyInMonitoring_ = true;
-        surveyInResultPending_ = true;
-        commands = buildBaseSurveyInCommand(static_cast<uint32_t>(duration), accuracy, detected, options);
-    }
+    const double duration = AUTO_SURVEY_IN_SECONDS;
+    const double accuracy = configNumber(base["survey_in_accuracy"], 5.0);
+    const double maxDuration = detected == GnssSensorType::Unicore ? 3600 : 604800;
+    if (!std::isfinite(duration) || std::floor(duration) != duration || duration < 1 || duration > maxDuration
+        || !std::isfinite(accuracy) || accuracy < 0.001 || accuracy > 10000)
+        return fail("Saved Survey-In parameters are invalid");
+    surveyInTargetSeconds_ = duration;
+    surveyInMonitoring_ = true;
+    surveyInResultPending_ = true;
+    surveyInResult_ = "{}";
+    CommandList commands = buildBaseSurveyInCommand(static_cast<uint32_t>(duration), accuracy, detected, options);
     if (!commands.empty() && !writeGnssCommands(commands)) return fail("Receiver rejected startup configuration");
-    if (!saved) {
+    if (!saved || replaceFixedWithSurveyIn) {
         baseConfig_.clear(); serializeJson(config, baseConfig_);
     }
     if (!saveStatePreferences()) return fail("Could not save Base configuration");
-    baseStartupState_ = restoreFixed ? "fixed_restored"
-        : "survey_started";
+    baseStartupState_ = "survey_started";
     lastReceiverPollMs_ = 0;
     String error;
     if (!refreshReceiverReadback(error)) return fail(error);
     DynamicJsonDocument readback(2048);
     deserializeJson(readback, receiverBaseReadback_.c_str());
-    const String expected = restoreFixed ? "base" : "survey_in";
+    const String expected = "survey_in";
     if (String(readback["mode_kind"] | "") != expected) return fail("Receiver mode does not match startup configuration");
-    if (restoreFixed && !confirmSavedFixedPosition(base, readback.as<JsonObjectConst>(),
-            detected == GnssSensorType::Ublox, error)) return fail(error);
     Serial.printf("[GNSS][STARTUP] %s; chip=%s\n", baseStartupState_.c_str(), sensorType_.c_str());
     markStatusDirty();
     return true;
