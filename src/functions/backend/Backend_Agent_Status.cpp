@@ -74,7 +74,7 @@ void BackendAgent::appendStatusFields(JsonDocument &doc, const String &status,
 
 void BackendAgent::appendAutoBaseProgress(JsonDocument &doc,
                                           const GnssTelemetrySnapshot &gnss,
-                                          uint32_t nowMs) const {
+                                          [[maybe_unused]] uint32_t nowMs) const {
     JsonObject progress = doc["auto_base_progress"].as<JsonObject>();
     if (progress.isNull() || progress.size() == 0) return;
     if (progress["phase"] == "completed" && !(progress["fixed_samples_only"] | false)) {
@@ -286,7 +286,7 @@ void BackendAgent::appendNtripStatus(JsonDocument &doc, const JsonObjectConst &s
 
 void BackendAgent::appendTransportStatus(JsonDocument &doc,
                                          const GnssTelemetrySnapshot &gnss,
-                                         [[maybe_unused]] uint32_t nowMs, int32_t signal) const {
+                                         uint32_t nowMs, int32_t signal) const {
     const bool mqtt_connected = mqttConnected();
     const bool websocket = websocketConnected();
     JsonObject antenna = doc.createNestedObject("antenna_status");
