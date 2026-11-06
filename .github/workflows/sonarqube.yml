@@ -29,7 +29,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y clang-18 llvm-18
-          curl --fail --location https://github.com/bblanchon/ArduinoJson/archive/40ee05c065ce248192c47eb37af7a70a6935dfa6.tar.gz -o /tmp/arduinojson.tar.gz
+          curl --fail --location --proto '=https' --proto-redir '=https' https://github.com/bblanchon/ArduinoJson/archive/40ee05c065ce248192c47eb37af7a70a6935dfa6.tar.gz -o /tmp/arduinojson.tar.gz
           mkdir /tmp/arduinojson
           tar -xzf /tmp/arduinojson.tar.gz --strip-components=1 -C /tmp/arduinojson
           python3 -m unittest discover -s test/host -p 'test_*.py'
