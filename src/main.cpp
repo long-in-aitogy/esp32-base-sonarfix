@@ -246,7 +246,7 @@ __attribute__((noreturn)) void healthCheckTask([[maybe_unused]] void* const para
     String healthPayload = "";
     uint32_t loopStartTime = 0;
     while (true) {
-        const uint32_t loopStartTime = millis();
+        loopStartTime = millis();
         healthPayload = "";
         int32_t signalQualityDbm = -1;
         if (xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)))

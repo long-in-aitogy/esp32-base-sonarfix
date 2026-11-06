@@ -64,14 +64,14 @@ bool query(uint8_t cls, uint8_t id, UbxReply &reply, String &error) {
 bool UbloxReadback::readBaseStatus(UbxBaseStatus &status, String &error) {
     UbxReply mode;
     if (!query(0x06, 0x71, mode, error)) return false;
-    if (!status.tmode(mode.frame + 6, mode.length - 8)) {
+    if (!status.tmode(mode.frame.data() + 6, mode.length - 8)) {
         error = "Invalid CFG-TMODE3 response";
         return false;
     }
     if (status.mode != 1) return true;
     UbxReply survey;
     if (!query(0x01, 0x3B, survey, error)) return false;
-    if (!status.svin(survey.frame + 6, survey.length - 8)) {
+    if (!status.svin(survey.frame.data() + 6, survey.length - 8)) {
         error = "Invalid NAV-SVIN response";
         return false;
     }

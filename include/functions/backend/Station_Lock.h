@@ -10,17 +10,17 @@ struct StationLock {
 
     bool locked(uint8_t serverId = 0) const {
         return all || (serverId >= 1 && serverId <= 2
-            && (servers & (1U << (serverId - 1))) != 0);
+            && (std::byte{servers} & (std::byte{1} << (serverId - 1))) != std::byte{});
     }
 
     bool setScoped(const int *ids, size_t count) {
-        uint8_t mask = 0;
+        std::byte mask = {};
         for (size_t i = 0; i < count; ++i) {
             if (ids[i] < 1 || ids[i] > 2) return false;
-            mask |= 1U << (ids[i] - 1);
+            mask |= std::byte{1} << (ids[i] - 1);
         }
         all = false;
-        servers = mask;
+        servers = std::to_integer<uint8_t>(mask);
         return true;
     }
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cctype>
@@ -15,23 +16,23 @@ inline size_t routeUnicoreOutput(uint8_t *data, size_t length, uint8_t port) {
     size_t tokenLength = 0;
     while (tokenLength < length && data[tokenLength] != ' ') ++tokenLength;
     if (tokenLength < 5 || tokenLength > 8 || tokenLength + 6 > length) return length;
-    char name[9] = {};
+    std::array<char, 9> name = {};
     for (size_t i = 0; i < tokenLength; ++i) {
         name[i] = static_cast<char>(std::tolower(data[i]));
     }
     bool output = false;
-    if (strncmp(name, "rtcm", 4) == 0) {
+    if (strncmp(name.data(), "rtcm", 4) == 0) {
         output = true;
         for (size_t i = 4; i < tokenLength; ++i) {
             if (!std::isdigit(static_cast<unsigned char>(name[i]))) output = false;
         }
     } else if (tokenLength == 5) {
-        const bool talker = strncmp(name, "gp", 2) == 0 || strncmp(name, "gn", 2) == 0
-            || strncmp(name, "gl", 2) == 0 || strncmp(name, "ga", 2) == 0
-            || strncmp(name, "bd", 2) == 0 || strncmp(name, "gb", 2) == 0
-            || strncmp(name, "gq", 2) == 0;
-        output = talker && (strcmp(name + 2, "gga") == 0 || strcmp(name + 2, "gsa") == 0
-            || strcmp(name + 2, "gsv") == 0 || strcmp(name + 2, "gst") == 0);
+        const bool talker = strncmp(name.data(), "gp", 2) == 0 || strncmp(name.data(), "gn", 2) == 0
+            || strncmp(name.data(), "gl", 2) == 0 || strncmp(name.data(), "ga", 2) == 0
+            || strncmp(name.data(), "bd", 2) == 0 || strncmp(name.data(), "gb", 2) == 0
+            || strncmp(name.data(), "gq", 2) == 0;
+        output = talker && (strcmp(name.data() + 2, "gga") == 0 || strcmp(name.data() + 2, "gsa") == 0
+            || strcmp(name.data() + 2, "gsv") == 0 || strcmp(name.data() + 2, "gst") == 0);
     }
     const size_t start = tokenLength + 1;
     if (output && std::tolower(data[start]) == 'c' && std::tolower(data[start + 1]) == 'o'

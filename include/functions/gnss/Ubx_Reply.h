@@ -1,10 +1,11 @@
 #pragma once
+#include <array>
 #include <cstddef>
 #include <cstdint>
 
 // Bounded UBX reply reader for configuration exchanges, including checksum.
 struct UbxReply {
-    uint8_t frame[256] = {};
+    std::array<uint8_t, 256> frame = {};
     size_t used = 0;
     size_t expected = 0;
     size_t length = 0;
@@ -21,7 +22,7 @@ struct UbxReply {
         frame[used++] = byte;
         if (used == 6) {
             expected = 8 + size_t(frame[4]) + (size_t(frame[5]) << 8);
-            if (expected > sizeof(frame)) used = 0;
+            if (expected > frame.size()) used = 0;
         }
         if (used < 8 || used != expected) return false;
         length = used;
