@@ -70,11 +70,12 @@ struct UnicoreReply {
         const char *star = std::strchr(response, '*');
         if (star) {
             if (end - star != 3 || hex(star[1]) < 0 || hex(star[2]) < 0) return false;
-            uint8_t checksum = 0;
+            std::byte checksum = {};
             // N4 '$command' replies include '$' in XOR (unlike standard NMEA).
             for (const char *p = line.data(); p < star; ++p)
-                checksum ^= std::to_integer<uint8_t>(std::byte{static_cast<unsigned char>(*p)});
-            if (checksum != static_cast<uint8_t>((hex(star[1]) << 4) | hex(star[2]))) return false;
+                checksum ^= std::byte{static_cast<unsigned char>(*p)};
+            const auto expected = std::byte{static_cast<unsigned char>((hex(star[1]) << 4) | hex(star[2]))};
+            if (checksum != expected) return false;
             end = star;
         }
         while (response < end && std::isspace(static_cast<unsigned char>(*response))) ++response;
