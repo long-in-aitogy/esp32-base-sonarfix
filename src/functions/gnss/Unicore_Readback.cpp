@@ -6,6 +6,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 
@@ -159,7 +160,7 @@ bool readBestPosition(JsonObject position, String &error) {
     auto payload = response.substring(separator + 1);
     const auto checksum = payload.indexOf('*');
     if (checksum >= 0) payload.remove(checksum);
-    String fields[5];
+    std::array<String, 5> fields;
     auto start = 0;
     for (size_t index = 0; index < 5; ++index) {
         const auto comma = payload.indexOf(',', start);
