@@ -67,6 +67,8 @@ struct BackendAgent {
     bool stopNtripRoverLocked();bool applyBaseCoordinates(double,double,double);
     bool restoreWorkflowBase(JsonObjectConst);void runWorkflow();
     bool runAutoBaseWorkflow(JsonObject);bool runReferenceCheckWorkflow(JsonObject);
+    bool waitForAutoBaseFix(uint32_t, uint8_t, bool &, String &);
+    bool collectAutoBaseSamples(int, std::vector<double> &, std::vector<double> &, std::vector<double> &, bool &, String &);
     void setAgentState(const String &value){agentState_=value;}
     String normalAgentState()const{return "online";}
     void markStatusDirty(){

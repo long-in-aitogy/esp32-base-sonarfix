@@ -158,6 +158,13 @@ private:
     bool stopNtripRoverLocked();
     bool applyBaseCoordinates(double latitude, double longitude, double altitude);
     bool restoreWorkflowBase(JsonObjectConst base);
+    bool executeLicenseCommand(JsonObject payload, String &error, String &detail, bool &restartAfterCommand);
+    bool executeServiceConfigCommand(JsonObject payload, String &error, String &detail);
+    bool executeRawCommand(JsonDocument &doc, JsonObject payload, String &error, String &detail);
+    bool executeAutoBaseCommand(JsonObject payload, String &error, String &detail);
+    bool executeReferenceCheckCommand(JsonObject payload, String &error, String &detail);
+    bool waitForAutoBaseFix(uint32_t timeoutSeconds, uint8_t fixedStreakRequired, bool &cancelled, String &failureReason);
+    bool collectAutoBaseSamples(int configuredSamples, std::vector<double> &latitudes, std::vector<double> &longitudes, std::vector<double> &altitudes, bool &cancelled, String &failureReason);
     bool refreshReceiverReadback(String &error);
     bool refreshUbloxReadback(String &error);
     bool refreshUnicoreReadback(String &error);

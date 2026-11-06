@@ -256,6 +256,116 @@ void BackendAgent::runWorkflow() {
     }
 }
 
+bool BackendAgent::waitForAutoBaseFix(uint32_t timeoutSeconds, uint8_t fixedStreakRequired, bool &cancelled, String &failureReason) {
+    const uint32_t waitStartedMs = millis();
+    uint32_t nextSecondMs = waitStartedMs;
+    uint8_t fixedStreak = 0;
+    bool fixed = false;
+    while (millis() - waitStartedMs < timeoutSeconds * 1000UL) {
+        if (workflowCancelRequested_) {
+            cancelled = true; failureReason = "cancelled by user";
+            return false;
+        }
+        if (loopNtripRoverLocked() == 504) {
+            failureReason = ntripRoverLastError();
+            return false;
+        }
+
+        const uint32_t now = millis();
+        if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
+            nextSecondMs = now + 1000UL;
+            const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
+            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
+            fixedStreak = usable ? static_cast<uint8_t>(fixedStreak + 1) : 0;
+            fixed = fixedStreak >= fixedStreakRequired;
+            DynamicJsonDocument details(1024);
+            details["timeout"] = timeoutSeconds;
+            details["elapsed"] = (now - waitStartedMs) / 1000UL;
+            details["fix_status"] = snapshot.fixStatus;
+            details["fixed_streak"] = fixedStreak;
+            details["fixed_streak_required"] = fixedStreakRequired;
+            String serialized;
+            serializeJson(details, serialized);
+            setWorkflowProgress("wait_fix", 2, 4, serialized);
+            if (fixed) break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    if (!fixed) {
+        failureReason = "RTK fix timeout";
+        return false;
+    }
+
+    return true;
+}
+
+bool BackendAgent::collectAutoBaseSamples(int configuredSamples, std::vector<double> &latitudes, std::vector<double> &longitudes, std::vector<double> &altitudes, bool &cancelled, String &failureReason) {
+    constexpr uint16_t samplesNeeded = 60;
+    constexpr uint32_t averagingSeconds = 60;
+    setWorkflowProgress("averaging", 3, 4);
+    latitudes.reserve(samplesNeeded);
+    longitudes.reserve(samplesNeeded);
+    altitudes.reserve(samplesNeeded);
+
+    const uint32_t averageStartedMs = millis();
+    uint32_t lastSampleGgaMs = 0;
+    uint32_t nextSecondMs = averageStartedMs;
+    while (millis() - averageStartedMs < averagingSeconds * 1000UL
+           && latitudes.size() < samplesNeeded) {
+        if (workflowCancelRequested_) {
+            cancelled = true; failureReason = "cancelled by user";
+            return false;
+        }
+        if (loopNtripRoverLocked() == 504) {
+            failureReason = ntripRoverLastError();
+            return false;
+        }
+
+        const uint32_t now = millis();
+        if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
+            nextSecondMs = now + 1000UL;
+            const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
+            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
+            if (usable && snapshot.lastGgaMs != lastSampleGgaMs
+                && std::isfinite(snapshot.latitude) && std::isfinite(snapshot.longitude)
+                && std::isfinite(snapshot.altitude)
+                && snapshot.latitude >= -90.0 && snapshot.latitude <= 90.0
+                && snapshot.longitude >= -180.0 && snapshot.longitude <= 180.0) {
+                lastSampleGgaMs = snapshot.lastGgaMs;
+                latitudes.push_back(snapshot.latitude);
+                longitudes.push_back(snapshot.longitude);
+                altitudes.push_back(snapshot.altitude);
+            }
+            DynamicJsonDocument details(1200);
+            details["samples_collected"] = latitudes.size();
+            details["samples_target"] = samplesNeeded;
+            details["averaging_seconds"] = averagingSeconds;
+            details["elapsed"] = (now - averageStartedMs) / 1000UL;
+            details["fix_status"] = snapshot.fixStatus;
+            if (configuredSamples != samplesNeeded) {
+                details["requested_samples_overridden"] = configuredSamples;
+            }
+            if (usable) {
+                JsonObject latest = details.createNestedObject("latest_coord");
+                latest["lat"] = snapshot.latitude;
+                latest["lon"] = snapshot.longitude;
+                latest["alt"] = snapshot.altitude;
+            }
+            String serialized;
+            serializeJson(details, serialized);
+            setWorkflowProgress("averaging", 3, 4, serialized);
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+
+    if (latitudes.size() < 15) {
+        failureReason = "insufficient valid RTK samples";
+        return false;
+    }
+
+    return true;
+}
+
 bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
     String host = payload["ip"] | String();
     host.trim();
@@ -327,110 +437,18 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
 
     setAgentState("auto_setup_wait_fix");
     setWorkflowProgress("wait_fix", 2, 4);
-    const uint32_t waitStartedMs = millis();
-    uint32_t nextSecondMs = waitStartedMs;
-    uint8_t fixedStreak = 0;
-    bool fixed = false;
-    while (millis() - waitStartedMs < timeoutSeconds * 1000UL) {
-        if (workflowCancelRequested_) {
-            finish(false, true, "cancelled by user");
-            return false;
-        }
-        if (loopNtripRoverLocked() == 504) {
-            finish(false, false, ntripRoverLastError());
-            return false;
-        }
-
-        const uint32_t now = millis();
-        if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
-            nextSecondMs = now + 1000UL;
-            const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
-            fixedStreak = usable ? static_cast<uint8_t>(fixedStreak + 1) : 0;
-            fixed = fixedStreak >= fixedStreakRequired;
-            DynamicJsonDocument details(1024);
-            details["timeout"] = timeoutSeconds;
-            details["elapsed"] = (now - waitStartedMs) / 1000UL;
-            details["fix_status"] = snapshot.fixStatus;
-            details["fixed_streak"] = fixedStreak;
-            details["fixed_streak_required"] = fixedStreakRequired;
-            String serialized;
-            serializeJson(details, serialized);
-            setWorkflowProgress("wait_fix", 2, 4, serialized);
-            if (fixed) break;
-        }
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-    if (!fixed) {
-        finish(false, false, "RTK fix timeout");
+    bool cancelled = false;
+    String failureReason;
+    if (!waitForAutoBaseFix(timeoutSeconds, fixedStreakRequired, cancelled, failureReason)) {
+        finish(false, cancelled, failureReason);
         return false;
     }
 
     setAgentState("auto_setup_averaging");
     const int configuredSamples = payload["samples"] | 60;
-    constexpr uint16_t samplesNeeded = 60;
-    constexpr uint32_t averagingSeconds = 60;
-    setWorkflowProgress("averaging", 3, 4);
-    std::vector<double> latitudes;
-    std::vector<double> longitudes;
-    std::vector<double> altitudes;
-    latitudes.reserve(samplesNeeded);
-    longitudes.reserve(samplesNeeded);
-    altitudes.reserve(samplesNeeded);
-
-    const uint32_t averageStartedMs = millis();
-    uint32_t lastSampleGgaMs = 0;
-    nextSecondMs = averageStartedMs;
-    while (millis() - averageStartedMs < averagingSeconds * 1000UL
-           && latitudes.size() < samplesNeeded) {
-        if (workflowCancelRequested_) {
-            finish(false, true, "cancelled by user");
-            return false;
-        }
-        if (loopNtripRoverLocked() == 504) {
-            finish(false, false, ntripRoverLastError());
-            return false;
-        }
-
-        const uint32_t now = millis();
-        if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
-            nextSecondMs = now + 1000UL;
-            const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
-            if (usable && snapshot.lastGgaMs != lastSampleGgaMs
-                && std::isfinite(snapshot.latitude) && std::isfinite(snapshot.longitude)
-                && std::isfinite(snapshot.altitude)
-                && snapshot.latitude >= -90.0 && snapshot.latitude <= 90.0
-                && snapshot.longitude >= -180.0 && snapshot.longitude <= 180.0) {
-                lastSampleGgaMs = snapshot.lastGgaMs;
-                latitudes.push_back(snapshot.latitude);
-                longitudes.push_back(snapshot.longitude);
-                altitudes.push_back(snapshot.altitude);
-            }
-            DynamicJsonDocument details(1200);
-            details["samples_collected"] = latitudes.size();
-            details["samples_target"] = samplesNeeded;
-            details["averaging_seconds"] = averagingSeconds;
-            details["elapsed"] = (now - averageStartedMs) / 1000UL;
-            details["fix_status"] = snapshot.fixStatus;
-            if (configuredSamples != samplesNeeded) {
-                details["requested_samples_overridden"] = configuredSamples;
-            }
-            if (usable) {
-                JsonObject latest = details.createNestedObject("latest_coord");
-                latest["lat"] = snapshot.latitude;
-                latest["lon"] = snapshot.longitude;
-                latest["alt"] = snapshot.altitude;
-            }
-            String serialized;
-            serializeJson(details, serialized);
-            setWorkflowProgress("averaging", 3, 4, serialized);
-        }
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-
-    if (latitudes.size() < 15) {
-        finish(false, false, "insufficient valid RTK samples");
+    std::vector<double> latitudes, longitudes, altitudes;
+    if (!collectAutoBaseSamples(configuredSamples, latitudes, longitudes, altitudes, cancelled, failureReason)) {
+        finish(false, cancelled, failureReason);
         return false;
     }
 

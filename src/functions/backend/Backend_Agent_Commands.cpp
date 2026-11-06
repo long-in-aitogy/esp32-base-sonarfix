@@ -218,6 +218,219 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
     return true;
 }
 
+bool BackendAgent::executeLicenseCommand(JsonObject payload, String &error, String &detail, bool &restartAfterCommand) {
+    bool success = true;
+    const String license = payload["license_key"] | String();
+    if (license.isEmpty()) {
+        Serial.println("[BACKEND][LICENSE] Lenh DEPLOY_LICENSE khong co license_key.");
+        success = false;
+        error = "missing payload.license_key";
+    } else if (!licenseMatchesSerial(serialNumber_, license)) {
+        success = false;
+        error = "invalid device token or legacy license";
+    } else {
+        Serial.println("[BACKEND][LICENSE] Da nhan license_key (khong in noi dung key).");
+        const String previousToken = licenseToken_;
+        const bool previousValid = licenseValid_;
+        licenseToken_ = license;
+        licenseValid_ = true;
+        const bool saved = saveStatePreferences();
+        Serial.printf("[BACKEND][LICENSE] Kiem tra: %s; luu NVS: %s.\n",
+                      licenseValid_ ? "HOP LE" : "KHONG HOP LE",
+                      saved ? "THANH CONG" : "THAT BAI");
+        if (!saved) {
+            licenseToken_ = previousToken;
+            licenseValid_ = previousValid;
+            success = false;
+            error = "cannot persist device token";
+        } else {
+            detail = "license deployed; rebooting";
+            restartAfterCommand = true;
+            setAgentState("rebooting");
+            refreshWebsocket();
+        }
+    }
+    return success;
+}
+
+bool BackendAgent::executeServiceConfigCommand(JsonObject payload, String &error, String &detail) {
+    bool success = true;
+    if (payload.isNull() || payload.size() == 0) {
+        success = false;
+        error = "missing service config payload";
+    } else {
+        DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
+        if (deserializeJson(serviceDoc, serviceConfig_) != DeserializationError::Ok
+            || !serviceDoc.is<JsonObject>()) {
+            serviceDoc.clear();
+            serviceDoc.to<JsonObject>();
+        }
+        JsonObject service = serviceDoc.as<JsonObject>();
+        for (JsonPair entry : payload) {
+            service[entry.key()] = entry.value();
+        }
+        const JsonArrayConst removedServers = payload["removed_servers"].as<JsonArrayConst>();
+        for (JsonVariantConst removed : removedServers) {
+            if (!removed.is<int>()) continue;
+            const int serverId = removed.as<int>();
+            if (serverId <= 2) continue;
+            const String suffix = String(serverId);
+            service.remove((String("server") + suffix + "_enabled").c_str());
+            service.remove((String("server") + suffix + "_stream_on_demand").c_str());
+            service.remove((String("server") + suffix + "_stream_active").c_str());
+            service.remove((String("serverhost") + suffix).c_str());
+            service.remove((String("port") + suffix).c_str());
+            service.remove((String("mountpoint") + suffix).c_str());
+            service.remove((String("username") + suffix).c_str());
+            service.remove((String("password") + suffix).c_str());
+            service.remove((String("ntrip_version") + suffix).c_str());
+        }
+        service.remove("removed_servers");
+        const bool onDemand = jsonBool(service, "stream_on_demand", false);
+        if (!onDemand) service["stream_active"] = true;
+        else if (service["stream_active"].isNull()) service["stream_active"] = false;
+        const bool globalActive = jsonBool(service, "stream_active", false);
+        for (uint8_t id = 1; id <= 2; ++id) {
+            const String prefix = String("server") + String(id);
+            const String onDemandKey = prefix + "_stream_on_demand";
+            const String activeKey = prefix + "_stream_active";
+            const bool serverOnDemand = jsonBool(service, onDemandKey, onDemand);
+            service[onDemandKey] = serverOnDemand;
+            if (!serverOnDemand) service[activeKey] = true;
+            else if (service[activeKey.c_str()].isNull()) {
+                service[activeKey] = globalActive;
+            }
+        }
+        serviceConfig_.clear();
+        serializeJson(serviceDoc, serviceConfig_);
+        detail = "service config deployed";
+        setupNTRIP();
+        connectNTRIP();
+        publishConfigState("service_config_state");
+    }
+    return success;
+}
+
+bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload, String &error, String &detail) {
+    bool success = true;
+    JsonArray commands = payload["commands_b64"].as<JsonArray>();
+    const JsonObject originalConfig = doc["original_config"].as<JsonObject>();
+    const bool configuringBase = String(originalConfig["mode"] | "") == "BASE";
+    const String sensorType = originalConfig["sensor_type"] | sensorType_;
+    if (workflowActive()) {
+        requestWorkflowStop();
+        const uint32_t stopWaitMs = millis();
+        while (workflowActive() && static_cast<uint32_t>(millis() - stopWaitMs) < 1500UL) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+        }
+    }
+    if (workflowActive()) {
+        success = false;
+        error = "cannot stop active base workflow";
+    } else if (configuringBase && sensorType != "Ublox" && sensorType != "Unicorecomm") {
+        success = false;
+        error = "unsupported GNSS sensor_type";
+    } else {
+        success = executeRawCommands(commands, error, configuringBase ? sensorType : String());
+    }
+    detail = success ? "raw commands executed" : error;
+    if (success) {
+        if (configuringBase) {
+            sensorType_ = sensorType;
+            baseStartupState_ = "configured";
+            baseStartupError_ = "";
+            baseStartupAttempted_ = true;
+            autoBaseProgress_.clear();
+            lastReceiverPollMs_ = 0;
+            setAgentState(normalAgentState());
+        }
+        if (!originalConfig.isNull() && originalConfig.containsKey("params")) {
+            DynamicJsonDocument baseDoc(CONFIG_DOCUMENT_SIZE);
+            baseDoc.set(originalConfig["params"]);
+            JsonObject base = baseDoc.as<JsonObject>();
+            if (originalConfig.containsKey("mode")) base["mode"] = originalConfig["mode"];
+            baseConfig_.clear();
+            serializeJson(baseDoc, baseConfig_);
+            publishConfigState("base_config_state");
+        }
+    }
+    return success;
+}
+
+bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error, String &detail) {
+    bool success = true;
+    const String sensorType = payload["sensor_type"] | sensorType_;
+    const int requestedPort = payload["port"] | 0;
+    const bool hasConnection = !String(payload["ip"] | String()).isEmpty()
+        && !String(payload["user"] | String()).isEmpty()
+        && !String(payload["password"] | String()).isEmpty()
+        && !String(payload["mountpoint"] | String()).isEmpty()
+        && requestedPort >= 1 && requestedPort <= 65535;
+    if (workflowActive()) {
+        success = false;
+        error = "another base workflow is already running";
+    } else if (sensorType != "Ublox" && sensorType != "Unicorecomm") {
+        success = false;
+        error = "select Ublox or Unicorecomm in CORS before starting auto base";
+    } else if (!hasConnection) {
+        success = false;
+        error = "missing or invalid CORS connection fields";
+    } else {
+        sensorType_ = sensorType;
+        String workflowPayload;
+        serializeJson(payload, workflowPayload);
+        if (!startWorkflow("auto_base", workflowPayload)) {
+            success = false;
+            error = "cannot start auto base workflow";
+        } else {
+            DynamicJsonDocument progress(CONFIG_DOCUMENT_SIZE);
+            progress["ntrip_host"] = payload["ip"];
+            progress["ntrip_port"] = payload["port"];
+            progress["mountpoint"] = payload["mountpoint"];
+            progress["note"] = "Collect RTK Fixed LLH; VNGEONET datum parameters are decoded per session and results wait for review.";
+            String progressJson;
+            serializeJson(progress, progressJson);
+            setAgentState("auto_setup_queued");
+            setWorkflowProgress("queued", 0, 4, progressJson);
+            detail = "auto base workflow queued";
+        }
+    }
+    return success;
+}
+
+bool BackendAgent::executeReferenceCheckCommand(JsonObject payload, String &error, String &detail) {
+    bool success = true;
+    const JsonObject reference = payload["reference_coords"].as<JsonObject>();
+    const int requestedPort = payload["port"] | 0;
+    const bool validReference = !reference.isNull()
+        && !reference["lat"].isNull() && !reference["lon"].isNull()
+        && !reference["alt"].isNull();
+    const bool hasConnection = !String(payload["ip"] | String()).isEmpty()
+        && !String(payload["user"] | String()).isEmpty()
+        && !String(payload["password"] | String()).isEmpty()
+        && !String(payload["mountpoint"] | String()).isEmpty()
+        && requestedPort >= 1 && requestedPort <= 65535;
+    if (workflowActive()) {
+        success = false;
+        error = "another base workflow is already running";
+    } else if (!validReference || !hasConnection) {
+        success = false;
+        error = "missing or invalid reference/CORS configuration";
+    } else {
+        String workflowPayload;
+        serializeJson(payload, workflowPayload);
+        if (!startWorkflow("reference_check", workflowPayload)) {
+            success = false;
+            error = "cannot start reference check workflow";
+        } else {
+            setAgentState("reference_check_queued");
+            setWorkflowProgress("reference_check_queued", 0, 4);
+            detail = "base reference check queued";
+        }
+    }
+    return success;
+}
+
 void BackendAgent::handleCommand(const String &source, const String &message) {
     Serial.printf("[BACKEND][RX] Nhan goi lenh qua %s (%u bytes).\n",
                   source.c_str(), static_cast<unsigned>(message.length()));
@@ -324,90 +537,9 @@ void BackendAgent::handleCommand(const String &source, const String &message) {
             detail = "device provisioned";
         }
     } else if (command == "DEPLOY_LICENSE") {
-        const String license = payload["license_key"] | String();
-        if (license.isEmpty()) {
-            Serial.println("[BACKEND][LICENSE] Lenh DEPLOY_LICENSE khong co license_key.");
-            success = false;
-            error = "missing payload.license_key";
-        } else if (!licenseMatchesSerial(serialNumber_, license)) {
-            success = false;
-            error = "invalid device token or legacy license";
-        } else {
-            Serial.println("[BACKEND][LICENSE] Da nhan license_key (khong in noi dung key).");
-            const String previousToken = licenseToken_;
-            const bool previousValid = licenseValid_;
-            licenseToken_ = license;
-            licenseValid_ = true;
-            const bool saved = saveStatePreferences();
-            Serial.printf("[BACKEND][LICENSE] Kiem tra: %s; luu NVS: %s.\n",
-                          licenseValid_ ? "HOP LE" : "KHONG HOP LE",
-                          saved ? "THANH CONG" : "THAT BAI");
-            if (!saved) {
-                licenseToken_ = previousToken;
-                licenseValid_ = previousValid;
-                success = false;
-                error = "cannot persist device token";
-            } else {
-                detail = "license deployed; rebooting";
-                restartAfterCommand = true;
-                setAgentState("rebooting");
-                refreshWebsocket();
-            }
-        }
+        success = executeLicenseCommand(payload, error, detail, restartAfterCommand);
     } else if (command == "DEPLOY_SERVICE_CONFIG") {
-        if (payload.isNull() || payload.size() == 0) {
-            success = false;
-            error = "missing service config payload";
-        } else {
-            DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
-            if (deserializeJson(serviceDoc, serviceConfig_) != DeserializationError::Ok
-                || !serviceDoc.is<JsonObject>()) {
-                serviceDoc.clear();
-                serviceDoc.to<JsonObject>();
-            }
-            JsonObject service = serviceDoc.as<JsonObject>();
-            for (JsonPair entry : payload) {
-                service[entry.key()] = entry.value();
-            }
-            const JsonArrayConst removedServers = payload["removed_servers"].as<JsonArrayConst>();
-            for (JsonVariantConst removed : removedServers) {
-                if (!removed.is<int>()) continue;
-                const int serverId = removed.as<int>();
-                if (serverId <= 2) continue;
-                const String suffix = String(serverId);
-                service.remove((String("server") + suffix + "_enabled").c_str());
-                service.remove((String("server") + suffix + "_stream_on_demand").c_str());
-                service.remove((String("server") + suffix + "_stream_active").c_str());
-                service.remove((String("serverhost") + suffix).c_str());
-                service.remove((String("port") + suffix).c_str());
-                service.remove((String("mountpoint") + suffix).c_str());
-                service.remove((String("username") + suffix).c_str());
-                service.remove((String("password") + suffix).c_str());
-                service.remove((String("ntrip_version") + suffix).c_str());
-            }
-            service.remove("removed_servers");
-            const bool onDemand = jsonBool(service, "stream_on_demand", false);
-            if (!onDemand) service["stream_active"] = true;
-            else if (service["stream_active"].isNull()) service["stream_active"] = false;
-            const bool globalActive = jsonBool(service, "stream_active", false);
-            for (uint8_t id = 1; id <= 2; ++id) {
-                const String prefix = String("server") + String(id);
-                const String onDemandKey = prefix + "_stream_on_demand";
-                const String activeKey = prefix + "_stream_active";
-                const bool serverOnDemand = jsonBool(service, onDemandKey, onDemand);
-                service[onDemandKey] = serverOnDemand;
-                if (!serverOnDemand) service[activeKey] = true;
-                else if (service[activeKey.c_str()].isNull()) {
-                    service[activeKey] = globalActive;
-                }
-            }
-            serviceConfig_.clear();
-            serializeJson(serviceDoc, serviceConfig_);
-            detail = "service config deployed";
-            setupNTRIP();
-            connectNTRIP();
-            publishConfigState("service_config_state");
-        }
+        success = executeServiceConfigCommand(payload, error, detail);
     } else if (command == "SET_RTCM_STREAM_ACTIVE") {
         if (!payload.containsKey("active")) {
             success = false;
@@ -419,47 +551,7 @@ void BackendAgent::handleCommand(const String &source, const String &message) {
             detail = (payload["active"] | false) ? "stream activated" : "stream set to standby";
         }
     } else if (command == "EXECUTE_RAW_COMMANDS") {
-        JsonArray commands = payload["commands_b64"].as<JsonArray>();
-        const JsonObject originalConfig = doc["original_config"].as<JsonObject>();
-        const bool configuringBase = String(originalConfig["mode"] | "") == "BASE";
-        const String sensorType = originalConfig["sensor_type"] | sensorType_;
-        if (workflowActive()) {
-            requestWorkflowStop();
-            const uint32_t stopWaitMs = millis();
-            while (workflowActive() && static_cast<uint32_t>(millis() - stopWaitMs) < 1500UL) {
-                vTaskDelay(pdMS_TO_TICKS(50));
-            }
-        }
-        if (workflowActive()) {
-            success = false;
-            error = "cannot stop active base workflow";
-        } else if (configuringBase && sensorType != "Ublox" && sensorType != "Unicorecomm") {
-            success = false;
-            error = "unsupported GNSS sensor_type";
-        } else {
-            success = executeRawCommands(commands, error, configuringBase ? sensorType : String());
-        }
-        detail = success ? "raw commands executed" : error;
-        if (success) {
-            if (configuringBase) {
-                sensorType_ = sensorType;
-                baseStartupState_ = "configured";
-                baseStartupError_ = "";
-                baseStartupAttempted_ = true;
-                autoBaseProgress_.clear();
-                lastReceiverPollMs_ = 0;
-                setAgentState(normalAgentState());
-            }
-            if (!originalConfig.isNull() && originalConfig.containsKey("params")) {
-                DynamicJsonDocument baseDoc(CONFIG_DOCUMENT_SIZE);
-                baseDoc.set(originalConfig["params"]);
-                JsonObject base = baseDoc.as<JsonObject>();
-                if (originalConfig.containsKey("mode")) base["mode"] = originalConfig["mode"];
-                baseConfig_.clear();
-                serializeJson(baseDoc, baseConfig_);
-                publishConfigState("base_config_state");
-            }
-        }
+        success = executeRawCommand(doc, payload, error, detail);
     } else if (command == "VERIFY_GNSS_CONFIG") {
         if (workflowActive() || (sensorType_ != "Ublox" && sensorType_ != "Unicorecomm")) {
             success = false;
@@ -478,71 +570,9 @@ void BackendAgent::handleCommand(const String &source, const String &message) {
             error = "GNSS serial is busy";
         }
     } else if (command == "TRIGGER_AUTO_BASE") {
-        const String sensorType = payload["sensor_type"] | sensorType_;
-        const int requestedPort = payload["port"] | 0;
-        const bool hasConnection = !String(payload["ip"] | String()).isEmpty()
-            && !String(payload["user"] | String()).isEmpty()
-            && !String(payload["password"] | String()).isEmpty()
-            && !String(payload["mountpoint"] | String()).isEmpty()
-            && requestedPort >= 1 && requestedPort <= 65535;
-        if (workflowActive()) {
-            success = false;
-            error = "another base workflow is already running";
-        } else if (sensorType != "Ublox" && sensorType != "Unicorecomm") {
-            success = false;
-            error = "select Ublox or Unicorecomm in CORS before starting auto base";
-        } else if (!hasConnection) {
-            success = false;
-            error = "missing or invalid CORS connection fields";
-        } else {
-            sensorType_ = sensorType;
-            String workflowPayload;
-            serializeJson(payload, workflowPayload);
-            if (!startWorkflow("auto_base", workflowPayload)) {
-                success = false;
-                error = "cannot start auto base workflow";
-            } else {
-                DynamicJsonDocument progress(CONFIG_DOCUMENT_SIZE);
-                progress["ntrip_host"] = payload["ip"];
-                progress["ntrip_port"] = payload["port"];
-                progress["mountpoint"] = payload["mountpoint"];
-                progress["note"] = "Collect RTK Fixed LLH; VNGEONET datum parameters are decoded per session and results wait for review.";
-                String progressJson;
-                serializeJson(progress, progressJson);
-                setAgentState("auto_setup_queued");
-                setWorkflowProgress("queued", 0, 4, progressJson);
-                detail = "auto base workflow queued";
-            }
-        }
+        success = executeAutoBaseCommand(payload, error, detail);
     } else if (command == "TRIGGER_BASE_REFERENCE_CHECK") {
-        const JsonObject reference = payload["reference_coords"].as<JsonObject>();
-        const int requestedPort = payload["port"] | 0;
-        const bool validReference = !reference.isNull()
-            && !reference["lat"].isNull() && !reference["lon"].isNull()
-            && !reference["alt"].isNull();
-        const bool hasConnection = !String(payload["ip"] | String()).isEmpty()
-            && !String(payload["user"] | String()).isEmpty()
-            && !String(payload["password"] | String()).isEmpty()
-            && !String(payload["mountpoint"] | String()).isEmpty()
-            && requestedPort >= 1 && requestedPort <= 65535;
-        if (workflowActive()) {
-            success = false;
-            error = "another base workflow is already running";
-        } else if (!validReference || !hasConnection) {
-            success = false;
-            error = "missing or invalid reference/CORS configuration";
-        } else {
-            String workflowPayload;
-            serializeJson(payload, workflowPayload);
-            if (!startWorkflow("reference_check", workflowPayload)) {
-                success = false;
-                error = "cannot start reference check workflow";
-            } else {
-                setAgentState("reference_check_queued");
-                setWorkflowProgress("reference_check_queued", 0, 4);
-                detail = "base reference check queued";
-            }
-        }
+        success = executeReferenceCheckCommand(payload, error, detail);
     } else if (command == "STOP_AUTO_BASE") {
         if (workflowActive()) {
             requestWorkflowStop();

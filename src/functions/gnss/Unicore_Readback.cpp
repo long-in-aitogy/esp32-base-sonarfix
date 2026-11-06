@@ -14,6 +14,41 @@ extern SemaphoreHandle_t gnssSerialMutex;
 
 namespace UnicoreReadback {
 namespace {
+bool appendUnicoreCandidate(char value, const char *prefix, bool multiline,
+                            String &candidate, String &response) {
+    if (value == prefix[0]) {
+        candidate = String(value);
+    } else if (multiline && value == '\r' && !candidate.isEmpty()) {
+        candidate += value;
+    } else if (value == '\r' || value == '\n') {
+        if (multiline && candidate.startsWith(prefix)) {
+            candidate += value;
+            if (candidate.endsWith("\r\n\r\n") || candidate.endsWith("\n\n")) {
+                response = candidate;
+                return true;
+            }
+            size_t end = candidate.length();
+            while (end && (candidate[end - 1] == '\r' || candidate[end - 1] == '\n' || candidate[end - 1] == ' ')) --end;
+            if (end >= 9 && candidate[end - 9] == '*') {
+                candidate.remove(end);
+                response = candidate;
+                return true;
+            }
+            return false;
+        }
+        if (candidate.startsWith(prefix)) {
+            response = candidate;
+            return true;
+        }
+        candidate = "";
+    } else if (!candidate.isEmpty() && candidate.length() < (multiline ? 4095U : 383U)) {
+        candidate += value;
+    } else if (candidate.length() >= (multiline ? 4095U : 383U)) {
+        candidate = "";
+    }
+    return false;
+}
+
 bool queryUnicoreLine(const char *query, const char *prefix, String &response, String &error,
                       bool multiline = false) {
     if (!rtcmBufferMutex
@@ -55,36 +90,7 @@ bool queryUnicoreLine(const char *query, const char *prefix, String &response, S
                     break;
                 }
             }
-            if (value == prefix[0]) {
-                candidate = String(value);
-            } else if (multiline && value == '\r' && !candidate.isEmpty()) {
-                candidate += value;
-            } else if (value == '\r' || value == '\n') {
-                if (multiline && candidate.startsWith(prefix)) {
-                    candidate += value;
-                    if (candidate.endsWith("\r\n\r\n") || candidate.endsWith("\n\n")) {
-                        response = candidate;
-                        break;
-                    }
-                    size_t end = candidate.length();
-                    while (end && (candidate[end - 1] == '\r' || candidate[end - 1] == '\n' || candidate[end - 1] == ' ')) --end;
-                    if (end >= 9 && candidate[end - 9] == '*') {
-                        candidate.remove(end);
-                        response = candidate;
-                        break;
-                    }
-                    continue;
-                }
-                if (candidate.startsWith(prefix)) {
-                    response = candidate;
-                    break;
-                }
-                candidate = "";
-            } else if (!candidate.isEmpty() && candidate.length() < (multiline ? 4095U : 383U)) {
-                candidate += value;
-            } else if (candidate.length() >= (multiline ? 4095U : 383U)) {
-                candidate = "";
-            }
+            if (appendUnicoreCandidate(value, prefix, multiline, candidate, response)) break;
         }
         if (response.isEmpty()) vTaskDelay(pdMS_TO_TICKS(5));
     }
