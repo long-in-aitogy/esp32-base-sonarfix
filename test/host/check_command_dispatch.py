@@ -10,6 +10,8 @@ esp_functions = 'static cmd_action_t handleEspConnectionSet(' + source.split('st
 functions = 'cmd_action_t handleGnssCommand(' + source.split('cmd_action_t handleGnssCommand(', 1)[1]
 shim = r'''
 #include <cassert>
+#include <cstdint>
+#include <cstdlib>
 #include <string>
 #include <vector>
 struct String : std::string {
