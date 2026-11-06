@@ -51,7 +51,7 @@ namespace cmd_helper {
         constexpr uint32_t RESPONSE_TIMEOUT_MS = 500;
         constexpr uint32_t RESPONSE_IDLE_MS = 80;
         constexpr size_t RESPONSE_BUFFER_SIZE = 512;
-        uint8_t response[RESPONSE_BUFFER_SIZE] = {};
+        std::array<uint8_t, RESPONSE_BUFFER_SIZE> response{};
         auto length = 0;
         uint32_t lastByteAt = millis();
         const uint32_t startedAt = millis();
@@ -74,7 +74,7 @@ namespace cmd_helper {
         if (length == 0) {
             Serial.println("[GNSS RESPONSE] Khong co phan hoi trong thoi gian cho.");
         } else {
-            printGnssResponse(response, length);
+            printGnssResponse(response.data(), length);
         }
     }
 
@@ -358,11 +358,11 @@ cmd_action_t handleEspCommand(const std::vector<String> &cmdWords) {
 
 cmd_action_t handleMqttCommand(const std::vector<String> &cmdWords) {
     if (cmd_helper::hasExactArgumentCount(cmdWords, 3, "MQTT" ) && cmdWords[0] == "SET") {
-        static constexpr cmd_helper::PreferenceMapping stringSettings[] = {
+        static constexpr std::array<cmd_helper::PreferenceMapping, 5> stringSettings{{
             {"SERVER", "MQTT_SERVER"}, {"USER", "MQTT_USER"},
             {"PASS", "MQTT_PASS"}, {"PUBTPCHEALTH", "TPC_HEALTH"},
             {"SUBTPCCMD", "TPC_SUB_CMD"},
-        };
+        }};
         const char *key = cmd_helper::findPreferenceKey(cmdWords[1], stringSettings,
                                             std::size(stringSettings));
         if (key != nullptr) {
@@ -378,10 +378,10 @@ cmd_action_t handleMqttCommand(const std::vector<String> &cmdWords) {
 
 cmd_action_t handleNtripCommand(const std::vector<String> &cmdWords) {
     if (cmd_helper::hasExactArgumentCount(cmdWords, 3, "NTRIP") && cmdWords[0] == "SET") {
-        static constexpr cmd_helper::PreferenceMapping stringSettings[] = {
+        static constexpr std::array<cmd_helper::PreferenceMapping, 3> stringSettings{{
             {"CSTRADDR", "NTRIP_SERVER"}, {"MNTPNT", "NTRIP_MPT"},
             {"CSTRAUTH", "NT_AUTH_BS"},
-        };
+        }};
         const char *key = cmd_helper::findPreferenceKey(cmdWords[1], stringSettings,
                                             std::size(stringSettings));
         if (key != nullptr) {
