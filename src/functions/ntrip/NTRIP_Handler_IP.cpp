@@ -137,7 +137,7 @@ namespace {
     while (millis() - start < timeoutMs) {
       while (Serial1.available() > 0) {
         if (identity.feed(static_cast<uint8_t>(Serial1.read()))) {
-          Serial.printf("[GNSS][UNICORE RESPONSE] %s\n", identity.line);
+          Serial.printf("[GNSS][UNICORE RESPONSE] %s\n", identity.line.data());
           return true;
         }
       }

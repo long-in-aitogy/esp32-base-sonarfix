@@ -530,7 +530,7 @@ bool BackendAgent::probeUnicore(Stream &stream, String &identityLine) {
     while (millis() - startMs < 1000) {
         while (stream.available()) {
             if (identity.feed(static_cast<uint8_t>(stream.read()))) {
-                identityLine = identity.line;
+                identityLine = identity.line.data();
                 return true;
             }
         }

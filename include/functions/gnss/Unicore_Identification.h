@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cctype>
@@ -6,7 +7,7 @@
 
 // Extract the ASCII identity line even when the UART also carries binary RTCM.
 struct UnicoreIdentification {
-    char line[512] = {};
+    std::array<char, 512> line = {};
     size_t used = 0;
 
     bool feed(uint8_t byte) {
@@ -15,11 +16,12 @@ struct UnicoreIdentification {
         if (byte == '\r' || byte == '\n') {
             line[used] = '\0';
             used = 0;
-            return (std::strncmp(line, "#VERSIONA,", 10) == 0 || std::strncmp(line, "#VERSION,", 9) == 0)
-                && (std::strstr(line, "\"UM9") || std::strstr(line, "\"UB9")
-                    || std::strstr(line, "\"UB4") || std::strstr(line, "UNICORE"));
+            return (std::strncmp(line.data(), "#VERSIONA,", 10) == 0
+                    || std::strncmp(line.data(), "#VERSION,", 9) == 0)
+                && (std::strstr(line.data(), "\"UM9") || std::strstr(line.data(), "\"UB9")
+                    || std::strstr(line.data(), "\"UB4") || std::strstr(line.data(), "UNICORE"));
         }
-        if (byte < 0x20 || byte > 0x7e || used + 1 >= sizeof(line)) {
+        if (byte < 0x20 || byte > 0x7e || used + 1 >= line.size()) {
             used = 0;
             return false;
         }
