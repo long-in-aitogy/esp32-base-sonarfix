@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, run_cpp, cpp_output, mapped
 
 root = Path(__file__).resolve().parents[2]
 source = (root / "src/functions/ntrip/RTCM_Receiver.cpp").read_text()
@@ -66,10 +67,11 @@ int main() {
     assert(sentences == 32); // Binary traffic ends a malformed NMEA line.
 }
 '''
+parser = mapped(root / 'src/functions/ntrip/RTCM_Receiver.cpp', 'void resetRtcmParser()' + parser)
 with tempfile.TemporaryDirectory(prefix="gnss-stream-") as directory:
     path = Path(directory)
-    (path / "check.cpp").write_text(harness + "void resetRtcmParser()" + parser + checks)
-    subprocess.run(["c++", "-std=c++17", "-fsanitize=address,undefined",
+    (path / "check.cpp").write_text(harness + parser + checks)
+    compile_cpp(["c++", "-std=c++17", "-fsanitize=address,undefined",
                     str(path / "check.cpp"), "-o", str(path / "check")], check=True)
-    subprocess.run([str(path / "check")], check=True)
+    run_cpp([str(path / "check")], check=True)
 print("PASS: 30 interleaved GGA/UBX/RTCM cycles, binary payload markers, malformed input recovery")

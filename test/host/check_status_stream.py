@@ -8,6 +8,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from host_coverage import compile_cpp, run_cpp, cpp_output, mapped
 
 root = Path(__file__).resolve().parents[2]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
@@ -127,14 +128,18 @@ def run(source_root, reference=False):
     agent = (root / 'src/functions/backend/Backend_Agent.cpp').read_text()
     active = 'bool BackendAgent::effectiveStreamActive' + agent.split('bool BackendAgent::effectiveStreamActive', 1)[1].split('\nbool BackendAgent::mqttConnected', 1)[0]
     telemetry = 'struct GnssTelemetrySnapshot {' + snapshot + '\n};\nGnssTelemetrySnapshot getGnssTelemetrySnapshot() { GnssTelemetrySnapshot s; s.hasData = true; s.lastDataMs = s.lastGgaMs = 9000; s.satellites = 20; return s; }\n'
+    status = mapped(next((source_root / 'src/functions').rglob('Backend_Agent_Status.cpp')), status, stripped_includes=True)
+    active = mapped(root / 'src/functions/backend/Backend_Agent.cpp', active)
+    helpers = mapped(next((source_root / 'src/functions').rglob('Backend_Agent_Commands.cpp')), helpers) if helpers else helpers
+    stream = mapped(next((source_root / 'src/functions').rglob('Backend_Agent_Commands.cpp')), stream)
     with tempfile.TemporaryDirectory(prefix='esp-status-stream-') as directory:
         path = Path(directory)
         test_code = checks[:checks.index('    for (unsigned demand')] + '}\n' if reference else checks
         (path / 'check.cpp').write_text(shim + common + telemetry + header + status + active + helpers + stream + test_code)
-        subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+        compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                         '-I' + str(root / 'include'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                         str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-        return [json.loads(line) for line in subprocess.check_output([str(path / 'check')], text=True).splitlines()]
+        return [json.loads(line) for line in cpp_output([str(path / 'check')], text=True).splitlines()]
 
 actual = run(root)
 assert len(actual) == 188

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <cstdint>
 #include <type_traits>
 inline bool isDigit(char value) { return value >= '0' && value <= '9'; }
@@ -23,6 +24,9 @@ public:
     int indexOf(char value) const { const auto pos = find(value); return pos == npos ? -1 : int(pos); }
 #ifdef HOST_READBACK_TEST
     String(char value) : std::string(1, value) {}
+    String &operator=(const char *value) { assign(value ? value : ""); return *this; }
+    long toInt() const { return std::strtol(c_str(), nullptr, 10); }
+    void toLowerCase() { std::transform(begin(), end(), begin(), [](unsigned char c) { return std::tolower(c); }); }
     int indexOf(char value, size_t start) const { const auto pos = find(value, start); return pos == npos ? -1 : int(pos); }
     bool startsWith(const String &prefix) const { return compare(0, prefix.size(), prefix) == 0; }
     void remove(size_t start) { erase(start); }

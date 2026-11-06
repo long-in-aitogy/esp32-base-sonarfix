@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, run_cpp, cpp_output, mapped
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/ntrip/RTCM_Receiver.cpp').read_text()
@@ -44,10 +45,11 @@ int main() {
     assert(std::isnan(telemetry.altitude)); // New epoch cannot reuse previous coordinates.
 }
 '''
+functions = mapped(root / 'src/functions/ntrip/RTCM_Receiver.cpp', functions)
 with tempfile.TemporaryDirectory(prefix='esp-gga-') as directory:
     path = Path(directory)
     (path / 'check.cpp').write_text(shim + harness + telemetry + '\nGnssTelemetrySnapshot telemetry;\n' + functions + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / 'include'), str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: real GGA telemetry parses RTK Fixed LLH; h=H+N; missing height/coordinates never reuse a prior sample')

@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, run_cpp, cpp_output, mapped
 
 root = Path(__file__).resolve().parents[2]
 workflow = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_text()
@@ -127,12 +128,15 @@ int main() {
     assert(loopNtripRover() == 504 && !roverSessionAuthenticated);
 }
 '''
+number = mapped(root / 'src/functions/backend/Backend_Agent_Workflows.cpp', number)
+restore = mapped(root / 'src/functions/backend/Backend_Agent_Workflows.cpp', restore)
+rover = mapped(root / 'src/functions/ntrip/NTRIP_Handler_IP.cpp', rover)
 with tempfile.TemporaryDirectory(prefix='esp-workflow-restore-') as directory:
     path = Path(directory)
     (path / 'Arduino.h').write_text('#pragma once\n' + shim)
     (path / 'check.cpp').write_text('#include <Arduino.h>\n' + harness + number + restore + snapshot + rover + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(path), '-I' + str(root / 'include'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: actual 120/300s snapshot over saved 1800s, Survey-In/Fixed restore, mode verification, failure publishing gate, CORS receive/UART delivery and short writes')

@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, run_cpp, cpp_output, mapped
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/hardware/Network_Manager.cpp').read_text()
@@ -56,10 +57,11 @@ int main() {
     assert(tryWifiFallback(false)); // Boot has no running protocol sockets.
 }
 '''
+function = mapped(root / 'src/hardware/Network_Manager.cpp', function)
 with tempfile.TemporaryDirectory(prefix='wifi-handover-') as directory:
     path = Path(directory)
     (path / 'check.cpp').write_text('#include <initializer_list>\n' + harness + function + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: Wi-Fi closes sockets before route loss; SIM preserved on failed candidate; boot handover')

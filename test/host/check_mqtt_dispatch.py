@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, run_cpp, cpp_output, mapped
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/mqtt/MQTT_Manager.cpp').read_text()
@@ -74,10 +75,12 @@ int main() {
     assert(connectMQTT() == 0 && mqtt.attempts == 2 && backendAgent.online == 1);
 }
 '''
+callback = mapped(root / 'src/functions/mqtt/MQTT_Manager.cpp', callback)
+connect = mapped(root / 'src/functions/mqtt/MQTT_Manager.cpp', connect)
 with tempfile.TemporaryDirectory(prefix='mqtt-dispatch-') as directory:
     path = Path(directory)
     (path / 'check.cpp').write_text(shim + harness + callback + connect + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: MQTT JSON/legacy routing, locked/NUL/oversized input, restart cleanup, reconnect backoff and subscriptions')

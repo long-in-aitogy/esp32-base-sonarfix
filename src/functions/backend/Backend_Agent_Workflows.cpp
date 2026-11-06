@@ -479,7 +479,9 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
         DynamicJsonDocument received(2048);
         while (!workflowCancelRequested_ && millis() - started < 30000UL) {
             if (xQueueReceive(autoBaseLocationQueue_, &reply, pdMS_TO_TICKS(50)) == pdTRUE
-                && deserializeJson(received, reply.json) == DeserializationError::Ok
+                // The queue buffer leaves scope before location is used below.
+                // Const input makes ArduinoJson own strings copied into location.
+                && deserializeJson(received, static_cast<const char *>(reply.json)) == DeserializationError::Ok
                 && acceptAutoBaseLocationReply(received.as<JsonObjectConst>(), requestId,
                     rawLatitude, rawLongitude, rawAltitude, location)) { located = true; break; }
         }

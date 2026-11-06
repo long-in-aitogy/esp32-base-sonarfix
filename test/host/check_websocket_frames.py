@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from host_coverage import compile_cpp, run_cpp, cpp_output, mapped
 
 root = Path(__file__).resolve().parents[2]
 source_root = Path(sys.argv[1]) if len(sys.argv) > 1 else root
@@ -67,10 +68,11 @@ int main() {
     assert(!ws.connected_);
 }
 '''
+source = mapped(next((source_root / 'src/functions').rglob('Backend_Agent_Websocket.cpp')), source)
 with tempfile.TemporaryDirectory(prefix='esp-websocket-') as directory:
     path = Path(directory)
     (path / 'check.cpp').write_text(shim + harness + source + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: real WebSocket reader; partial/coalesced frames, 32KB limit, invalid headers, ping/close and command delivery')

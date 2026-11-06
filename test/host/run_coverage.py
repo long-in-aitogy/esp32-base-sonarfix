@@ -73,6 +73,7 @@ def main():
         "mqtt": ["mqtt_write_checks.cpp"],
         "wifi": ["wifi_profiles_checks.cpp"],
         "sample": ["sample_checks.cpp"],
+        "protocol": ["protocol_checks.cpp"],
         "readback": ["readback_checks.cpp", "src/functions/gnss/Ublox_Readback.cpp",
                      "src/functions/gnss/Unicore_Readback.cpp", "src/functions/backend/Backend_Agent_Codec.cpp"],
     }
@@ -98,6 +99,17 @@ def main():
                             "-o", str(profile)], check=True)
             exports.append(subprocess.check_output(
                 [cov, "export", "-format=lcov", f"-instr-profile={profile}", str(binary)], text=True, cwd=ROOT))
+        for name in ("backend_lifecycle", "backend_storage", "detection_lifecycle", "gnss_lifecycle", "network_lifecycle",
+                     "projection_native", "workflow_lifecycle", "base_startup_confirmation", "gga_position", "gnss_stream", "mqtt_dispatch",
+                     "ntrip_reconnect", "nvs_inventory", "rover_gga", "status_stream", "websocket_frames",
+                     "wifi_handover", "wifi_nvs", "workflow_progress", "workflow_restore"):
+            print(f"Running {name} integration checks", flush=True)
+            report = build / f"{name}.lcov"
+            environment = dict(os.environ, CXX=compiler, LLVM_PROFDATA=profdata, LLVM_COV=cov,
+                               HOST_COVERAGE_OUTPUT=str(report), HOST_ARDUINOJSON=str(args.arduinojson.resolve()))
+            subprocess.run([sys.executable, str(ROOT / f"test/host/check_{name}.py")],
+                           check=True, env=environment, cwd=ROOT)
+            exports.append(report.read_text())
         sonar_report("\n".join(exports), args.output)
 
 

@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, run_cpp, cpp_output, mapped
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Startup.cpp').read_text()
@@ -126,12 +127,15 @@ int main() {
     assert(result["state"] == "unread");
 }
 '''
+helpers = mapped(root / 'src/functions/backend/Backend_Agent_Startup.cpp', helpers)
+reconcile = mapped(root / 'src/functions/backend/Backend_Agent_Startup.cpp', reconcile)
+verification = mapped(root / 'src/functions/backend/Backend_Agent_Gnss.cpp', verification)
 with tempfile.TemporaryDirectory(prefix='base-confirmation-') as directory:
     path = Path(directory)
     (path / 'check.cpp').write_text(shim + harness + helpers + reconcile + verification + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     '-I' + str(root / 'include'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: delayed Fixed LLA confirmation clears startup error; MODE coordinates confirm Unicore without BESTNAV; malformed modes, wrong coordinates and unrelated errors remain blocked')

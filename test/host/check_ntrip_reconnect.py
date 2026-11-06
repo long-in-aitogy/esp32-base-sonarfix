@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, run_cpp, cpp_output, mapped
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/ntrip/NTRIP_Handler_IP.cpp').read_text()
@@ -69,12 +70,13 @@ int main() {
     assert(loopNTRIP(payload) == 504);
 }
 '''
+loop = mapped(root / 'src/functions/ntrip/NTRIP_Handler_IP.cpp', loop)
 with tempfile.TemporaryDirectory(prefix='esp-ntrip-reconnect-') as directory:
     path = Path(directory)
     log_check = 'void checkLogs() { bool ntripStatusLogged = false, ntripWasConnected = false; for (int loopStatus : {1, 5, 1, 504, 504, 1, 5}) {\n' + logging + '\n} assert(Serial.events == 3); }\n'
     checks = checks.replace('int main() {', 'int main() { checkLogs();')
     (path / 'check.cpp').write_text(shim + harness + loop + log_check + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: reconnect status, retry backoff, two endpoints, disabled streams, Rover exclusion v2 framing and transition-only logs')

@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, run_cpp, cpp_output, mapped
 
 root = Path(__file__).resolve().parents[2]
 source = (root / "src/functions/ntrip/NTRIP_Handler_IP.cpp").read_text()
@@ -58,10 +59,11 @@ int main() {
     assert(client.writes == 2 && Serial.logs.back() != "sent");
 }
 '''
+sender = mapped(root / 'src/functions/ntrip/NTRIP_Handler_IP.cpp', 'void sendRoverGgaIfAvailable(' + sender)
 with tempfile.TemporaryDirectory(prefix="esp32-gga-") as directory:
     path = Path(directory)
-    (path / "check.cpp").write_text(harness + "void sendRoverGgaIfAvailable(" + sender + checks)
-    subprocess.run(["c++", "-std=c++17", "-fsanitize=address,undefined",
+    (path / "check.cpp").write_text(harness + sender + checks)
+    compile_cpp(["c++", "-std=c++17", "-fsanitize=address,undefined",
                     str(path / "check.cpp"), "-o", str(path / "check")], check=True)
-    subprocess.run([str(path / "check")], check=True)
+    run_cpp([str(path / "check")], check=True)
 print("PASS: missing/stale GGA, CRLF forwarding, rate limit, socket write failure")

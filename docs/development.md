@@ -15,11 +15,28 @@ Sonar's generic coverage format. The report includes only production paths under
 `src` and `include`, never mocks or generated harnesses. Each executable has its
 own profile, and the report combines executions across suites.
 
-These tests cover command builders, codec, configuration verification, MQTT
-chunking, Wi-Fi validation, RTK samples and complete u-blox/Unicore readback code
-with a virtual clock/UART. They do not measure uninstrumented firmware paths or
+Existing generated harnesses use `host_coverage.mapped()` to verify that each
+instrumented fragment exactly matches production source before attaching source
+line markers. LLVM's physical harness line counts are mapped back to those
+verified source lines; test and mock lines are discarded. Directly compiled
+production files retain their original coverage. Unit tests check both paths,
+reject edited/ambiguous fragments, and retain missed lines in the report.
+
+The runner executes eight native suites and twenty integration harnesses, covering
+backend queues/control ACK/fail-open recovery, NVS migration/write failures,
+network fallback/recovery, GNSS boot detection/configuration/readback/Rover,
+complete Auto Base/reference workflows, status and stream commands, WebSocket
+upgrade/framing, NTRIP delivery, and the logged VN2000 reference. A virtual clock
+advances real workflow timeouts and the full 60-sample averaging loop.
+These tests do not measure uninstrumented firmware paths or
 establish behavior on hardware. The Sonar way requirement of at least 80% coverage
 on new code remains enabled; missing firmware coverage still counts as uncovered.
+
+The Auto Base location reply is parsed from const input so ArduinoJson owns its
+keys and strings. Mutable queue input previously left location fields pointing
+into a stack buffer that expired before the conversion report used them. The
+complete lifecycle harness reproduces that failure under ASan and verifies the
+location fallback succeeds after the ownership fix.
 
 ## Backend agent ownership
 

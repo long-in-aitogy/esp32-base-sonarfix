@@ -5,9 +5,36 @@ import unittest
 import xml.etree.ElementTree as ET
 
 from run_coverage import ROOT, sonar_report
+from host_coverage import mapped, remap_lcov
 
 
 class CoverageReportTests(unittest.TestCase):
+    def test_preserve_directly_compiled_production_sources(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "source.cpp"
+            source.write_text("int value() { return 7; }\n")
+            data = f"SF:{source}\nDA:1,3\nend_of_record"
+            self.assertEqual(remap_lcov(data, [source]), data)
+
+    def test_map_only_verified_source_fragments(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "source.cpp"
+            source.write_text("// original\nint value() {\n    return 7;\n}\n")
+            fragment = "int value() {\n    return 7;\n}"
+            harness = Path(directory) / "check.cpp"
+            harness.write_text("int fake = 0;\n" + mapped(source, fragment) + "int test = 1;\n")
+            lines = harness.read_text().splitlines()
+            physical = lines.index("    return 7;") + 1
+            test = lines.index("int test = 1;") + 1
+            result = remap_lcov(f"SF:{harness}\nDA:{physical},3\nDA:{test},999\nend_of_record", [harness])
+            self.assertIn(f"SF:{source.resolve()}\nDA:3,3", result)
+            self.assertNotIn("999", result)
+            with self.assertRaises(ValueError):
+                mapped(source, fragment.replace("7", "8"))
+            source.write_text(fragment + "\n" + fragment)
+            with self.assertRaises(ValueError):
+                mapped(source, fragment)
+
     def test_merge_runs_and_keep_uncovered_production_lines(self):
         lcov = (
             f"SF:{ROOT / 'src/main.cpp'}\nDA:10,0\nDA:11,2\nend_of_record\n"

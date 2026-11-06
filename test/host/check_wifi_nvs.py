@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, run_cpp, cpp_output, mapped
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/hardware/Wifi_handler.cpp').read_text()
@@ -54,11 +55,12 @@ int main() {
     assert(!setupWiFi(nullptr) && saves == 1 && legacyChecks == 4);
 }
 '''
+setup = mapped(root / 'src/hardware/Wifi_handler.cpp', setup)
 with tempfile.TemporaryDirectory(prefix='esp-wifi-nvs-') as directory:
     path = Path(directory)
     (path / 'check.cpp').write_text(harness + setup + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / 'test/host'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: saved Wi-Fi reused; missing keys saved only after successful connection; absent legacy NVS is optional')
