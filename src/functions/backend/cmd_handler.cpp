@@ -394,37 +394,48 @@ cmd_action_t handleNtripCommand(const std::vector<String> &cmdWords) {
     return CMD_ACTION_NONE;
 }
 
+cmd_action_t handleGnssCommand(std::vector<String> &cmdWords) {
+    if (cmdWords.size() < 3) {
+        Serial.println("[MQTT COMMAND DOWNLINK] Error: Incomplete GNSS command.");
+        return CMD_ACTION_NONE;
+    }
+    if (cmdWords.size() == 3 && cmdWords[2] == "ROVER") {
+        if (backendAgent.workflowActive()) {
+            Serial.println("[GNSS ROVER][ERROR] Dung workflow hien tai truoc khi thu lai");
+        } else {
+            const bool confirmed = backendAgent.applyRoverMode();
+            Serial.println(confirmed ? "[GNSS ROVER] Rover va GGA da xac nhan"
+                                     : "[GNSS ROVER][ERROR] Chua xac nhan Rover/GGA");
+        }
+        return CMD_ACTION_NONE;
+    }
+    if (cmdWords[2] == "BASE") {
+        cmdWords.erase(cmdWords.begin(), cmdWords.begin() + 3);
+        return handleGnssBaseCommand(cmdWords);
+    }
+    if (cmdWords[2] == "SET") {
+        cmdWords.erase(cmdWords.begin(), cmdWords.begin() + 2);
+        return handleGnssSetCommand(cmdWords);
+    }
+    Serial.println("[MQTT COMMAND DOWNLINK] Error: Unknown GNSS command: " + cmdWords[2]);
+    return CMD_ACTION_NONE;
+}
+
+cmd_action_t handleConfigCommand(const std::vector<String> &cmdWords) {
+    if (cmdWords.size() < 3 || cmdWords[2] != "RESET") return CMD_ACTION_NONE;
+    Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau reset ve cau hinh mac dinh");
+    prefs.begin("myPrefs", false);
+    prefs.putBool("NEED_RESET", true);
+    prefs.end();
+    return CMD_ACTION_ESP_RESTART;
+}
+
 cmd_action_t handleCommand(std::vector<String> &cmdWords) {
     if (cmdWords.size() < 2 || cmdWords[0] != "ATG") {
         Serial.println("[MQTT COMMAND DOWNLINK] Error: Empty or invalid command format. Command must start with 'ATG'.");
         return CMD_ACTION_NONE;
     }
-    if (cmdWords[1] == "GNSS") {
-        if (cmdWords.size() < 3) {
-            Serial.println("[MQTT COMMAND DOWNLINK] Error: Incomplete GNSS command.");
-            return CMD_ACTION_NONE;
-        }
-        if (cmdWords.size() == 3 && cmdWords[2] == "ROVER") {
-            if (backendAgent.workflowActive()) {
-                Serial.println("[GNSS ROVER][ERROR] Dung workflow hien tai truoc khi thu lai");
-            } else {
-                const bool confirmed = backendAgent.applyRoverMode();
-                Serial.println(confirmed ? "[GNSS ROVER] Rover va GGA da xac nhan"
-                                         : "[GNSS ROVER][ERROR] Chua xac nhan Rover/GGA");
-            }
-            return CMD_ACTION_NONE;
-        }
-        if (cmdWords[2] == "BASE") {
-            cmdWords.erase(cmdWords.begin(), cmdWords.begin() + 3);
-            return handleGnssBaseCommand(cmdWords);
-        }
-        if (cmdWords[2] == "SET") {
-            cmdWords.erase(cmdWords.begin(), cmdWords.begin() + 2);
-            return handleGnssSetCommand(cmdWords);
-        }
-        Serial.println("[MQTT COMMAND DOWNLINK] Error: Unknown GNSS command: " + cmdWords[2]);
-        return CMD_ACTION_NONE;
-    }    
+    if (cmdWords[1] == "GNSS") return handleGnssCommand(cmdWords);
     if (cmdWords[1] == "ESP") {
         cmdWords.erase(cmdWords.begin(), cmdWords.begin() + 2);
         return handleEspCommand(cmdWords);
@@ -437,14 +448,8 @@ cmd_action_t handleCommand(std::vector<String> &cmdWords) {
         cmdWords.erase(cmdWords.begin(), cmdWords.begin() + 2);
         return handleNtripCommand(cmdWords);
     }
-    if (cmdWords[1] == "CONFIG") {
-        if (cmdWords.size() >= 3 && cmdWords[2] == "RESET") {
-            Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau reset ve cau hinh mac dinh");
-            prefs.begin("myPrefs", false);
-            prefs.putBool("NEED_RESET", true);
-            prefs.end();
-            return CMD_ACTION_ESP_RESTART;
-        }
+    if (cmdWords[1] == "CONFIG" && cmdWords.size() >= 3 && cmdWords[2] == "RESET") {
+        return handleConfigCommand(cmdWords);
     }
     Serial.println("[MQTT COMMAND DOWNLINK] Unknown command: " + cmdWords[1]);
     return CMD_ACTION_NONE;

@@ -6,7 +6,7 @@ from host_coverage import compile_cpp, run_cpp, cpp_output, mapped
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/ntrip/NTRIP_Handler_IP.cpp').read_text()
-loop = 'int loopNTRIP(String &rtcmData) {' + source.split('int loopNTRIP(String &rtcmData) {', 1)[1].split('\nvoid stopNtrip()', 1)[0]
+loop = 'static bool sendEndpointRtcm(' + source.split('static bool sendEndpointRtcm(', 1)[1].split('\nvoid stopNtrip()', 1)[0]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
 shim = shim.replace('    void trim() {', '''    String(unsigned long value, int) { char text[24]; snprintf(text, sizeof(text), "%lx", value); assign(text); }
     void trim() {''')

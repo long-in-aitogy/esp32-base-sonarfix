@@ -315,6 +315,23 @@ int connectNTRIP() {
     return connected > 0 ? 0 : -1;
 }
 
+static bool sendEndpointRtcm(NtripEndpoint &endpoint, Client &client, const String &rtcmData) {
+    if (rtcmData.isEmpty()) {
+        if (endpoint.version == 2 && millis() - endpoint.lastKeepAliveMs >= 10000UL) {
+            client.print("0\r\n\r\n");
+            endpoint.lastKeepAliveMs = millis();
+        }
+        return false;
+    }
+    const size_t payloadLength = rtcmData.length();
+    if (endpoint.version == 2) client.print(String(payloadLength, HEX) + "\r\n");
+    const size_t sent = client.write(reinterpret_cast<const uint8_t *>(rtcmData.c_str()), payloadLength);
+    if (endpoint.version == 2) client.print("\r\n");
+    if (sent != payloadLength) return false;
+    endpoint.bytesInWindow += static_cast<uint32_t>(sent);
+    return true;
+}
+
 int loopNTRIP(String &rtcmData) {
     if (roverSessionActive || backendAgent.workflowActive()) return 504;
 
@@ -340,27 +357,7 @@ int loopNTRIP(String &rtcmData) {
         }
 
         anyConnected = true;
-        if (!rtcmData.isEmpty()) {
-            const size_t payloadLength = rtcmData.length();
-            size_t sent = 0;
-            if (endpoint.version == 2) {
-                // NTRIP v2 source streams use HTTP chunk framing after the
-                // POST handshake. The payload itself remains untouched.
-                client.print(String(payloadLength, HEX) + "\r\n");
-                sent = client.write(reinterpret_cast<const uint8_t *>(rtcmData.c_str()), payloadLength);
-                client.print("\r\n");
-            } else {
-                sent = client.write(reinterpret_cast<const uint8_t *>(rtcmData.c_str()), payloadLength);
-            }
-            if (sent == payloadLength) {
-                endpoint.bytesInWindow += static_cast<uint32_t>(sent);
-                anySent = true;
-            }
-        } else if (endpoint.version == 2
-                   && millis() - endpoint.lastKeepAliveMs >= 10000UL) {
-            client.print("0\r\n\r\n");
-            endpoint.lastKeepAliveMs = millis();
-        }
+        anySent = sendEndpointRtcm(endpoint, client, rtcmData) || anySent;
         updateBps(endpoint);
     }
 

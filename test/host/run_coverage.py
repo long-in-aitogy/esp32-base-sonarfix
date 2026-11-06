@@ -112,7 +112,7 @@ def main():
                 [cov, "export", "-format=lcov", f"-instr-profile={profile}", str(binary)], text=True, cwd=ROOT))
         for name in ("backend_lifecycle", "backend_storage", "detection_lifecycle", "gnss_lifecycle", "network_lifecycle",
                      "projection_native", "workflow_lifecycle", "base_startup_confirmation", "gga_position", "gnss_stream", "mqtt_dispatch",
-                     "ntrip_reconnect", "nvs_inventory", "rover_gga", "status_stream", "websocket_frames",
+                     "ntrip_reconnect", "command_dispatch", "nvs_inventory", "rover_gga", "status_stream", "websocket_frames",
                      "wifi_handover", "wifi_nvs", "workflow_progress", "workflow_restore"):
             print(f"Running {name} integration checks", flush=True)
             report = build / f"{name}.lcov"

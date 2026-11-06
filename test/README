@@ -8,7 +8,7 @@ pio run -e tdm240x_dev_general -t compiledb
 python3 test/host/firmware_coverage_inventory.py
 python3 test/host/run_coverage.py
 
-The runner executes eight native suites and twenty integration harnesses with
+The runner executes eight native suites and twenty-one integration harnesses with
 ASan/UBSan and coverage enabled.
 It reuses the installed ArduinoJson 6 headers from PlatformIO by default; supply
 `--arduinojson /path/to/ArduinoJson/src` for a separate checkout. Set CXX,
