@@ -12,6 +12,7 @@
 
 #include <ArduinoJson.h>
 #include <Preferences.h>
+#include <array>
 #include <cstring>
 
 extern Preferences prefs;
@@ -37,7 +38,7 @@ namespace {
   inline constexpr const char rtcm1127SetOutputCom2[] = "RTCM1127 COM2 1\r\n";
   inline constexpr const char rtcmSetBaudCom2[] = "CONFIG COM2 115200\r\n";
   inline constexpr const char cmdSaveConfig[] = "saveconfig\r\n";
-  inline constexpr uint8_t ubxMonVerPoll[] = {
+    inline constexpr std::array<uint8_t, 8> ubxMonVerPoll = {
     0xB5, 0x62, 0x0A, 0x04, 0x00, 0x00, 0x0E, 0x34
   };
 
@@ -107,21 +108,20 @@ namespace {
 
   bool receiveUbxFrame(uint32_t timeoutMs)
   {
-    uint8_t buffer[512] = {};
+    std::array<uint8_t, 512> buffer{};
     auto length = 0;
     const uint32_t start = millis();
 
     while (millis() - start < timeoutMs) {
       while (Serial1.available() > 0) {
         const auto value = Serial1.read();
-        if (length < sizeof(buffer)) {
+                if (length < buffer.size()) {
           buffer[length++] = static_cast<uint8_t>(value);
         } else {
-          memmove(buffer, buffer + 1, sizeof(buffer) - 1);
-          buffer[sizeof(buffer) - 1] = static_cast<uint8_t>(value);
+                    memmove(buffer.data(), buffer.data() + 1, buffer.size() - 1);
+                    buffer[buffer.size() - 1] = static_cast<uint8_t>(value);
         }
-
-        if (hasValidUbxFrame(buffer, length)) {
+        if (hasValidUbxFrame(buffer.data(), length)) {
           return true;
         }
       }
@@ -245,7 +245,7 @@ struct NtripEndpoint {
     String lastError;
 };
 
-NtripEndpoint endpoints[NTRIP_SERVER_COUNT];
+std::array<NtripEndpoint, NTRIP_SERVER_COUNT> endpoints;
 WiFiClient wifiNtripClient1;
 WiFiClient wifiNtripClient2;
 TinyGsmClient gsmNtripClient1(modem, 0);
@@ -365,15 +365,21 @@ bool waitForNtripResponse(Client &client, String *statusLine = nullptr) {
     String response;
     response.reserve(512);
     const uint32_t deadline = millis() + 10000UL;
-    while ((client.connected() || client.available() > 0) && millis() < deadline && response.length() < 4096) {
-        while (client.available() > 0 && response.length() < 4096) {
+    bool headerComplete = false;
+    bool readFailed = false;
+    while ((client.connected() || client.available() > 0) && millis() < deadline
+        && response.length() < 4096 && !headerComplete && !readFailed) {
+        while (client.available() > 0 && response.length() < 4096
+            && !headerComplete && !readFailed) {
             const auto value = client.read();
-            if (value < 0) break;
-            response += static_cast<char>(value);
-            if (response.endsWith("\r\n\r\n")) break;
+            if (value < 0) {
+                readFailed = true;
+            } else {
+                response += static_cast<char>(value);
+                headerComplete = response.endsWith("\r\n\r\n");
+            }
         }
-        if (response.indexOf("\r\n\r\n") >= 0) break;
-        delay(1);
+        if (!headerComplete && !readFailed) delay(1);
     }
     if (statusLine) {
         const auto end = response.indexOf('\n');
@@ -566,13 +572,15 @@ int bootstrapUblox() {
 GnssCmdBuilder::GnssSensorType detectGnssSensorType() {
   Serial.println("[GNSS] Cho receiver khoi dong 2000 ms truoc khi probe.");
   delay(2000);
-  const uint32_t baudRates[] = {GNSS_BAUD, 38400, 9600, 19200, 57600, 230400, 460800};
+    const std::array<uint32_t, 7> baudRates = {
+        GNSS_BAUD, 38400, 9600, 19200, 57600, 230400, 460800
+    };
   for (const uint32_t baud : baudRates) {
     Serial1.updateBaudRate(baud);
     delay(30);
     Serial.printf("[GNSS] Probe baud=%lu\n", static_cast<unsigned long>(baud));
     clearGnssInput();
-    Serial1.write(ubxMonVerPoll, sizeof(ubxMonVerPoll));
+    Serial1.write(ubxMonVerPoll.data(), ubxMonVerPoll.size());
     Serial1.flush();
     if (receiveUbxFrame(1000)) {
       Serial.printf("[GNSS] Da nhan dien u-blox qua UBX-MON-VER, baud=%lu.\n", static_cast<unsigned long>(baud));
@@ -744,16 +752,16 @@ int loopNtripRover() {
     sendRoverGgaIfAvailable(client);
     if (client.available() <= 0) return 200;
 
-    uint8_t buffer[512] = {};
+    std::array<uint8_t, 512> buffer{};
     if (!rtcmBufferMutex
         || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE) {
         return 200;
     }
     const auto available = client.available();
     const auto bytesToRead = min(static_cast<size_t>(available), sizeof(buffer));
-    const auto bytesRead = client.read(buffer, bytesToRead);
+    const auto bytesRead = client.read(buffer.data(), bytesToRead);
     if (bytesRead > 0) {
-        Serial1.write(buffer, static_cast<size_t>(bytesRead));
+        Serial1.write(buffer.data(), static_cast<size_t>(bytesRead));
         roverBytesReceived += static_cast<uint32_t>(bytesRead);
         ++roverPacketsReceived;
     }
