@@ -1,5 +1,4 @@
 """Run with: python3 -m unittest discover -s docs -p 'test_*.py'."""
-import argparse
 from pathlib import Path
 import tempfile
 import unittest
@@ -9,6 +8,19 @@ import render_catalogues as renderer
 
 
 class OutputPathTests(unittest.TestCase):
+    def test_all_catalogues_render_as_pdf(self):
+        sources = sorted(renderer.ROOT.glob("Catalogue-*.md"))
+        self.assertEqual(len(sources), 4)
+        renderer.fonts()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            with patch.object(renderer, "ROOT", root):
+                for source in sources:
+                    with self.subTest(catalogue=source.name):
+                        output = root / source.with_suffix(".pdf").name
+                        renderer.render(source, output)
+                        self.assertTrue(output.read_bytes().startswith(b"%PDF-"))
+
     def test_output_paths_stay_inside_docs(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve() / "docs"
@@ -17,14 +29,18 @@ class OutputPathTests(unittest.TestCase):
             outside.mkdir()
             (root / "escape").symlink_to(outside, target_is_directory=True)
             with patch.object(renderer, "ROOT", root):
-                for value in (".", "preview", str(root / "preview")):
+                for value in ("docs", "preview"):
                     with self.subTest(allowed=value):
                         self.assertTrue(renderer._output_directory(value).is_relative_to(root))
-                for value in ("..", "../docs-other", str(outside), "escape/nested"):
+                for value in ("..", "../docs-other", str(outside), "escape/nested", "."):
                     with self.subTest(rejected=value):
-                        with self.assertRaises(argparse.ArgumentTypeError):
+                        with self.assertRaises(ValueError):
                             renderer._output_directory(value)
                 self.assertFalse((outside / "nested").exists())
+
+                (root / "preview").symlink_to(outside, target_is_directory=True)
+                with self.assertRaises(ValueError):
+                    renderer._output_directory("preview")
 
     def test_render_rejects_output_file_symlink_before_reading_source(self):
         with tempfile.TemporaryDirectory() as directory:
