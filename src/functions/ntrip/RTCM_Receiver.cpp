@@ -3,6 +3,7 @@
 #include "HardwareSerial.h"
 #include "Prog_Config.h"
 #include "functions/backend/Backend_Agent.h"
+#include <array>
 #include <cstdio>
 
 namespace {
@@ -127,14 +128,14 @@ void parseNmeaSentence(const String &rawSentence) {
         backendAgent.setDetectedChipIfUnknown("Ublox");
     }
 
-    char line[MAX_NMEA_LENGTH] = {};
-    const auto copyLength = min(sentence.length(), sizeof(line) - 1);
-    memcpy(line, sentence.c_str(), copyLength);
+    std::array<char, MAX_NMEA_LENGTH> line = {};
+    const auto copyLength = min(sentence.length(), line.size() - 1);
+    memcpy(line.data(), sentence.c_str(), copyLength);
     line[copyLength] = '\0';
 
-    char *fields[32] = {};
+    std::array<char *, 32> fields = {};
     auto fieldCount = 0;
-    char *cursor = line + 1;
+    char *cursor = line.data() + 1;
     while (fieldCount < (std::size(fields))) {
         fields[fieldCount++] = cursor;
         char *comma = strchr(cursor, ',');
@@ -165,7 +166,7 @@ void parseNmeaSentence(const String &rawSentence) {
     auto gstHacc = 0.0F;
 
     if (strcmp(type, "GGA") == 0) {
-        parseGgaFields(fields, fieldCount, updateFix, fixQuality, updatePosition,
+        parseGgaFields(fields.data(), fieldCount, updateFix, fixQuality, updatePosition,
                        latitude, longitude, altitude, hdop, satellites);
     } else if (strcmp(type, "GSA") == 0) {
         // GSA field 2 is only the 2D/3D solution dimension, not the RTK
@@ -173,9 +174,9 @@ void parseNmeaSentence(const String &rawSentence) {
         // so a following GSA sentence cannot turn RTK_FIXED into a generic
         // 2D/3D status.
     } else if (strcmp(type, "GSV") == 0) {
-        parseGsvFields(fields, fieldCount, updateSnr, snrSum, snrCount);
+        parseGsvFields(fields.data(), fieldCount, updateSnr, snrSum, snrCount);
     } else if (strcmp(type, "GST") == 0) {
-        parseGstFields(fields, fieldCount, updateGst, gstSemiMajor,
+        parseGstFields(fields.data(), fieldCount, updateGst, gstSemiMajor,
                        gstSemiMinor, gstHacc);
     }
 
@@ -238,7 +239,8 @@ void resetRtcmParser() {
 }
 
 bool processRtcmByte(uint8_t value, String &rtcmOutput) {
-    if (rtcmLength == 1 && (value & 0xFCU) != 0) {
+    if (rtcmLength == 1
+        && (std::byte{value} & std::byte{0xFC}) != std::byte{}) {
         resetRtcmParser();
         return false;
     }
@@ -340,7 +342,7 @@ void bufferGnssQueryByte(uint8_t value) {
 String receiveRtcmFromGnss() {
     String rtcmData;
     rtcmData.reserve(1024);
-    uint8_t buffer[128] = {};
+    std::array<uint8_t, 128> buffer = {};
 
     if (gnssSerialMutex == nullptr ||
         !xSemaphoreTake(gnssSerialMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS))) {
@@ -354,11 +356,11 @@ String receiveRtcmFromGnss() {
 
     while (Serial1.available() > 0) {
         const auto bytesAvailable = static_cast<size_t>(Serial1.available());
-        const auto bytesToRead = min(bytesAvailable, sizeof(buffer));
+        const auto bytesToRead = min(bytesAvailable, buffer.size());
         if (bytesToRead == 0) break;
 
         const auto bytesRead = Serial1.readBytes(
-            reinterpret_cast<char *>(buffer), bytesToRead);
+            reinterpret_cast<char *>(buffer.data()), bytesToRead);
         if (bytesRead == 0) break;
         noteInputBytes(bytesRead);
         for (size_t i = 0; i < bytesRead; ++i) {
