@@ -58,7 +58,7 @@ struct UbxBaseStatus {
         if (mode != 2) return true;
         if (hp(p[16]) < -99 || hp(p[16]) > 99 || hp(p[17]) < -99 || hp(p[17]) > 99
             || hp(p[18]) < -99 || hp(p[18]) > 99) return false;
-        if (p[3] & 1) {
+        if ((std::byte{p[3]} & std::byte{1}) != std::byte{0}) {
             latitude = i32(p+4)*1e-7 + hp(p[16])*1e-9;
             longitude = i32(p+8)*1e-7 + hp(p[17])*1e-9;
             height = i32(p+12)*0.01 + hp(p[18])*0.0001;

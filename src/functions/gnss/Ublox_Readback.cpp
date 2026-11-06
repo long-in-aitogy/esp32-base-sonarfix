@@ -5,6 +5,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
+#include <array>
 
 extern SemaphoreHandle_t rtcmBufferMutex;
 extern SemaphoreHandle_t gnssSerialMutex;
@@ -22,10 +23,12 @@ bool query(uint8_t cls, uint8_t id, UbxReply &reply, String &error) {
         return false;
     }
     while (Serial1.available()) bufferGnssQueryByte(static_cast<uint8_t>(Serial1.read()));
-    const uint8_t poll[] = {0xB5,0x62,cls,id,0,0,uint8_t(cls+id),uint8_t(4*cls+3*id)};
+    const std::array<uint8_t, 8> poll = {
+        0xB5, 0x62, cls, id, 0, 0, uint8_t(cls + id), uint8_t(4 * cls + 3 * id)
+    };
     Serial.printf("[GNSS][READBACK][TX] UBX %02X/%02X; baud=%lu\n", cls, id,
                   static_cast<unsigned long>(Serial1.baudRate()));
-    const auto written = Serial1.write(poll, sizeof(poll)) == sizeof(poll);
+    const auto written = Serial1.write(poll.data(), poll.size()) == poll.size();
     Serial1.flush();
     const uint32_t started = millis();
     auto matched = false;
@@ -44,7 +47,11 @@ bool query(uint8_t cls, uint8_t id, UbxReply &reply, String &error) {
     }
     xSemaphoreGive(gnssSerialMutex);
     xSemaphoreGive(rtcmBufferMutex);
-    const char *result = !written ? "WRITE_FAILED" : matched ? "OK" : "TIMEOUT";
+    const char *result;
+    if (!written)
+        result = "WRITE_FAILED";
+    else
+        result = matched ? "OK" : "TIMEOUT";
     Serial.printf("[GNSS][READBACK][RX] UBX %02X/%02X; bytes=%lu; elapsed_ms=%lu; reply=%s\n",
                   cls, id, static_cast<unsigned long>(receivedBytes),
                   static_cast<unsigned long>(millis() - started), result);
