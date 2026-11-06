@@ -207,10 +207,11 @@ void parseNmeaSentence(const String &rawSentence) {
         telemetry.snrSamples += snrCount;
         telemetry.latestGsvSamples = snrCount;
         telemetry.lastGsvMs = millis();
-        telemetry.latestAverageSnr = snrSum / snrCount;
+        telemetry.latestAverageSnr = static_cast<float>(snrSum) / static_cast<float>(snrCount);
         telemetry.averageSnr = oldSamples == 0
-            ? snrSum / snrCount
-            : ((telemetry.averageSnr * oldSamples) + snrSum) / telemetry.snrSamples;
+            ? static_cast<float>(snrSum) / static_cast<float>(snrCount)
+            : ((telemetry.averageSnr * static_cast<float>(oldSamples)) + static_cast<float>(snrSum))
+                / static_cast<float>(telemetry.snrSamples);
     }
     if (updateGst) {
         telemetry.gstSemiMajor = gstSemiMajor;
@@ -357,11 +358,15 @@ String receiveRtcmFromGnss() {
     while (Serial1.available() > 0) {
         const auto bytesAvailable = static_cast<size_t>(Serial1.available());
         const auto bytesToRead = min(bytesAvailable, buffer.size());
-        if (bytesToRead == 0) break;
+        auto stopReading = bytesToRead == 0;
 
-        const auto bytesRead = Serial1.readBytes(
-            reinterpret_cast<char *>(buffer.data()), bytesToRead);
-        if (bytesRead == 0) break;
+        size_t bytesRead = 0;
+        if (!stopReading) {
+            bytesRead = Serial1.readBytes(
+                reinterpret_cast<char *>(buffer.data()), bytesToRead);
+            stopReading = bytesRead == 0;
+        }
+        if (stopReading) break;
         noteInputBytes(bytesRead);
         for (size_t i = 0; i < bytesRead; ++i) {
             consumeByte(buffer[i], rtcmData);
