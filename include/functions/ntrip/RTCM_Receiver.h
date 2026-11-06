@@ -10,7 +10,7 @@
 inline constexpr size_t RTCM_SUPPORTED_MESSAGE_TYPE_COUNT = 10;
 
 struct RtcmMessageCounts {
-	uint32_t values[RTCM_SUPPORTED_MESSAGE_TYPE_COUNT] = {};
+	std::array<uint32_t, RTCM_SUPPORTED_MESSAGE_TYPE_COUNT> values{};
 };
 
 // Snapshot of NMEA-derived position/quality and UART/frame counters.
