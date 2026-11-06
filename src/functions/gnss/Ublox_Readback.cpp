@@ -32,7 +32,7 @@ bool query(uint8_t cls, uint8_t id, UbxReply &reply, String &error) {
     uint32_t receivedBytes = 0;
     while (written && millis() - started < 3000UL && !matched) {
         while (Serial1.available()) {
-            const uint8_t value = static_cast<uint8_t>(Serial1.read());
+            const auto value = static_cast<uint8_t>(Serial1.read());
             bufferGnssQueryByte(value);
             ++receivedBytes;
             if (reply.feed(value) && reply.frame[2] == cls && reply.frame[3] == id) {

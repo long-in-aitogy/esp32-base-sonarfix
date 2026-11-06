@@ -66,7 +66,7 @@ void BackendAgent::requestWorkflowStop() {
 }
 
 void BackendAgent::workflowTaskThunk(void *parameter) {
-    BackendAgent *agent = static_cast<BackendAgent *>(parameter);
+    auto *agent = static_cast<BackendAgent *>(parameter);
     if (agent) {
         agent->runWorkflow();
         agent->workflowPayload_ = String();

@@ -174,7 +174,7 @@ String urlEncode(const String &value) {
     String encoded;
     encoded.reserve(value.length() + 8);
     for (size_t i = 0; i < value.length(); ++i) {
-        const uint8_t c = static_cast<uint8_t>(value[i]);
+        const auto c = static_cast<uint8_t>(value[i]);
         if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
             encoded += static_cast<char>(c);
         } else {
@@ -409,7 +409,7 @@ void BackendAgent::loadPreferences() {
     surveyInResult_ = statePrefs.isKey("SURVEY_RESULT") ? statePrefs.getString("SURVEY_RESULT") : "{}";
     statePrefs.end();
     prefs.begin("myPrefs", true);
-    const uint32_t bootCounter = static_cast<uint32_t>(prefs.getInt("RSTRT_COUNT", 0));
+    const auto bootCounter = static_cast<uint32_t>(prefs.getInt("RSTRT_COUNT", 0));
     prefs.end();
     if (serialNeedsSave) {
         const auto opened = beginBackendPreferences(false);
