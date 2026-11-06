@@ -480,26 +480,38 @@ void BackendAgent::evaluateControlPlaneFailover() {
     }
 }
 
+void BackendAgent::retryUnknownChipProbe() {
+    // Retry an unidentified receiver every 8 seconds while no base workflow is running.
+    if (sensorType_ != "UNKNOWN" && !sensorType_.isEmpty()) return;
+
+    const uint32_t now = millis();
+    if (now - lastChipProbeMs_ < 8000UL || workflowActive()) return;
+
+    lastChipProbeMs_ = now;
+    if (!rtcmBufferMutex
+        || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE) {
+        return;
+    }
+
+    if (!gnssSerialMutex
+        || xSemaphoreTake(gnssSerialMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE) {
+        xSemaphoreGive(rtcmBufferMutex);
+        return;
+    }
+
+    detectGnssChip(Serial1);
+    xSemaphoreGive(gnssSerialMutex);
+    xSemaphoreGive(rtcmBufferMutex);
+}
+
+
 void BackendAgent::loop() {
     if (!websocket_) setupWebsocket();
     loopWebsocket();
     drainDataQueues();
     evaluateControlPlaneFailover();
 
-    // Retry an unidentified receiver every 8 seconds while no base workflow is running.
-    if (sensorType_ == "UNKNOWN" || sensorType_.isEmpty()) {
-        const uint32_t now = millis();
-        if (now - lastChipProbeMs_ >= 8000UL && !workflowActive()) {
-            lastChipProbeMs_ = now;
-            if (rtcmBufferMutex && xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
-                if (gnssSerialMutex && xSemaphoreTake(gnssSerialMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
-                    detectGnssChip(Serial1);
-                    xSemaphoreGive(gnssSerialMutex);
-                }
-                xSemaphoreGive(rtcmBufferMutex);
-            }
-        }
-    }
+    retryUnknownChipProbe();
 
     if (!baseStartupAttempted_ && sensorType_ != "UNKNOWN" && !sensorType_.isEmpty())
         initializeBaseAtBoot(GnssCmdBuilder::sensorTypeFromString(sensorType_));

@@ -159,6 +159,9 @@ private:
     bool applyBaseCoordinates(double latitude, double longitude, double altitude);
     bool restoreWorkflowBase(JsonObjectConst base);
     bool refreshReceiverReadback(String &error);
+    bool refreshUbloxReadback(String &error);
+    bool refreshUnicoreReadback(String &error);
+    void retryUnknownChipProbe();
     void reconcileBaseStartupReadback(JsonObjectConst readback);
     bool verifyGnssConfig(JsonObjectConst payload, const String &commandId, String &error);
     bool verifyUnicoreConfig(JsonObjectConst payload, const String &commandId, String &error);
