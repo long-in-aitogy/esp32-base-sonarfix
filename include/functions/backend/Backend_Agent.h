@@ -165,6 +165,8 @@ private:
     bool executeReferenceCheckCommand(JsonObject payload, String &error, String &detail);
     bool waitForAutoBaseFix(uint32_t timeoutSeconds, uint8_t fixedStreakRequired, bool &cancelled, String &failureReason);
     bool collectAutoBaseSamples(int configuredSamples, std::vector<double> &latitudes, std::vector<double> &longitudes, std::vector<double> &altitudes, bool &cancelled, String &failureReason);
+    void finishCommand(const String &source, const String &command, const String &commandId, bool success, const String &error, const String &detail, bool restartAfterCommand);
+    bool readStartupReceiverMode(GnssCmdBuilder::GnssSensorType detected, String &error);
     bool refreshReceiverReadback(String &error);
     bool refreshUbloxReadback(String &error);
     bool refreshUnicoreReadback(String &error);

@@ -653,6 +653,10 @@ void BackendAgent::handleCommand(const String &source, const String &message) {
         ESP.restart();
     }
 
+    finishCommand(source, command, commandId, success, error, detail, restartAfterCommand);
+}
+
+void BackendAgent::finishCommand(const String &source, const String &command, const String &commandId, bool success, const String &error, const String &detail, bool restartAfterCommand) {
     if (success) {
         const bool workflowState = command == "TRIGGER_AUTO_BASE"
             || command == "TRIGGER_BASE_REFERENCE_CHECK"

@@ -96,13 +96,7 @@ bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
     // Every Survey-In boot sends a fresh survey configuration.
     bool receiverRead = false;
     String queryError;
-    if (detected == GnssSensorType::Unicore) {
-        String mode;
-        receiverRead = UnicoreReadback::readMode(mode, queryError);
-    } else {
-        UbxBaseStatus status;
-        receiverRead = UbloxReadback::readBaseStatus(status, queryError);
-    }
+    receiverRead = readStartupReceiverMode(detected, queryError);
     // Do not guess a mode when a receiver cannot be read reliably.
     if (!receiverRead) return fail(queryError.isEmpty() ? String("Receiver mode could not be read") : queryError);
     const bool restoreFixed = method == "FIXED_LLA";
@@ -180,6 +174,16 @@ bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
     Serial.printf("[GNSS][STARTUP] %s; chip=%s\n", baseStartupState_.c_str(), sensorType_.c_str());
     markStatusDirty();
     return true;
+}
+
+bool BackendAgent::readStartupReceiverMode(GnssCmdBuilder::GnssSensorType detected, String &error) {
+    if (detected == GnssCmdBuilder::GnssSensorType::Unicore) {
+        String mode;
+        return UnicoreReadback::readMode(mode, error);
+    } else {
+        UbxBaseStatus status;
+        return UbloxReadback::readBaseStatus(status, error);
+    }
 }
 
 void BackendAgent::reconcileBaseStartupReadback(JsonObjectConst readback) {
