@@ -293,6 +293,57 @@ cmd_action_t handleGnssSetCommand(const std::vector<String> &cmdWords) {
     return CMD_ACTION_ESP_RESTART;
 }
 
+static cmd_action_t handleEspConnectionSet(const std::vector<String> &cmdWords) {
+    if (cmdWords[1] == "CONNECTION" && cmdWords[2] == "4G") {
+        Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh 4G");
+        cmd_helper::saveStringPreference("CONNECTION_TYPE", "4G");
+        return CMD_ACTION_ESP_RESTART;
+    }
+    if (cmdWords[1] == "CONNECTION" && cmdWords[2] == "WIFI") {
+        Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh WIFI");
+        cmd_helper::saveStringPreference("CONNECTION_TYPE", "WIFI");
+        return CMD_ACTION_ESP_RESTART;
+    }
+    Serial.println("[MQTT COMMAND DOWNLINK] This command is not yet implemented.");
+    return CMD_ACTION_NONE;
+}
+
+static cmd_action_t handleEspValueSet(const std::vector<String> &cmdWords) {
+    if (cmdWords[1] == "WIFI" && cmdWords[2] == "SSID") {
+        Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh WIFI SSID");
+        return cmd_helper::saveWifiSetting(true, cmdWords[3]);
+    }
+    if (cmdWords[1] == "WIFI" && cmdWords[2] == "PASS") {
+        Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh WIFI PASS");
+        return cmd_helper::saveWifiSetting(false, cmdWords[3]);
+    }
+    if (cmdWords[1] == "4G" && cmdWords[2] == "APN") {
+        Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh 4G APN");
+        return cmd_helper::saveStringPreference("APN", cmdWords[3]);
+    }
+    if (cmdWords[1] == "4G" && cmdWords[2] == "USER") {
+        Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh 4G USER");
+        return cmd_helper::saveStringPreference("GPRS_USER", cmdWords[3]);
+    }
+    if (cmdWords[1] == "4G" && cmdWords[2] == "PASS") {
+        Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh 4G PASS");
+        return cmd_helper::saveStringPreference("GPRS_PASS", cmdWords[3]);
+    }
+    if (cmdWords[1] == "BACKEND" && cmdWords[2] == "HOST") {
+        return cmd_helper::saveStringPreference("BACKEND_HOST", cmdWords[3]);
+    }
+    if (cmdWords[1] == "BACKEND" && cmdWords[2] == "PORT") {
+        const long port = cmdWords[3].toInt();
+        if (port >= 1 && port <= 65535) {
+            return cmd_helper::saveUShortPreference("BACKEND_PORT", static_cast<uint16_t>(port));
+        }
+        Serial.println("[BACKEND] Port must be 1..65535.");
+        return CMD_ACTION_NONE;
+    }
+    Serial.println("[MQTT COMMAND DOWNLINK] This command is not yet implemented.");
+    return CMD_ACTION_NONE;
+}
+
 cmd_action_t handleEspCommand(const std::vector<String> &cmdWords) {
     if (cmdWords.empty()) {
         Serial.println("[MQTT COMMAND DOWNLINK] Error: Lenh ESP khong day du.");
@@ -305,50 +356,11 @@ cmd_action_t handleEspCommand(const std::vector<String> &cmdWords) {
     }
 
     if (cmdWords[0] == "SET" && cmd_helper::hasExactArgumentCount(cmdWords, 3, "ESP SET")) {
-        if (cmdWords[1] == "CONNECTION" && cmdWords[2] == "4G") {
-            Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh 4G");
-            cmd_helper::saveStringPreference("CONNECTION_TYPE", "4G");
-            return CMD_ACTION_ESP_RESTART;
-        }
-        if (cmdWords[1] == "CONNECTION" && cmdWords[2] == "WIFI") {
-            Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh WIFI");
-            cmd_helper::saveStringPreference("CONNECTION_TYPE", "WIFI");
-            return CMD_ACTION_ESP_RESTART;
-        }
+        return handleEspConnectionSet(cmdWords);
     }
 
     if (cmdWords[0] == "SET" && cmd_helper::hasExactArgumentCount(cmdWords, 4, "ESP SET")) {
-        if (cmdWords[1] == "WIFI" && cmdWords[2] == "SSID") {
-            Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh WIFI SSID");
-            return cmd_helper::saveWifiSetting(true, cmdWords[3]);
-        }
-        if (cmdWords[1] == "WIFI" && cmdWords[2] == "PASS") {
-            Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh WIFI PASS");
-            return cmd_helper::saveWifiSetting(false, cmdWords[3]);
-        }
-        if (cmdWords[1] == "4G" && cmdWords[2] == "APN") {
-            Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh 4G APN");
-            return cmd_helper::saveStringPreference("APN", cmdWords[3]);
-        }
-        if (cmdWords[1] == "4G" && cmdWords[2] == "USER") {
-            Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh 4G USER");
-            return cmd_helper::saveStringPreference("GPRS_USER", cmdWords[3]);
-        }
-        if (cmdWords[1] == "4G" && cmdWords[2] == "PASS") {
-            Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh 4G PASS");
-            return cmd_helper::saveStringPreference("GPRS_PASS", cmdWords[3]);
-        }
-        if (cmdWords[1] == "BACKEND" && cmdWords[2] == "HOST") {
-            return cmd_helper::saveStringPreference("BACKEND_HOST", cmdWords[3]);
-        }
-        if (cmdWords[1] == "BACKEND" && cmdWords[2] == "PORT") {
-            const long port = cmdWords[3].toInt();
-            if (port >= 1 && port <= 65535) {
-                return cmd_helper::saveUShortPreference("BACKEND_PORT", static_cast<uint16_t>(port));
-            }
-            Serial.println("[BACKEND] Port must be 1..65535.");
-            return CMD_ACTION_NONE;
-        }
+        return handleEspValueSet(cmdWords);
     }
     
     Serial.println("[MQTT COMMAND DOWNLINK] This command is not yet implemented.");

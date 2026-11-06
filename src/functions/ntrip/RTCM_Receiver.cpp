@@ -82,6 +82,49 @@ void setFixStatus(char *target, size_t capacity, int quality) {
     target[capacity - 1] = '\0';
 }
 
+void parseGgaFields(char *const *fields, size_t fieldCount, bool &updateFix, int &fixQuality, bool &updatePosition, double &latitude, double &longitude, double &altitude, float &hdop, uint8_t &satellites) {
+    updateFix = fieldCount > 6;
+    fixQuality = updateFix ? atoi(fields[6]) : 0;
+    if (fieldCount > 9 && fields[2][0] && fields[3][0]
+        && fields[4][0] && fields[5][0]) {
+        // GGA fields are: sentence ID, UTC, latitude, N/S, longitude, E/W,
+        // fix quality, satellites, HDOP, altitude, ...
+        latitude = nmeaCoordinate(fields[2], fields[3]);
+        longitude = nmeaCoordinate(fields[4], fields[5]);
+        satellites = static_cast<uint8_t>(constrain(atoi(fields[7]), 0, 255));
+        hdop = static_cast<float>(atof(fields[8]));
+        // GGA reports orthometric H and geoid separation N. Auto Base uses h.
+        altitude = fieldCount > 12
+            ? ggaEllipsoidalHeight(fields[9], fields[10], fields[11], fields[12]) : NAN;
+        updatePosition = true;
+    }
+}
+
+void parseGsvFields(char *const *fields, size_t fieldCount, bool &updateSnr, float &snrSum, uint32_t &snrCount) {
+    // GSV repeats satellite groups as PRN/elevation/azimuth/SNR.
+    for (size_t i = 4; i + 3 < fieldCount; i += 4) {
+        if (fields[i + 3] && *fields[i + 3]) {
+            const int snr = atoi(fields[i + 3]);
+            if (snr >= 0 && snr <= 99) {
+                snrSum += static_cast<float>(snr);
+                ++snrCount;
+            }
+        }
+    }
+    updateSnr = snrCount > 0;
+}
+
+void parseGstFields(char *const *fields, size_t fieldCount, bool &updateGst, float &gstSemiMajor, float &gstSemiMinor, float &gstHacc) {
+    if (fieldCount > 7) {
+        gstSemiMajor = static_cast<float>(atof(fields[3]));
+        gstSemiMinor = static_cast<float>(atof(fields[4]));
+        const float latitudeSigma = static_cast<float>(atof(fields[6]));
+        const float longitudeSigma = static_cast<float>(atof(fields[7]));
+        gstHacc = sqrtf(latitudeSigma * latitudeSigma + longitudeSigma * longitudeSigma);
+        updateGst = gstHacc > 0.0F;
+    }
+}
+
 void parseNmeaSentence(const String &rawSentence) {
     String sentence = rawSentence;
     sentence.trim();
@@ -128,47 +171,16 @@ void parseNmeaSentence(const String &rawSentence) {
     float gstHacc = 0.0F;
 
     if (strcmp(type, "GGA") == 0) {
-        updateFix = fieldCount > 6;
-        fixQuality = updateFix ? atoi(fields[6]) : 0;
-        if (fieldCount > 9 && fields[2][0] && fields[3][0]
-            && fields[4][0] && fields[5][0]) {
-            // GGA fields are: sentence ID, UTC, latitude, N/S, longitude, E/W,
-            // fix quality, satellites, HDOP, altitude, ...
-            latitude = nmeaCoordinate(fields[2], fields[3]);
-            longitude = nmeaCoordinate(fields[4], fields[5]);
-            satellites = static_cast<uint8_t>(constrain(atoi(fields[7]), 0, 255));
-            hdop = static_cast<float>(atof(fields[8]));
-            // GGA reports orthometric H and geoid separation N. Auto Base uses h.
-            altitude = fieldCount > 12
-                ? ggaEllipsoidalHeight(fields[9], fields[10], fields[11], fields[12]) : NAN;
-            updatePosition = true;
-        }
+        parseGgaFields(fields, fieldCount, updateFix, fixQuality, updatePosition, latitude, longitude, altitude, hdop, satellites);
     } else if (strcmp(type, "GSA") == 0) {
         // GSA field 2 is only the 2D/3D solution dimension, not the RTK
         // quality reported by GGA. Keep the last GGA fix state authoritative
         // so a following GSA sentence cannot turn RTK_FIXED into a generic
         // 2D/3D status.
     } else if (strcmp(type, "GSV") == 0) {
-        // GSV repeats satellite groups as PRN/elevation/azimuth/SNR.
-        for (size_t i = 4; i + 3 < fieldCount; i += 4) {
-            if (fields[i + 3] && *fields[i + 3]) {
-                const int snr = atoi(fields[i + 3]);
-                if (snr >= 0 && snr <= 99) {
-                    snrSum += static_cast<float>(snr);
-                    ++snrCount;
-                }
-            }
-        }
-        updateSnr = snrCount > 0;
+        parseGsvFields(fields, fieldCount, updateSnr, snrSum, snrCount);
     } else if (strcmp(type, "GST") == 0) {
-        if (fieldCount > 7) {
-            gstSemiMajor = static_cast<float>(atof(fields[3]));
-            gstSemiMinor = static_cast<float>(atof(fields[4]));
-            const float latitudeSigma = static_cast<float>(atof(fields[6]));
-            const float longitudeSigma = static_cast<float>(atof(fields[7]));
-            gstHacc = sqrtf(latitudeSigma * latitudeSigma + longitudeSigma * longitudeSigma);
-            updateGst = gstHacc > 0.0F;
-        }
+        parseGstFields(fields, fieldCount, updateGst, gstSemiMajor, gstSemiMinor, gstHacc);
     }
 
     portENTER_CRITICAL(&telemetryMux);
