@@ -363,7 +363,7 @@ cmd_action_t handleMqttCommand(const std::vector<String> &cmdWords) {
             {"PASS", "MQTT_PASS"}, {"PUBTPCHEALTH", "TPC_HEALTH"},
             {"SUBTPCCMD", "TPC_SUB_CMD"},
         }};
-        const char *key = cmd_helper::findPreferenceKey(cmdWords[1], stringSettings,
+        const char *key = cmd_helper::findPreferenceKey(cmdWords[1], stringSettings.data(),
                                             std::size(stringSettings));
         if (key != nullptr) {
             return cmd_helper::saveStringPreference(key, cmdWords[2]);
@@ -382,7 +382,7 @@ cmd_action_t handleNtripCommand(const std::vector<String> &cmdWords) {
             {"CSTRADDR", "NTRIP_SERVER"}, {"MNTPNT", "NTRIP_MPT"},
             {"CSTRAUTH", "NT_AUTH_BS"},
         }};
-        const char *key = cmd_helper::findPreferenceKey(cmdWords[1], stringSettings,
+        const char *key = cmd_helper::findPreferenceKey(cmdWords[1], stringSettings.data(),
                                             std::size(stringSettings));
         if (key != nullptr) {
             return cmd_helper::saveStringPreference(key, cmdWords[2]);
