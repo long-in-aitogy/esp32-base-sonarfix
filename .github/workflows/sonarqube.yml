@@ -21,6 +21,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Run native firmware tests with coverage
+        env:
+          CXX: clang++-18
+          LLVM_COV: llvm-cov-18
+          LLVM_PROFDATA: llvm-profdata-18
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 llvm-18
+          curl --fail --location https://github.com/bblanchon/ArduinoJson/archive/40ee05c065ce248192c47eb37af7a70a6935dfa6.tar.gz -o /tmp/arduinojson.tar.gz
+          mkdir /tmp/arduinojson
+          tar -xzf /tmp/arduinojson.tar.gz --strip-components=1 -C /tmp/arduinojson
+          python3 -m unittest discover -s test/host -p 'test_*.py'
+          python3 test/host/run_coverage.py --arduinojson /tmp/arduinojson/src
+
       - name: Run catalogue tests with coverage
         run: |
           python3 -m venv /tmp/catalogue-tests

@@ -25,15 +25,28 @@ int main() {
         assert(decodeBase64(invalid, decoded, sizeof(decoded)) == 0);
     assert(decodeBase64(" Z g = = \n", decoded, sizeof(decoded)) == 1 && decoded[0] == 'f');
     assert(decodeBase64("Zm9v", decoded, 2) == 0);
+    assert(decodeBase64("Zg", decoded, sizeof(decoded)) == 1 && decoded[0] == 'f');
+    assert(decodeBase64("Zm8", decoded, sizeof(decoded)) == 2 && decoded[1] == 'o');
+    assert(decodeBase64("Zg==", decoded, 0) == 0);
     assert(urlEncode("a b/+?") == "a%20b%2F%2B%3F");
+    assert(urlEncode("AZaz09-_.~") == "AZaz09-_.~");
+    assert(urlEncode(String("a\0b", 3)) == "a%00b");
     uint32_t duration = 0;
     for (const char *text : {"$DELAY_0$", "$DELAY_2000$", "$DELAY_99999$"})
         assert(delayMarker(reinterpret_cast<const uint8_t *>(text), std::strlen(text), duration));
     assert(duration == 10000);
     const char *invalidDelay = "$DELAY_bad$";
     assert(!delayMarker(reinterpret_cast<const uint8_t *>(invalidDelay), std::strlen(invalidDelay), duration));
+    for (const char *text : {"$DELAY_$", "$DELAY_1", "DELAY_1$", "$DELAY_-1$"})
+        assert(!delayMarker(reinterpret_cast<const uint8_t *>(text), std::strlen(text), duration));
     assert(tokenFingerprint("").isEmpty());
     assert(tokenFingerprint("secret").length() == 16);
     assert(!licenseMatchesSerial("", "dt_test") && !licenseMatchesSerial("esp_test", ""));
+    const String bearer = String("dt_") + String(40, 'a');
+    assert(licenseMatchesSerial("esp_test", bearer));
+    assert(!licenseMatchesSerial("esp_test", "dt_short"));
+    assert(!licenseMatchesSerial("esp_test", bearer + "!"));
+    assert(!licenseMatchesSerial("esp_test", String("dt_") + String(65, 'a')));
+    assert(!licenseMatchesSerial("esp_12345678901234567890", "not-a-license"));
     std::cout << "PASS: shared codec vectors, binary round trips, malformed Base64, bounds, URL encoding and delay markers\n";
 }

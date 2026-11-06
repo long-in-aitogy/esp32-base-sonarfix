@@ -21,6 +21,15 @@ public:
     }
     bool isEmpty() const { return empty(); }
     int indexOf(char value) const { const auto pos = find(value); return pos == npos ? -1 : int(pos); }
+#ifdef HOST_READBACK_TEST
+    String(char value) : std::string(1, value) {}
+    int indexOf(char value, size_t start) const { const auto pos = find(value, start); return pos == npos ? -1 : int(pos); }
+    bool startsWith(const String &prefix) const { return compare(0, prefix.size(), prefix) == 0; }
+    void remove(size_t start) { erase(start); }
+    bool equalsIgnoreCase(String other) const {
+        String own = *this; own.toUpperCase(); other.toUpperCase(); return own == other;
+    }
+#endif
     bool concat(const char *value, size_t length) { append(value, length); return true; }
     bool concat(const char *value) { append(value); return true; }
     bool concat(char value) { push_back(value); return true; }
