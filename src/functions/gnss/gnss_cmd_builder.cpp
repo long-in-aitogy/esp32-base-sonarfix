@@ -1,4 +1,5 @@
 #include "functions/gnss/gnss_cmd_builder.h"
+#include <array>
 #include "functions/gnss/ublox_commands.h"
 #include "functions/gnss/unicore_commands.h"
 #include "Prog_Config.h"
@@ -104,11 +105,11 @@ namespace GnssCmdBuilder {
         String result;
         for (uint8_t byte : command)
         {
-            char hex[4];
-            snprintf(hex, sizeof(hex), "%02x", byte);
+            std::array<char, 4> hex = {};
+            snprintf(hex.data(), hex.size(), "%02x", byte);
             if (!result.isEmpty())
                 result += ' ';
-            result += hex;
+            result += hex.data();
         }
         return result;
     }
