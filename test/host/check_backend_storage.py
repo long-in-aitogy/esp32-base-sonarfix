@@ -11,6 +11,12 @@ shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
 shim = shim.replace('    bool isEmpty()', '''    bool startsWith(const char *text) const { return find(text) == 0; }
     void remove(size_t start, size_t count) { erase(start, count); }
     bool isEmpty()''')
+command_path = root / 'src/functions/backend/Backend_Agent_Commands.cpp'
+commands = command_path.read_text()
+command_functions = commands[commands.index('bool BackendAgent::executeLicenseCommand('):commands.index('bool BackendAgent::executeRawCommand(')]
+agent_source = (root / 'src/functions/backend/Backend_Agent.cpp').read_text()
+bool_helper = agent_source[agent_source.index('bool jsonBool('):agent_source.index('String jsonString(')]
+shim = shim.replace('    bool isEmpty()', '    bool equalsIgnoreCase(String value) const { String own = *this; std::transform(own.begin(), own.end(), own.begin(), ::tolower); std::transform(value.begin(), value.end(), value.begin(), ::tolower); return own == value; }\n    bool isEmpty()')
 harness = r'''
 #include <ArduinoJson.h>
 #include "functions/backend/Station_Lock.h"
@@ -72,11 +78,18 @@ void nvs_close(nvs_handle_t handle) { ++nativeCloses; handles.erase(handle); }
 namespace BackendAgentInternal {
 bool licenseMatchesSerial(const String &, const String &token) { return token == "test-license"; }
 }
+void setupNTRIP() {}
+void connectNTRIP() {}
 struct BackendAgent {
     String serialNumber_, deviceName_, sensorType_, baseConfig_, serviceConfig_, licenseToken_, lastCommandResult_,
            autoBaseProgress_, surveyInResult_, statusBootId_, agentState_;
     bool provisioned_ = false, licenseValid_ = false;
     StationLock stationLock_;
+    bool executeLicenseCommand(JsonObject, String &, String &, bool &);
+    bool executeServiceConfigCommand(JsonObject, String &, String &);
+    void setAgentState(const String &state) { agentState_ = state; }
+    void refreshWebsocket() {}
+    void publishConfigState(const char *) {}
     void loadPreferences(); void ensureDefaultServiceConfig(); bool saveStatePreferences();
     String normalAgentState() const { return stationLock_.all ? "locked" : licenseValid_ ? "online" : "awaiting_license"; }
 };
@@ -123,11 +136,32 @@ int main() {
     generated.serviceConfig_ = "{\"custom\":true}"; generated.ensureDefaultServiceConfig();
     assert(generated.serviceConfig_ == "{\"custom\":true}");
     assert(nativeOpens == nativeCloses);
+    DynamicJsonDocument payload(4096); String error, detail; bool restart = false;
+    assert(!generated.executeLicenseCommand(payload.as<JsonObject>(), error, detail, restart));
+    payload["license_key"] = "bad";
+    assert(!generated.executeLicenseCommand(payload.as<JsonObject>(), error, detail, restart));
+    payload["license_key"] = "test-license";
+    generated.licenseToken_ = "old"; generated.licenseValid_ = false; failCommit = true;
+    assert(!generated.executeLicenseCommand(payload.as<JsonObject>(), error, detail, restart));
+    assert(generated.licenseToken_ == "old" && !generated.licenseValid_ && !restart);
+    failCommit = false;
+    assert(generated.executeLicenseCommand(payload.as<JsonObject>(), error, detail, restart));
+    assert(restart && generated.licenseValid_ && generated.agentState_ == "rebooting");
+    payload.clear(); assert(!generated.executeServiceConfigCommand(payload.as<JsonObject>(), error, detail));
+    generated.serviceConfig_ = "bad json";
+    deserializeJson(payload, R"({"stream_on_demand":true,"server1_stream_on_demand":false,"server3_enabled":true,"password3":"test","removed_servers":["bad",1,3]})");
+    assert(generated.executeServiceConfigCommand(payload.as<JsonObject>(), error, detail));
+    DynamicJsonDocument deployed(4096); deserializeJson(deployed, generated.serviceConfig_);
+    assert(deployed["server1_stream_active"] == true && deployed["server2_stream_active"] == false);
+    assert(!deployed.containsKey("removed_servers") && !deployed.containsKey("server3_enabled") && !deployed.containsKey("password3"));
+    payload.clear(); payload["stream_on_demand"] = false;
+    assert(generated.executeServiceConfigCommand(payload.as<JsonObject>(), error, detail));
+    deserializeJson(deployed, generated.serviceConfig_); assert(deployed["stream_active"] == true);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='backend-storage-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + harness + mapped(source_path, source, stripped_includes=True) + checks)
+    (path / 'check.cpp').write_text(shim + harness + mapped(source_path, source, stripped_includes=True) + '\nnamespace BackendAgentInternal {\n' + mapped(root / 'src/functions/backend/Backend_Agent.cpp', bool_helper) + '}\nusing namespace BackendAgentInternal;\n' + mapped(command_path, command_functions) + checks)
     compile_cpp(['c++', '-std=c++17', '-DNATIVE_BUILD', '-fsanitize=address,undefined',
                  '-I' + str(root / 'include'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                  str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
