@@ -63,9 +63,7 @@ double nmeaCoordinate(const char *raw, const char *hemisphere) {
     return coordinate;
 }
 
-void setFixStatus(char *target, size_t capacity, int quality) {
-    if (!target || capacity == 0) return;
-
+void setFixStatus(std::array<char, 16> &target, int quality) {
     const char *status = "UNKNOWN";
     switch (quality) {
         case 0: status = "NO_FIX"; break;
@@ -76,8 +74,8 @@ void setFixStatus(char *target, size_t capacity, int quality) {
         case 7: status = "BASE_FIXED"; break;
         default: status = "NO_FIX"; break;
     }
-    snprintf(target, capacity, "%s", status);
-    target[capacity - 1] = '\0';
+    snprintf(target.data(), target.size(), "%s", status);
+    target[target.size() - 1] = '\0';
 }
 
 void parseGgaFields(char *const *fields, size_t fieldCount, bool &updateFix,
@@ -190,10 +188,10 @@ void parseNmeaSentence(const String &rawSentence) {
     else if (strcmp(type, "GSV") == 0) ++telemetry.gsvCount;
     else if (strcmp(type, "GST") == 0) ++telemetry.gstCount;
 
-    if (updateFix) setFixStatus(telemetry.fixStatus, sizeof(telemetry.fixStatus), fixQuality);
+    if (updateFix) setFixStatus(telemetry.fixStatus, fixQuality);
     if (strcmp(type, "GGA") == 0) {
-        snprintf(telemetry.lastGga, sizeof(telemetry.lastGga), "%s", sentence.c_str());
-        telemetry.lastGga[sizeof(telemetry.lastGga) - 1] = '\0';
+        snprintf(telemetry.lastGga.data(), telemetry.lastGga.size(), "%s", sentence.c_str());
+        telemetry.lastGga[telemetry.lastGga.size() - 1] = '\0';
         telemetry.lastGgaMs = millis();
     }
     if (updatePosition) {
@@ -398,8 +396,7 @@ GnssTelemetrySnapshot getGnssTelemetrySnapshot() {
     copy = telemetry;
     portEXIT_CRITICAL(&telemetryMux);
     if (copy.lastGgaMs == 0 || millis() - copy.lastGgaMs > 15000UL) {
-        strncpy(copy.fixStatus, "NO_FIX", 6);
-        copy.fixStatus[6] = '\0';
+        copy.fixStatus = {'N', 'O', '_', 'F', 'I', 'X'};
     }
     return copy;
 }

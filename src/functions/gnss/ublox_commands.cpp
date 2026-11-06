@@ -278,13 +278,15 @@ namespace UbloxCommands {
 
     bool processUbloxPacket(uint8_t *packet, size_t remaining)
     {
-        const auto payloadLength = packet[4] | (static_cast<size_t>(packet[5]) << 8);
+        const auto payloadLength = std::to_integer<size_t>(static_cast<std::byte>(packet[4]))
+            | (std::to_integer<size_t>(static_cast<std::byte>(packet[5])) << 8);
         if (payloadLength + 8 > remaining) return false;
         if (packet[2] == 0x06 && packet[3] == 0x8A && payloadLength >= 4) {
             if (!remapValsetEntries(packet, payloadLength)) return false;
         } else if (packet[2] == 0x06 && packet[3] == 0x01 && payloadLength == 8) {
             packet[9] = std::max(packet[9], std::max(packet[10], packet[11]));
-            packet[10] = packet[11] = 0;
+            packet[10] = 0;
+            packet[11] = 0;
         }
         uint8_t a = 0;
         uint8_t b = 0;

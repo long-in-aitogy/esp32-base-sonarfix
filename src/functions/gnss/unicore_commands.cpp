@@ -134,7 +134,7 @@ using namespace GnssCmdBuilder;
         return commands;
     }
 
-    CommandList buildBaseSurveyInCommand(uint32_t duration, float accuracy, const GnssOptions &options) {
+    CommandList buildBaseSurveyInCommand(uint32_t duration, [[maybe_unused]] float accuracy, const GnssOptions &options) {
         CommandList commands;
         commands.push_back(asciiCommand("unlogall\r\n"));
         commands.push_back(delayCommand(1000));
@@ -151,7 +151,7 @@ using namespace GnssCmdBuilder;
         return commands;
     }
 
-    CommandList buildBaseFixedLlaCommand(double lat, double lon, double alt, float accuracy, const GnssOptions &options) {
+    CommandList buildBaseFixedLlaCommand(double lat, double lon, double alt, [[maybe_unused]] float accuracy, const GnssOptions &options) {
         CommandList commands;
         commands.push_back(asciiCommand("unlogall\r\n"));
         commands.push_back(delayCommand(1000));

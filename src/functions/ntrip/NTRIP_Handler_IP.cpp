@@ -397,13 +397,13 @@ void sendRoverGgaIfAvailable(Client &client, const bool force = false) {
         }
         return;
     }
-    const auto outbound = String(snapshot.lastGga) + "\r\n";
+    const auto outbound = String(snapshot.lastGga.data()) + "\r\n";
     if (client.print(outbound) != outbound.length()) {
         Serial.println("[NTRIP ROVER] Loi ghi GGA len socket caster");
         roverLastGgaMs = millis();
         return;
     }
-    Serial.printf("[NTRIP ROVER] GGA -> caster: %s\n", snapshot.lastGga);
+    Serial.printf("[NTRIP ROVER] GGA -> caster: %s\n", snapshot.lastGga.data());
     roverLastGgaMs = millis();
 }
 

@@ -4,6 +4,7 @@
 #include "Top_Lvl_Config.h"
 #include "Prog_Config.h"
 #include "WString.h"
+#include <array>
 #include <cstdint>
 
 inline constexpr size_t RTCM_SUPPORTED_MESSAGE_TYPE_COUNT = 10;
@@ -39,8 +40,8 @@ struct GnssTelemetrySnapshot {
     float gstSemiMinor = 0.0F;
     float gstHacc = 0.0F;
     uint8_t satellites = 0;
-    char fixStatus[16] = "NO_FIX";
-    char lastGga[128] = {};
+    std::array<char, 16> fixStatus = {'N', 'O', '_', 'F', 'I', 'X'};
+    std::array<char, 128> lastGga = {};
 };
 
 String receiveRtcmFromGnss();
