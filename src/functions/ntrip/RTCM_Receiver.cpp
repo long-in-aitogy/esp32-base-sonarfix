@@ -64,7 +64,7 @@ double nmeaCoordinate(const char *raw, const char *hemisphere) {
 }
 
 void setFixStatus(std::array<char, 16> &target, int quality) {
-    const char *status = "UNKNOWN";
+    const char *status = "NO_FIX";
     switch (quality) {
         case 0: status = "NO_FIX"; break;
         case 1: status = "GPS_FIX"; break;
