@@ -10,8 +10,16 @@ import subprocess
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
+from firmware_coverage_inventory import source_fingerprint
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def read_baseline(path):
+    report = path.read_text()
+    if not report.startswith("TN:" + source_fingerprint() + "\n"):
+        raise RuntimeError("Stale firmware inventory; rerun firmware_coverage_inventory.py")
+    return report
 
 
 def tool(name, variable):
@@ -59,7 +67,10 @@ def main():
     parser.add_argument("--arduinojson", type=Path,
                         default=ROOT / ".pio/libdeps/tdm240x_dev_general/ArduinoJson/src")
     parser.add_argument("--output", type=Path, default=ROOT / "cpp-coverage.xml")
+    parser.add_argument("--baseline", type=Path, default=ROOT / "cpp-baseline.lcov")
     args = parser.parse_args()
+    if not args.baseline.is_file():
+        parser.error("Generate cpp-baseline.lcov with firmware_coverage_inventory.py first")
     if not (args.arduinojson / "ArduinoJson.h").is_file():
         parser.error("--arduinojson must contain ArduinoJson.h (version 6)")
     compiler = tool("clang++", "CXX")
@@ -79,7 +90,7 @@ def main():
     }
     with tempfile.TemporaryDirectory(prefix="esp32-coverage-") as directory:
         build = Path(directory)
-        exports = []
+        exports = [read_baseline(args.baseline)]
         for name, sources in suites.items():
             binary = build / name
             include = [ROOT / "test/host/readback"] if name == "readback" else []

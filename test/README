@@ -4,6 +4,8 @@ This directory is intended for PlatformIO Test Runner and project tests.
 Native firmware coverage (Clang/LLVM required, no board connected):
 
 python3 -m unittest discover -s test/host -p 'test_*.py'
+pio run -e tdm240x_dev_general -t compiledb
+python3 test/host/firmware_coverage_inventory.py
 python3 test/host/run_coverage.py
 
 The runner executes eight native suites and twenty integration harnesses with
@@ -15,6 +17,15 @@ On macOS, the runner uses clang++ and finds LLVM tools through xcrun.
 The generated cpp-coverage.xml is imported by SonarCloud in CI. Its line coverage
 includes actual production source/header paths only; tests, UART/RTOS mocks and
 uninstrumented code are not credited. Other firmware paths remain uncovered.
+
+The inventory step uses the actual ESP32 compilation database and GCC/gcov to
+enumerate every executable firmware line, including functions not used by host
+harnesses. It compiles all firmware translation units as objects with coverage
+notes; it does not link a coverage runtime or flash a device. All inventory lines
+start uncovered. The native test execution counts are merged into this baseline.
+This is required because a partial generic report can otherwise omit unreported
+functions from Sonar's coverage denominator. A source/config fingerprint rejects
+stale inventory after firmware changes. Regenerate it before rerunning coverage.
 
 Integration coverage is optional when running a harness individually. The runner
 sets HOST_COVERAGE_OUTPUT and the matching LLVM tools; host_coverage.py verifies

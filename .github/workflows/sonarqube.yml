@@ -21,6 +21,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Inventory all firmware executable lines
+        run: |
+          python3 -m venv /tmp/firmware-coverage
+          /tmp/firmware-coverage/bin/python -m pip install platformio
+          /tmp/firmware-coverage/bin/pio run -e tdm240x_dev_general -t compiledb
+          python3 test/host/firmware_coverage_inventory.py
+
       - name: Run native firmware tests with coverage
         env:
           CXX: clang++-18

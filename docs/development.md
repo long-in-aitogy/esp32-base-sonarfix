@@ -15,6 +15,15 @@ Sonar's generic coverage format. The report includes only production paths under
 `src` and `include`, never mocks or generated harnesses. Each executable has its
 own profile, and the report combines executions across suites.
 
+Before native tests, CI generates the ESP32 compilation database and uses
+`firmware_coverage_inventory.py` to compile every firmware translation unit with
+GCC coverage notes. The matching cross-gcov lists executable lines without
+running the objects. These lines start uncovered in `cpp-baseline.lcov`; host
+test hits are merged afterward. This preserves untested functions in partial
+files, which generic coverage imports would otherwise omit from the denominator.
+The inventory is regenerated per CI run and checked against a firmware/config
+fingerprint. It neither links a coverage runtime nor flashes hardware.
+
 Existing generated harnesses use `host_coverage.mapped()` to verify that each
 instrumented fragment exactly matches production source before attaching source
 line markers. LLVM's physical harness line counts are mapped back to those
