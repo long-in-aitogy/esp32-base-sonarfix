@@ -124,8 +124,8 @@ bool BackendAgent::waitForUnicoreReply(UnicoreReply &reply, const bool written) 
 
 void BackendAgent::handleUnicoreAck(const UnicoreReply &reply, const uint8_t *data,
                                     const size_t length) {
-    Serial.printf("[GNSS][UNICORE] ACK OK: %s\n", reply.line);
-    if (!std::strcmp(reply.key, "mode")) {
+    Serial.printf("[GNSS][UNICORE] ACK OK: %s\n", reply.line.data());
+    if (!std::strcmp(reply.key.data(), "mode")) {
         String command;
         command.reserve(length);
         for (size_t i = 0; i < length; ++i) command += static_cast<char>(data[i]);
@@ -138,7 +138,7 @@ void BackendAgent::handleUnicoreAck(const UnicoreReply &reply, const uint8_t *da
         surveyInTargetSeconds_ = surveyInMonitoring_ ? target : 0;
         if (surveyInMonitoring_) surveyInResultPending_ = true;
     }
-    if (!std::strcmp(reply.key, "freset") || !std::strcmp(reply.key, "reset")) delay(2000);
+    if (!std::strcmp(reply.key.data(), "freset") || !std::strcmp(reply.key.data(), "reset")) delay(2000);
 }
 
 bool BackendAgent::writeUnicoreCommand(const uint8_t *data, size_t length, String &error) {
@@ -159,9 +159,9 @@ bool BackendAgent::writeUnicoreCommand(const uint8_t *data, size_t length, Strin
     const auto matched = waitForUnicoreReply(reply, written);
     xSemaphoreGive(gnssSerialMutex);
     xSemaphoreGive(rtcmBufferMutex);
-    if (!written) error = String("Unicore UART write failed: ") + reply.key;
-    else if (!matched) error = String("Unicore response timeout: ") + reply.key;
-    else if (reply.state != UnicoreReply::State::Ok) error = String("Unicore rejected command: ") + reply.line;
+    if (!written) error = String("Unicore UART write failed: ") + reply.key.data();
+    else if (!matched) error = String("Unicore response timeout: ") + reply.key.data();
+    else if (reply.state != UnicoreReply::State::Ok) error = String("Unicore rejected command: ") + reply.line.data();
     else { handleUnicoreAck(reply, data, length); return true; }
     Serial.printf("[GNSS][UNICORE][ERROR] %s\n", error.c_str());
     return false;

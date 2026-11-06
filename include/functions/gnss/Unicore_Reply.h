@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cctype>
@@ -8,8 +9,8 @@
 // Match the first command token; only an exact "OK" response succeeds.
 struct UnicoreReply {
     enum class State { Pending, Ok, Error };
-    char line[384] = {};
-    char key[32] = {};
+    std::array<char, 384> line = {};
+    std::array<char, 32> key = {};
     size_t used = 0;
     State state = State::Pending;
 
@@ -28,7 +29,7 @@ struct UnicoreReply {
         while (i < length && std::isspace(command[i])) ++i;
         if (i < length && command[i] == '$') ++i;
         while (i < length && !std::isspace(command[i]) && command[i] != '*') {
-            if (n + 1 >= sizeof(key) || command[i] < 0x21 || command[i] > 0x7e) {
+            if (n + 1 >= key.size() || command[i] < 0x21 || command[i] > 0x7e) {
                 key[0] = 0;
                 return;
             }
@@ -52,25 +53,27 @@ struct UnicoreReply {
     }
 
     bool parse() {
-        if (!key[0] || strnlen(line, 384) < 9 || !equal(line, 9, "$command,")) return false;
-        const char *command = line + 9;
+        if (!key[0] || strnlen(line.data(), line.size()) < 9
+            || !equal(line.data(), 9, "$command,")) return false;
+        const char *command = line.data() + 9;
         const char *comma = std::strchr(command, ',');
         if (!comma) return false;
         while (command < comma && std::isspace(static_cast<unsigned char>(*command))) ++command;
         const char *endKey = command;
         while (endKey < comma && !std::isspace(static_cast<unsigned char>(*endKey))) ++endKey;
-        if (!equal(command, static_cast<size_t>(endKey - command), key)) return false;
+        if (!equal(command, static_cast<size_t>(endKey - command), key.data())) return false;
         const char *response = comma + 1;
         while (std::isspace(static_cast<unsigned char>(*response))) ++response;
-        if (strnlen(response, 384) < 9 || !equal(response, 9, "response:")) return false;
+        if (strnlen(response, line.size()) < 9 || !equal(response, 9, "response:")) return false;
         response += 9;
-        const char *end = line + strnlen(line, 384);
+        const char *end = line.data() + strnlen(line.data(), line.size());
         const char *star = std::strchr(response, '*');
         if (star) {
             if (end - star != 3 || hex(star[1]) < 0 || hex(star[2]) < 0) return false;
             uint8_t checksum = 0;
             // N4 '$command' replies include '$' in XOR (unlike standard NMEA).
-            for (const char *p = line; p < star; ++p) checksum ^= static_cast<uint8_t>(*p);
+            for (const char *p = line.data(); p < star; ++p)
+                checksum ^= std::to_integer<uint8_t>(std::byte{static_cast<unsigned char>(*p)});
             if (checksum != static_cast<uint8_t>((hex(star[1]) << 4) | hex(star[2]))) return false;
             end = star;
         }
@@ -89,7 +92,7 @@ struct UnicoreReply {
             used = 0;
             return parse();
         }
-        if ((byte < 0x20 && byte != '\t') || byte > 0x7e || used + 1 >= sizeof(line)) {
+        if ((byte < 0x20 && byte != '\t') || byte > 0x7e || used + 1 >= line.size()) {
             used = 0;
             return false;
         }

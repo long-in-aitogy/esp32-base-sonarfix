@@ -40,11 +40,11 @@ bool processUnicoreQueryByte(uint8_t byte, const char *prefix, UnicoreReply &rep
     bufferGnssQueryByte(byte);
     const auto acknowledged = reply.feed(byte);
     if (acknowledged && reply.state == UnicoreReply::State::Error) {
-        Serial.printf("[GNSS][READBACK][ACK] %s\n", reply.line);
-        error = String("Unicore rejected query: ") + reply.line;
+        Serial.printf("[GNSS][READBACK][ACK] %s\n", reply.line.data());
+        error = String("Unicore rejected query: ") + reply.line.data();
         return false;
     }
-    if (acknowledged) Serial.printf("[GNSS][READBACK][ACK] %s\n", reply.line);
+    if (acknowledged) Serial.printf("[GNSS][READBACK][ACK] %s\n", reply.line.data());
     appendUnicoreCandidate(value, prefix, candidate, response);
     return true;
 }
