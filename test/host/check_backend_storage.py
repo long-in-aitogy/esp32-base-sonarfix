@@ -13,6 +13,7 @@ shim = shim.replace('    bool isEmpty()', '''    bool startsWith(const char *tex
     bool isEmpty()''')
 command_path = root / 'src/functions/backend/Backend_Agent_Commands.cpp'
 commands = command_path.read_text()
+reference_function = commands[commands.index('bool BackendAgent::executeReferenceCheckCommand('):commands.index('void BackendAgent::handleCommand(')]
 command_functions = commands[commands.index('bool BackendAgent::executeLicenseCommand('):commands.index('bool BackendAgent::executeRawCommand(')]
 agent_source = (root / 'src/functions/backend/Backend_Agent.cpp').read_text()
 bool_helper = agent_source[agent_source.index('bool jsonBool('):agent_source.index('String jsonString(')]
@@ -85,6 +86,11 @@ struct BackendAgent {
            autoBaseProgress_, surveyInResult_, statusBootId_, agentState_;
     bool provisioned_ = false, licenseValid_ = false;
     StationLock stationLock_;
+    bool workflow = false, startOk = false;
+    bool workflowActive() { return workflow; }
+    bool startWorkflow(const String &kind, const String &payload) { assert(kind == "reference_check" && !payload.isEmpty()); return startOk; }
+    void setWorkflowProgress(const String &, uint8_t, uint8_t) {}
+    bool executeReferenceCheckCommand(JsonObject, String &, String &);
     bool executeLicenseCommand(JsonObject, String &, String &, bool &);
     bool executeServiceConfigCommand(JsonObject, String &, String &);
     void setAgentState(const String &state) { agentState_ = state; }
@@ -157,11 +163,20 @@ int main() {
     payload.clear(); payload["stream_on_demand"] = false;
     assert(generated.executeServiceConfigCommand(payload.as<JsonObject>(), error, detail));
     deserializeJson(deployed, generated.serviceConfig_); assert(deployed["stream_active"] == true);
+    payload.clear(); generated.workflow = true;
+    assert(!generated.executeReferenceCheckCommand(payload.as<JsonObject>(), error, detail));
+    generated.workflow = false;
+    assert(!generated.executeReferenceCheckCommand(payload.as<JsonObject>(), error, detail));
+    deserializeJson(payload, R"({"reference_coords":{"lat":21,"lon":105,"alt":10},"ip":"caster.example","port":2101,"user":"test","password":"test","mountpoint":"BASE"})");
+    assert(!generated.executeReferenceCheckCommand(payload.as<JsonObject>(), error, detail));
+    generated.startOk = true;
+    assert(generated.executeReferenceCheckCommand(payload.as<JsonObject>(), error, detail));
+    assert(generated.agentState_ == "reference_check_queued");
 }
 '''
 with tempfile.TemporaryDirectory(prefix='backend-storage-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + harness + mapped(source_path, source, stripped_includes=True) + '\nnamespace BackendAgentInternal {\n' + mapped(root / 'src/functions/backend/Backend_Agent.cpp', bool_helper) + '}\nusing namespace BackendAgentInternal;\n' + mapped(command_path, command_functions) + checks)
+    (path / 'check.cpp').write_text(shim + harness + mapped(source_path, source, stripped_includes=True) + '\nnamespace BackendAgentInternal {\n' + mapped(root / 'src/functions/backend/Backend_Agent.cpp', bool_helper) + '}\nusing namespace BackendAgentInternal;\n' + mapped(command_path, command_functions) + mapped(command_path, reference_function) + checks)
     compile_cpp(['c++', '-std=c++17', '-DNATIVE_BUILD', '-fsanitize=address,undefined',
                  '-I' + str(root / 'include'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                  str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
