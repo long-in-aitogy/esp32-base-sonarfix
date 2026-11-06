@@ -15,11 +15,11 @@
 using namespace GnssCmdBuilder;
 
 void checkPackets(const Command &bytes) {
-    size_t offset = 0;
+    auto offset = 0;
     while (offset < bytes.size()) {
         assert(bytes.size() - offset >= 8);
         assert(bytes[offset] == 0xB5 && bytes[offset + 1] == 0x62);
-        const size_t size = bytes[offset + 4] | (size_t(bytes[offset + 5]) << 8);
+        const auto size = bytes[offset + 4] | (size_t(bytes[offset + 5]) << 8);
         assert(offset + size + 8 <= bytes.size());
         uint8_t a = 0, b = 0;
         for (size_t i = offset + 2; i < offset + size + 6; ++i) { a += bytes[i]; b += a; }
@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
     assert(!validUnicoreLogChecksum(nullptr, 0));
     UnicoreIdentification identity;
     const auto feedIdentity = [&](const std::string &bytes) {
-        bool found = false;
+        auto found = false;
         for (unsigned char byte : bytes) found = identity.feed(byte) || found;
         return found;
     };
@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
         return UnicoreReply(reinterpret_cast<const uint8_t *>(umCommand.data()), umCommand.size());
     };
     const auto feedUm = [](UnicoreReply &reply, const std::string &text) {
-        size_t matched = 0;
+        auto matched = 0;
         for (unsigned char c : text) matched += reply.feed(c);
         return matched;
     };
@@ -164,7 +164,7 @@ int main(int argc, char **argv) {
     for (const auto &message : {"rtcm1006", "rtcm1077", "gpgga", "gpgst"}) {
         for (const auto &port : {"COM1", "com2", "CoM3"}) {
             std::string current = std::string(message) + " " + port + " 1\r\n";
-            const size_t length = routeUnicoreOutput(reinterpret_cast<uint8_t *>(current.data()), current.size(), 0);
+            const auto length = routeUnicoreOutput(reinterpret_cast<uint8_t *>(current.data()), current.size(), 0);
             current.resize(length);
             assert(current == std::string(message) + " 1\r\n");
         }
@@ -224,7 +224,7 @@ int main(int argc, char **argv) {
             for (const uint32_t key : {0x10730004U, 0x10750004U, 0x10770004U,
                                        0x10740002U, 0x10760002U, 0x10780002U,
                                        0x209100BBU, 0x209100BCU, 0x209100BDU}) {
-                bool enabled = false;
+                auto enabled = false;
                 for (const auto &settings : rover) {
                   if (settings[2] != 6 || settings[3] != 0x8A) continue;
                   for (size_t i = 10; i + 5 <= settings.size() - 2; i += 5) {
@@ -241,7 +241,7 @@ int main(int argc, char **argv) {
                    && rover[0][12] == 0x03 && rover[0][13] == 0x20);
             UbxReply reply;
             for (uint8_t noise : {0x00, 0xB5, 0xB5, 0x00}) assert(!reply.feed(noise));
-            size_t replies = 0;
+            auto replies = 0;
             for (uint8_t byte : rover[1]) replies += reply.feed(byte);
             assert(replies == 1 && reply.frame[8] == 0 && reply.length == 48);
             auto corrupt = rover[1];
@@ -297,7 +297,7 @@ int main(int argc, char **argv) {
 
     // Route hexadecimal packets from stdin and emit the resulting bytes for comparison.
     if (argc > 1) {
-        const bool ublox = std::string(argv[1]) == "Ublox";
+        const auto ublox = std::string(argv[1]) == "Ublox";
         std::string hex;
         while (std::cin >> hex) {
             Command packet;

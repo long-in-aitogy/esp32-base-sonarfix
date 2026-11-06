@@ -53,10 +53,10 @@ void noteRtcmBytes(size_t count) {
 
 double nmeaCoordinate(const char *raw, const char *hemisphere) {
     if (!raw || !*raw) return 0.0;
-    const double value = atof(raw);
-    const double degrees = static_cast<int>(value / 100.0);
-    const double minutes = value - degrees * 100.0;
-    double coordinate = degrees + minutes / 60.0;
+    const auto value = atof(raw);
+    const auto degrees = static_cast<int>(value / 100.0);
+    const auto minutes = value - degrees * 100.0;
+    auto coordinate = degrees + minutes / 60.0;
     if (hemisphere && (hemisphere[0] == 'S' || hemisphere[0] == 'W')) {
         coordinate = -coordinate;
     }
@@ -102,7 +102,7 @@ void parseGsvFields(char *const *fields, size_t fieldCount, bool &updateSnr,
                     float &snrSum, uint32_t &snrCount) {
     for (size_t i = 4; i + 3 < fieldCount; i += 4) {
         if (!fields[i + 3] || !*fields[i + 3]) continue;
-        const int snr = atoi(fields[i + 3]);
+        const auto snr = atoi(fields[i + 3]);
         if (snr < 0 || snr > 99) continue;
         snrSum += static_cast<float>(snr);
         ++snrCount;
@@ -115,14 +115,14 @@ void parseGstFields(char *const *fields, size_t fieldCount, bool &updateGst,
     if (fieldCount <= 7) return;
     gstSemiMajor = static_cast<float>(atof(fields[3]));
     gstSemiMinor = static_cast<float>(atof(fields[4]));
-    const float latitudeSigma = static_cast<float>(atof(fields[6]));
-    const float longitudeSigma = static_cast<float>(atof(fields[7]));
+    const auto latitudeSigma = static_cast<float>(atof(fields[6]));
+    const auto longitudeSigma = static_cast<float>(atof(fields[7]));
     gstHacc = sqrtf(latitudeSigma * latitudeSigma + longitudeSigma * longitudeSigma);
     updateGst = gstHacc > 0.0F;
 }
 
 void parseNmeaSentence(const String &rawSentence) {
-    String sentence = rawSentence;
+    auto sentence = rawSentence;
     sentence.trim();
     if (sentence.length() < 7 || sentence[0] != '$') return;
     if (sentence.startsWith("$PUBX")) {
@@ -130,12 +130,12 @@ void parseNmeaSentence(const String &rawSentence) {
     }
 
     char line[MAX_NMEA_LENGTH] = {};
-    const size_t copyLength = min(sentence.length(), sizeof(line) - 1);
+    const auto copyLength = min(sentence.length(), sizeof(line) - 1);
     memcpy(line, sentence.c_str(), copyLength);
     line[copyLength] = '\0';
 
     char *fields[32] = {};
-    size_t fieldCount = 0;
+    auto fieldCount = 0;
     char *cursor = line + 1;
     while (fieldCount < (std::size(fields))) {
         fields[fieldCount++] = cursor;
@@ -146,25 +146,25 @@ void parseNmeaSentence(const String &rawSentence) {
     }
     if (fieldCount == 0) return;
 
-    const size_t typeLength = strnlen(fields[0], sizeof(fields[0]));
+    const auto typeLength = strnlen(fields[0], sizeof(fields[0]));
     if (typeLength < 3) return;
     const char *type = fields[0] + typeLength - 3;
 
-    bool updateFix = false;
-    int fixQuality = 0;
-    bool updatePosition = false;
-    bool updateSnr = false;
-    double latitude = 0.0;
-    double longitude = 0.0;
-    double altitude = 0.0;
-    float hdop = 0.0F;
+    auto updateFix = false;
+    auto fixQuality = 0;
+    auto updatePosition = false;
+    auto updateSnr = false;
+    auto latitude = 0.0;
+    auto longitude = 0.0;
+    auto altitude = 0.0;
+    auto hdop = 0.0F;
     uint8_t satellites = 0;
-    float snrSum = 0.0F;
+    auto snrSum = 0.0F;
     uint32_t snrCount = 0;
-    bool updateGst = false;
-    float gstSemiMajor = 0.0F;
-    float gstSemiMinor = 0.0F;
-    float gstHacc = 0.0F;
+    auto updateGst = false;
+    auto gstSemiMajor = 0.0F;
+    auto gstSemiMinor = 0.0F;
+    auto gstHacc = 0.0F;
 
     if (strcmp(type, "GGA") == 0) {
         parseGgaFields(fields, fieldCount, updateFix, fixQuality, updatePosition,
@@ -222,12 +222,12 @@ void parseNmeaSentence(const String &rawSentence) {
     portEXIT_CRITICAL(&telemetryMux);
 
     // Publish only GGA/GSA/GSV/GST receiver health sentences to the backend.
-    const bool backendSentence = strcmp(type, "GGA") == 0
+    const auto backendSentence = strcmp(type, "GGA") == 0
         || strcmp(type, "GSA") == 0
         || strcmp(type, "GSV") == 0
         || strcmp(type, "GST") == 0;
     if (backendSentence) {
-        String outbound = rawSentence;
+        auto outbound = rawSentence;
         outbound.trim();
         outbound += "\r\n";
         backendAgent.enqueueNmea(reinterpret_cast<const uint8_t *>(outbound.c_str()), outbound.length());
@@ -283,7 +283,7 @@ bool processUbxHeaderByte(uint8_t value) {
     ubxHeader[ubxHeaderLength++] = value;
     if (ubxHeaderLength != sizeof(ubxHeader)) return true;
 
-    const size_t payloadLength = size_t(ubxHeader[4])
+    const auto payloadLength = size_t(ubxHeader[4])
         | (size_t(ubxHeader[5]) << 8);
     ubxHeaderLength = 0;
     if (payloadLength <= 8192) ubxBytesRemaining = payloadLength + 2;
@@ -355,11 +355,11 @@ String receiveRtcmFromGnss() {
     }
 
     while (Serial1.available() > 0) {
-        const size_t bytesAvailable = static_cast<size_t>(Serial1.available());
-        const size_t bytesToRead = min(bytesAvailable, sizeof(buffer));
+        const auto bytesAvailable = static_cast<size_t>(Serial1.available());
+        const auto bytesToRead = min(bytesAvailable, sizeof(buffer));
         if (bytesToRead == 0) break;
 
-        const size_t bytesRead = Serial1.readBytes(
+        const auto bytesRead = Serial1.readBytes(
             reinterpret_cast<char *>(buffer), bytesToRead);
         if (bytesRead == 0) break;
         noteInputBytes(bytesRead);

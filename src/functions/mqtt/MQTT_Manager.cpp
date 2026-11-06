@@ -24,7 +24,7 @@ namespace {
     using TinyGsmClient::write;
 
     size_t write(const uint8_t* data, size_t size) override {
-      const size_t sent = writeMqttChunks(data, size, [this](const uint8_t* part, size_t count) {
+      const auto sent = writeMqttChunks(data, size, [this](const uint8_t* part, size_t count) {
         return TinyGsmClient::write(part, count);
       });
       if (sent != size) {
@@ -96,11 +96,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
 bool probeMqttTransport(bool useGsm) {
   prefs.begin("myPrefs", true);
-  String host = prefs.getString("MQTT_SERVER", String(MQTT_SERVER));
+  auto host = prefs.getString("MQTT_SERVER", String(MQTT_SERVER));
   if (host.equalsIgnoreCase("aitogy.asia")) host = MQTT_SERVER;
   const uint16_t port = prefs.getUShort("MQTT_PORT", MQTT_PORT);
-  const String user = prefs.getString("MQTT_USER", String(MQTT_USER));
-  const String password = prefs.getString("MQTT_PASS", String(MQTT_PASS));
+  const auto user = prefs.getString("MQTT_USER", String(MQTT_USER));
+  const auto password = prefs.getString("MQTT_PASS", String(MQTT_PASS));
   prefs.end();
 
   Client& transport = useGsm ? static_cast<Client&>(gsmProbeClient)
@@ -110,11 +110,11 @@ bool probeMqttTransport(bool useGsm) {
   probe.setSocketTimeout(3);
   if (!probe.setBufferSize(1024)) return false;
   // TinyGSM connect timeout is seconds; WiFiClient uses milliseconds.
-  const bool tcpReady = useGsm ? gsmProbeClient.connect(host.c_str(), port, 5)
+  const auto tcpReady = useGsm ? gsmProbeClient.connect(host.c_str(), port, 5)
                                : wifiProbeClient.connect(host.c_str(), port, 3000);
   // No LWT, publish or subscribe: this probe cannot change station status.
-  const String clientId = "net-probe-" + backendAgent.serial();
-  const bool reachable = tcpReady && probe.connect(clientId.c_str(), user.c_str(), password.c_str());
+  const auto clientId = "net-probe-" + backendAgent.serial();
+  const auto reachable = tcpReady && probe.connect(clientId.c_str(), user.c_str(), password.c_str());
   if (reachable) probe.disconnect();
   transport.stop();
   return reachable;
@@ -148,24 +148,24 @@ int connectMQTT() {
     }
     lastMqttConnectAttemptMs = millis();
     Serial.println("\n[MQTT] Dang ket noi Broker...");
-    String clientId = "agent-" + backendAgent.serial() + "-" + String(random(0xffff), HEX);
+    auto clientId = "agent-" + backendAgent.serial() + "-" + String(random(0xffff), HEX);
     prefs.begin("myPrefs", false);
-    String mqttUser = prefs.getString("MQTT_USER", String(MQTT_USER));
-    String mqttPass = prefs.getString("MQTT_PASS", String(MQTT_PASS));
-    String topicSubCmd = prefs.getString("TPC_SUB_CMD", String(TOPIC_SUB_CMD));
+    auto mqttUser = prefs.getString("MQTT_USER", String(MQTT_USER));
+    auto mqttPass = prefs.getString("MQTT_PASS", String(MQTT_PASS));
+    auto topicSubCmd = prefs.getString("TPC_SUB_CMD", String(TOPIC_SUB_CMD));
     prefs.end();
-    const String statusTopic = String("pi/devices/") + backendAgent.serial() + "/status";
-    const String lwtPayload = backendAgent.lwtPayload();
+    const auto statusTopic = String("pi/devices/") + backendAgent.serial() + "/status";
+    const auto lwtPayload = backendAgent.lwtPayload();
     if (mqtt.connect(clientId.c_str(), mqttUser.c_str(), mqttPass.c_str(),
                     statusTopic.c_str(), 1, true, lwtPayload.c_str())) {
       Serial.println("[MQTT] Da ket noi thanh cong!");
-      const String commandTopic = String("pi/devices/") + backendAgent.serial() + "/command";
-      const String commandsTopic = String("pi/devices/") + backendAgent.serial() + "/commands";
-      const String legacyCommandTopic = String("pi/device/") + backendAgent.serial() + "/command";
-      const bool commandSubSent = mqtt.subscribe(commandTopic.c_str(), 1);
-      const bool commandsSubSent = mqtt.subscribe(commandsTopic.c_str(), 1);
-      const bool legacySubSent = mqtt.subscribe(legacyCommandTopic.c_str(), 1);
-      const bool oldSubSent = mqtt.subscribe(topicSubCmd.c_str());
+      const auto commandTopic = String("pi/devices/") + backendAgent.serial() + "/command";
+      const auto commandsTopic = String("pi/devices/") + backendAgent.serial() + "/commands";
+      const auto legacyCommandTopic = String("pi/device/") + backendAgent.serial() + "/command";
+      const auto commandSubSent = mqtt.subscribe(commandTopic.c_str(), 1);
+      const auto commandsSubSent = mqtt.subscribe(commandsTopic.c_str(), 1);
+      const auto legacySubSent = mqtt.subscribe(legacyCommandTopic.c_str(), 1);
+      const auto oldSubSent = mqtt.subscribe(topicSubCmd.c_str());
       mqtt.subscribe((String("pi/devices/") + backendAgent.serial() + "/control_ack").c_str(), 1);
       Serial.printf("[MQTT] SUBSCRIBE command=%s, commands=%s, legacy=%s, old=%s\n",
                     commandSubSent ? "OK" : "LOI", commandsSubSent ? "OK" : "LOI",
@@ -195,9 +195,9 @@ int publishHealth(const String& payload) {
       return -1;
     }
     prefs.begin("myPrefs", false);
-    String topicPubHealth = prefs.getString("TPC_HEALTH", String(TOPIC_PUB_HEALTH));
+    auto topicPubHealth = prefs.getString("TPC_HEALTH", String(TOPIC_PUB_HEALTH));
     prefs.end();
-    bool ok = mqtt.publish(topicPubHealth.c_str(), payload.c_str());
+    auto ok = mqtt.publish(topicPubHealth.c_str(), payload.c_str());
     xSemaphoreGive(tcpStreamMutex);
     if (ok) {
       #if PROGRAM_DEBUG

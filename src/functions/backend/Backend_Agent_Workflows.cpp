@@ -96,7 +96,7 @@ int BackendAgent::loopNtripRoverLocked() {
         // its next pass without touching a TinyGSM socket concurrently.
         return 200;
     }
-    const int result = loopNtripRover();
+    const auto result = loopNtripRover();
     xSemaphoreGive(tcpStreamMutex);
     return result;
 }
@@ -131,7 +131,7 @@ void BackendAgent::handleUnicoreAck(const UnicoreReply &reply, const uint8_t *da
         for (size_t i = 0; i < length; ++i) command += static_cast<char>(data[i]);
         command.trim();
         command.toLowerCase();
-        unsigned long target = 0;
+        auto target = 0;
         surveyInMonitoring_ = std::sscanf(command.c_str(), "mode base time %lu", &target) == 1
             && target > 0;
         surveyInStartedMs_ = surveyInMonitoring_ ? millis() : 0;
@@ -154,9 +154,9 @@ bool BackendAgent::writeUnicoreCommand(const uint8_t *data, size_t length, Strin
         return false;
     }
     while (Serial1.available()) Serial1.read();
-    const bool written = Serial1.write(data, length) == length;
+    const auto written = Serial1.write(data, length) == length;
     Serial1.flush();
-    const bool matched = waitForUnicoreReply(reply, written);
+    const auto matched = waitForUnicoreReply(reply, written);
     xSemaphoreGive(gnssSerialMutex);
     xSemaphoreGive(rtcmBufferMutex);
     if (!written) error = String("Unicore UART write failed: ") + reply.key;
@@ -182,7 +182,7 @@ bool BackendAgent::writeGnssCommands(const GnssCmdBuilder::CommandList &commands
         }
         if (!rtcmBufferMutex
             || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE) return false;
-        const size_t written = Serial1.write(command.data(), command.size());
+        const auto written = Serial1.write(command.data(), command.size());
         Serial1.flush();
         xSemaphoreGive(rtcmBufferMutex);
         if (written != command.size()) return false;
@@ -246,7 +246,7 @@ bool BackendAgent::configureUbloxRover() {
         // Unsupported optional port keys must not block legacy CFG commands.
         exchangeUbloxRoverCommand(command, false);
     }
-    const bool roverConfirmed = exchangeUbloxRoverCommand(
+    const auto roverConfirmed = exchangeUbloxRoverCommand(
         {0xB5, 0x62, 0x06, 0x71, 0, 0, 0x77, 0x6B}, true);
     xSemaphoreGive(gnssSerialMutex);
     xSemaphoreGive(rtcmBufferMutex);
@@ -295,7 +295,7 @@ void BackendAgent::runWorkflow() {
     }
 
     const JsonObject payload = document.as<JsonObject>();
-    const String kind = workflowKind_;
+    const auto kind = workflowKind_;
     if (kind == "auto_base") {
         runAutoBaseWorkflow(payload);
     } else if (kind == "reference_check") {
@@ -333,7 +333,7 @@ bool BackendAgent::startAutoBaseRover(const String &host, const uint16_t port,
         return false;
     }
     stopNtrip();
-    const bool started = startNtripRover(host, port, username, password, mountpoint, ntripVersion);
+    const auto started = startNtripRover(host, port, username, password, mountpoint, ntripVersion);
     xSemaphoreGive(tcpStreamMutex);
     return started;
 }
@@ -358,9 +358,9 @@ bool BackendAgent::waitForAutoBaseFix(const uint32_t timeoutSeconds,
         if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
             nextSecondMs = now + 1000UL;
             const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
+            const auto usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
             fixedStreak = usable ? static_cast<uint8_t>(fixedStreak + 1) : 0;
-            const bool fixed = fixedStreak >= fixedStreakRequired;
+            const auto fixed = fixedStreak >= fixedStreakRequired;
             DynamicJsonDocument details(1024);
             details["timeout"] = timeoutSeconds;
             details["elapsed"] = (now - waitStartedMs) / 1000UL;
@@ -406,7 +406,7 @@ bool BackendAgent::collectAutoBaseSamples(const int configuredSamples,
         if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
             nextSecondMs = now + 1000UL;
             const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
+            const auto usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
             if (usable && snapshot.lastGgaMs != lastSampleGgaMs
                 && std::isfinite(snapshot.latitude) && std::isfinite(snapshot.longitude)
                 && std::isfinite(snapshot.altitude) && snapshot.latitude >= -90.0
@@ -452,7 +452,7 @@ bool BackendAgent::resolveAutoBaseProjection(JsonObject payload, const double ra
     scale = 0.9999;
     provinceName = "Khong xac dinh (fallback theo kinh do)";
     provinceCode = "UNKNOWN";
-    const String requestedProvince = payload["province_code"] | String();
+    const auto requestedProvince = payload["province_code"] | String();
     if (!requestedProvince.isEmpty()) {
         if (!getProvinceProjection(requestedProvince, centralMeridianDeg, scale, provinceName)) {
             failureReason = "invalid province_code";
@@ -464,9 +464,9 @@ bool BackendAgent::resolveAutoBaseProjection(JsonObject payload, const double ra
             103.0, 104.0, 104.5, 104.75, 105.0, 105.5, 105.75,
             106.0, 106.5, 107.0, 107.25, 107.75, 108.0, 108.25, 108.5,
         };
-        double bestDistance = 1e9;
+        auto bestDistance = 1e9;
         for (const double candidate : candidates) {
-            const double distance = fabs(candidate - rawLongitude);
+            const auto distance = fabs(candidate - rawLongitude);
             if (distance < bestDistance) {
                 bestDistance = distance;
                 centralMeridianDeg = candidate;
@@ -509,9 +509,9 @@ bool BackendAgent::completeAutoBaseSetup(
     JsonObject payload, const std::vector<double> &latitudes,
     const std::vector<double> &longitudes, const std::vector<double> &altitudes,
     String &resultJson, String &failureReason) {
-    double rawLatitude = 0.0;
-    double rawLongitude = 0.0;
-    double rawAltitude = 0.0;
+    auto rawLatitude = 0.0;
+    auto rawLongitude = 0.0;
+    auto rawAltitude = 0.0;
     for (size_t index = 0; index < latitudes.size(); ++index) {
         rawLatitude += latitudes[index];
         rawLongitude += longitudes[index];
@@ -530,10 +530,10 @@ bool BackendAgent::completeAutoBaseSetup(
         return false;
     }
 
-    bool transformed = false;
-    double finalLatitude = rawLatitude;
-    double finalLongitude = rawLongitude;
-    double finalAltitude = rawAltitude;
+    auto transformed = false;
+    auto finalLatitude = rawLatitude;
+    auto finalLongitude = rawLongitude;
+    auto finalAltitude = rawAltitude;
     double northing = 0.0;
     double easting = 0.0;
     if (payload["enable_itrf_vn2000_transform"] | true) {
@@ -549,7 +549,7 @@ bool BackendAgent::completeAutoBaseSetup(
     baseProgress["averaged_coord"]["alt"] = finalAltitude;
     baseProgress["sample_count"] = latitudes.size();
     baseProgress["transform_applied"] = transformed;
-    const String requestedProvince = payload["province_code"] | String();
+    const auto requestedProvince = payload["province_code"] | String();
     const char *projectionSource = requestedProvince.isEmpty() ? "lon_fallback" : "manual_province";
     baseProgress["projection_source"] = projectionSource;
     baseProgress["province_code"] = provinceCode;
@@ -593,7 +593,7 @@ bool BackendAgent::completeAutoBaseSetup(
     baseConfig_.clear();
     serializeJson(baseConfig, baseConfig_);
     saveStatePreferences();
-    const bool transportRestored = restartConfiguredNtrip();
+    const auto transportRestored = restartConfiguredNtrip();
     setAgentState(normalAgentState());
     resultJson = buildAutoBaseResult(
         finalLatitude, finalLongitude, finalAltitude, rawLatitude, rawLongitude, rawAltitude,
@@ -614,14 +614,14 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
     uint8_t ntripVersion = 0;
     uint32_t timeoutSeconds = 0;
     uint8_t fixedStreakRequired = 0;
-    const bool validConfig = prepareAutoBaseConfig(
+    const auto validConfig = prepareAutoBaseConfig(
         payload, host, port, username, password, mountpoint, ntripVersion,
         timeoutSeconds, fixedStreakRequired);
 
     auto finish = [&](const bool success, const bool cancelled, const String &reason) {
         // restartConfiguredNtrip() stops the temporary rover session while
         // holding tcpStreamMutex, then restores the configured source streams.
-        const bool transportRestored = restartConfiguredNtrip();
+        const auto transportRestored = restartConfiguredNtrip();
         setAgentState(normalAgentState());
         DynamicJsonDocument details(1024);
         if (!reason.isEmpty()) details["reason"] = reason;
@@ -655,7 +655,7 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
 
     setAgentState("auto_setup_wait_fix");
     setWorkflowProgress("wait_fix", 2, 4);
-    bool cancelled = false;
+    auto cancelled = false;
     String failureReason;
     if (!waitForAutoBaseFix(timeoutSeconds, fixedStreakRequired, cancelled, failureReason)) {
         finish(false, cancelled, failureReason);
@@ -663,7 +663,7 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
     }
 
     setAgentState("auto_setup_averaging");
-    const int configuredSamples = payload["samples"] | 60;
+    const auto configuredSamples = payload["samples"] | 60;
     setWorkflowProgress("averaging", 3, 4);
     std::vector<double> latitudes;
     std::vector<double> longitudes;
@@ -693,7 +693,7 @@ bool BackendAgent::prepareReferenceCheckConfig(
     uint16_t &requestedSamples) {
     reference = payload["reference_coords"].as<JsonObject>();
     DynamicJsonDocument storedBase(CONFIG_DOCUMENT_SIZE);
-    const bool baseParsed = deserializeJson(storedBase, baseConfig_) == DeserializationError::Ok
+    const auto baseParsed = deserializeJson(storedBase, baseConfig_) == DeserializationError::Ok
         && storedBase.is<JsonObject>();
     JsonObject storedBaseObject = storedBase.as<JsonObject>();
     JsonObject storedCoordinates = storedBaseObject["coords"].as<JsonObject>();
@@ -733,7 +733,7 @@ inline bool BackendAgent::startReferenceRover(const String &host, const uint16_t
         return false;
     }
     stopNtrip();
-    const bool started = startNtripRover(host, port, username, password, mountpoint, 1);
+    const auto started = startNtripRover(host, port, username, password, mountpoint, 1);
     xSemaphoreGive(tcpStreamMutex);
     return started;
 }
@@ -754,7 +754,7 @@ bool BackendAgent::waitForReferenceFix(const uint32_t timeoutSeconds, String &fa
         if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
             nextSecondMs = now + 1000UL;
             const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-            const bool fixed = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
+            const auto fixed = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
             DynamicJsonDocument details(512);
             details["fix_status"] = snapshot.fixStatus;
             details["elapsed"] = (now - waitStartedMs) / 1000UL;
@@ -794,7 +794,7 @@ bool BackendAgent::collectReferenceSamples(const uint16_t requestedSamples,
         if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
             nextSecondMs = now + 1000UL;
             const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
+            const auto usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
             if (usable && std::isfinite(snapshot.latitude) && std::isfinite(snapshot.longitude)
                 && std::isfinite(snapshot.altitude) && snapshot.latitude >= -90.0
                 && snapshot.latitude <= 90.0 && snapshot.longitude >= -180.0
@@ -824,7 +824,7 @@ String BackendAgent::buildReferenceCheckResult(JsonObject reference, const doubl
                                                 const double measuredLongitude,
                                                 const double measuredAltitude,
                                                 const size_t sampleCount) {
-    const double meanLatitudeRad = (measuredLatitude + (reference["lat"] | NAN))
+    const auto meanLatitudeRad = (measuredLatitude + (reference["lat"] | NAN))
         * 3.14159265358979323846 / 360.0;
     DynamicJsonDocument result(2048);
     result["reference_coord"]["lat"] = reference["lat"];
@@ -859,25 +859,25 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload) {
     String mountpoint;
     uint32_t timeoutSeconds = 0;
     uint16_t requestedSamples = 0;
-    const bool validConfig = prepareReferenceCheckConfig(
+    const auto validConfig = prepareReferenceCheckConfig(
         payload, reference, referenceLatitude, referenceLongitude, referenceAltitude,
         restoreLatitude, restoreLongitude, restoreAltitude, host, port, username, password,
         mountpoint, timeoutSeconds, requestedSamples);
 
     auto cleanup = [&]() {
-        const bool roverStopped = stopNtripRoverLocked();
+        const auto roverStopped = stopNtripRoverLocked();
         if (!roverStopped) return false;
-        bool baseRestored = true;
+        auto baseRestored = true;
         if (std::isfinite(restoreLatitude) && std::isfinite(restoreLongitude) && std::isfinite(restoreAltitude)) {
             baseRestored = applyBaseCoordinates(restoreLatitude, restoreLongitude, restoreAltitude);
         }
-        const bool transportRestored = restartConfiguredNtrip();
+        const auto transportRestored = restartConfiguredNtrip();
         return baseRestored && transportRestored;
     };
     auto finish = [&](const bool success, const bool cancelled, const String &reason) {
-        const bool cleanupSucceeded = cleanup();
-        const bool completed = success && cleanupSucceeded;
-        const bool stopped = cancelled && cleanupSucceeded;
+        const auto cleanupSucceeded = cleanup();
+        const auto completed = success && cleanupSucceeded;
+        const auto stopped = cancelled && cleanupSucceeded;
         setAgentState(normalAgentState());
         DynamicJsonDocument details(1024);
         if (!reason.isEmpty()) details["reason"] = reason;
@@ -928,9 +928,9 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload) {
         return false;
     }
 
-    double measuredLatitude = 0.0;
-    double measuredLongitude = 0.0;
-    double measuredAltitude = 0.0;
+    auto measuredLatitude = 0.0;
+    auto measuredLongitude = 0.0;
+    auto measuredAltitude = 0.0;
     for (size_t index = 0; index < latitudes.size(); ++index) {
         measuredLatitude += latitudes[index];
         measuredLongitude += longitudes[index];
@@ -944,7 +944,7 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload) {
         return false;
     }
 
-    const String resultJson = buildReferenceCheckResult(
+    const auto resultJson = buildReferenceCheckResult(
         reference, measuredLatitude, measuredLongitude, measuredAltitude, latitudes.size());
 
     if (!cleanup()) {

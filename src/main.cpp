@@ -70,8 +70,8 @@ void setup() {
     esp_bt_controller_mem_release(ESP_BT_MODE_BTDM);
 
     prefs.begin("myPrefs");
-    const bool needReset = prefs.getBool("NEED_RESET", true);
-    const int restartCount = prefs.getInt("RSTRT_COUNT", 0);
+    const auto needReset = prefs.getBool("NEED_RESET", true);
+    const auto restartCount = prefs.getInt("RSTRT_COUNT", 0);
     prefs.putInt("RSTRT_COUNT", restartCount + 1);
     if (needReset) {
         Serial.println("[SETUP] Khoi tao Preferences lan dau tien...");
@@ -79,10 +79,10 @@ void setup() {
     }
 
     loadConnectionTypeFromPrefs();
-    const int gnssTX = TX_GNSS;
-    const int gnssRX = RX_GNSS;
-    const int rx2ModemTX = RX_TO_MODEM_TX;
-    const int tx2ModemRX = TX_TO_MODEM_RX;
+    const auto gnssTX = TX_GNSS;
+    const auto gnssRX = RX_GNSS;
+    const auto rx2ModemTX = RX_TO_MODEM_TX;
+    const auto tx2ModemRX = TX_TO_MODEM_RX;
     prefs.end();
 
     (void)restartCount;
@@ -147,7 +147,7 @@ void setup() {
     }
 #endif
 
-    bool networkConnected = false;
+    auto networkConnected = false;
     while (!networkConnected) {
         if (isWifiConnection()) {
             Serial.println("[SETUP] Su dung ket noi WIFI");
@@ -200,7 +200,7 @@ void setup() {
 __attribute__((noreturn)) void taskNtrip([[maybe_unused]] void *parameter) {
     auto* const rtcmState = static_cast<RtcmState*>(parameter);
     Serial.println("[NTRIP TASK] Bat dau task NTRIP...");
-    int loopStatus = 0;
+    auto loopStatus = 0;
     while (true) {
         String rtcmRead;
         if (rtcmBufferMutex && xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS))) {
@@ -217,7 +217,7 @@ __attribute__((noreturn)) void taskNtrip([[maybe_unused]] void *parameter) {
                 vTaskDelay(pdMS_TO_TICKS(100));
                 continue;
             }
-            const bool gprsConnected = modem.isGprsConnected();
+            const auto gprsConnected = modem.isGprsConnected();
             xSemaphoreGive(tcpStreamMutex);
             if (!gprsConnected) {
                 // The network manager retries SIM or switches to Wi-Fi. Keep
@@ -251,7 +251,7 @@ __attribute__((noreturn)) void healthCheckTask([[maybe_unused]] void* const para
         int32_t signalQualityDbm = -1;
         if (xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)))
         {
-            const bool gnssDataOk = rtcmState->hasGnssReception
+            const auto gnssDataOk = rtcmState->hasGnssReception
                 && millis() - rtcmState->lastGnssReceptionMs <= GNSS_DATA_TIMEOUT_MS;
             const RtcmMessageCounts messageCounts = rtcmState->messageCounts;
             rtcmState->messageCounts = {};
@@ -337,7 +337,7 @@ void loop() {
 static bool tryWifiFallback(bool protocolsRunning) {
     Serial.println("[NETWORK] SIM khong truy cap duoc dich vu; thu Wi-Fi du phong da luu.");
     if (!setupWiFi()) return false;
-    const bool reachable = probeMqttTransport(false);
+    const auto reachable = probeMqttTransport(false);
     if (!reachable) {
         Serial.println("[NETWORK] Wi-Fi chua truy cap duoc MQTT broker; giu SIM va se thu lai.");
         WiFi.disconnect();
@@ -369,13 +369,13 @@ static void activateNetwork(ConnectionType type, bool protocolsRunning) {
 // Only Wi-Fi entered through SIM fallback is eligible for automatic return.
 static void checkSimRecovery() {
     if (!wifiFallbackActive || !isWifiConnection()) return;
-    const bool wifiConnected = WiFiClass::status() == WL_CONNECTED;
+    const auto wifiConnected = WiFiClass::status() == WL_CONNECTED;
     const uint32_t now = millis();
     const uint32_t interval = wifiConnected ? 60000UL : 15000UL;
     if (now - lastSimProbeMs < interval) return;
     lastSimProbeMs = now;
     // Avoid a blocking registration wait while healthy Wi-Fi carries traffic.
-    const bool reachable = modem.isNetworkConnected()
+    const auto reachable = modem.isNetworkConnected()
         && (modem.isGprsConnected() || connectGSM(1))
         && probeMqttTransport(true);
     if (!reachable) {

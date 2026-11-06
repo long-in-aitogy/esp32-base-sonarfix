@@ -3,15 +3,15 @@
 
 bool setupWiFi() {
   prefs.begin("myPrefs", false);
-  String ssid = prefs.getString("WIFI_SSID", "AITOGY-VP");
-  String password = prefs.getString("WIFI_PASS", "123456789");
+  auto ssid = prefs.getString("WIFI_SSID", "AITOGY-VP");
+  auto password = prefs.getString("WIFI_PASS", "123456789");
   prefs.end();
 
   Serial.print("\n[WIFI] Dang ket noi mang: ");
   Serial.println(ssid);
   WiFi.begin(ssid.c_str(), password.c_str());
 
-  int attempt = 0;
+  auto attempt = 0;
   while (WiFiClass::status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");

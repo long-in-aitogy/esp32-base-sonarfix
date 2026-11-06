@@ -18,7 +18,7 @@ double configNumber(JsonVariantConst value, double fallback) {
     if (value.is<const char *>()) {
         const char *text = value.as<const char *>();
         char *end = nullptr;
-        const double number = std::strtod(text, &end);
+        const auto number = std::strtod(text, &end);
         return end != text && *end == '\0' && std::isfinite(number) ? number : double(NAN);
     }
     return value.is<double>() ? value.as<double>() : double(NAN);
@@ -74,7 +74,7 @@ bool BackendAgent::buildStartupCommands(JsonObject base,
     const JsonObjectConst output = base["gnss_options"].as<JsonObjectConst>();
     options.outputMode = String(output["output_mode"] | "rtcm_only") == "rtcm_only"
         ? OutputMode::RtcmOnly : OutputMode::DiagnosticsRtcm;
-    const String level = output["msm_level"].isNull() ? "both" : output["msm_level"].as<String>();
+    const auto level = output["msm_level"].isNull() ? "both" : output["msm_level"].as<String>();
     options.msmLevel = level == "7" ? MsmLevel::Msm7 : level == "4" ? MsmLevel::Msm4 : MsmLevel::Both;
     const JsonObjectConst systems = output["constellations"].as<JsonObjectConst>();
     options.gps = systems["gps"] | true; options.glo = systems["glo"] | true;
@@ -82,9 +82,9 @@ bool BackendAgent::buildStartupCommands(JsonObject base,
     options.qzss = systems["qzss"] | true; options.sbas = systems["sbas"] | true;
     ellipsoid = detected == GnssSensorType::Ublox;
     if (!restoreFixed) {
-        const double duration = AUTO_SURVEY_IN_SECONDS;
-        const double accuracy = configNumber(base["survey_in_accuracy"], 5.0);
-        const double maxDuration = detected == GnssSensorType::Unicore ? 3600 : 604800;
+        const auto duration = AUTO_SURVEY_IN_SECONDS;
+        const auto accuracy = configNumber(base["survey_in_accuracy"], 5.0);
+        const auto maxDuration = detected == GnssSensorType::Unicore ? 3600 : 604800;
         if (!std::isfinite(duration) || std::floor(duration) != duration || duration < 1 || duration > maxDuration
             || !std::isfinite(accuracy) || accuracy < 0.001 || accuracy > 10000) {
             error = "Saved Survey-In parameters are invalid";
@@ -99,10 +99,10 @@ bool BackendAgent::buildStartupCommands(JsonObject base,
 
     JsonObjectConst coords = base["coords"].as<JsonObjectConst>();
     if (coords.isNull()) coords = base;
-    const double lat = configNumber(coords["lat"], NAN);
-    const double lon = configNumber(coords["lon"], NAN);
-    const double alt = configNumber(coords["alt"], NAN);
-    const double accuracy = configNumber(base["accuracy"], 0.01);
+    const auto lat = configNumber(coords["lat"], NAN);
+    const auto lon = configNumber(coords["lon"], NAN);
+    const auto alt = configNumber(coords["alt"], NAN);
+    const auto accuracy = configNumber(base["accuracy"], 0.01);
     if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(alt)
         || std::abs(lat) > 90 || std::abs(lon) > 180 || alt < -12000 || alt > 100000
         || !std::isfinite(accuracy) || accuracy < 0.0001 || accuracy > 10000) {
@@ -113,7 +113,7 @@ bool BackendAgent::buildStartupCommands(JsonObject base,
     fixedLongitude = lon;
     fixedAltitude = alt;
     if (detected == GnssSensorType::Unicore) {
-        const String reference = base["altitude_reference"] | "LEGACY";
+        const auto reference = base["altitude_reference"] | "LEGACY";
         if (reference != "ELLIPSOID" && reference != "LEGACY") {
             error = "Unsupported saved altitude reference";
             return false;
@@ -148,17 +148,17 @@ bool BackendAgent::verifyStartupReadback(GnssCmdBuilder::GnssSensorType detected
         error = "Receiver has not confirmed the saved fixed position";
         return false;
     }
-    double lat = 0;
-    double lon = 0;
-    double height = 0;
+    auto lat = 0;
+    auto lon = 0;
+    auto height = 0;
     if (detected == GnssCmdBuilder::GnssSensorType::Ublox) {
         lat = position["lat"].as<double>();
         lon = position["lon"].as<double>();
         height = position["alt"].as<double>();
     } else {
-        const String raw = position["raw"] | String();
-        const int separator = raw.indexOf(';');
-        double undulation = 0;
+        const auto raw = position["raw"] | String();
+        const auto separator = raw.indexOf(';');
+        auto undulation = 0;
         char datum[16] = {};
         if (separator < 0 || std::sscanf(raw.c_str() + separator + 1,
                 "%*[^,],%*[^,],%lf,%lf,%lf,%lf,%15[^,]",
@@ -199,7 +199,7 @@ bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
     };
     DynamicJsonDocument config(CONFIG_DOCUMENT_SIZE);
     JsonObject base;
-    bool saved = false;
+    auto saved = false;
     String method;
     if (String configError;
             !prepareStartupConfig(config, base, saved, method, configError))
@@ -216,12 +216,12 @@ bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
     }
     if (String queryError; !readStartupReceiverMode(detected, queryError))
         return fail(queryError.isEmpty() ? String("Receiver mode could not be read") : queryError);
-    const bool restoreFixed = method == "FIXED_LLA";
+    const auto restoreFixed = method == "FIXED_LLA";
     if (!restoreFixed && !method.isEmpty() && method != "SURVEY_IN")
         return fail("Unsupported saved Base mode");
     CommandList commands;
     double fixedLatitude = 0, fixedLongitude = 0, fixedAltitude = 0;
-    bool ellipsoid = false;
+    auto ellipsoid = false;
     if (String commandError;
             !buildStartupCommands(base, detected, restoreFixed, commands,
             fixedLatitude, fixedLongitude, fixedAltitude,

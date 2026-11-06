@@ -32,7 +32,7 @@ namespace GnssCmdBuilder {
 
     GnssSensorType sensorTypeFromString(const String &sensorType)
     {
-        String normalized = sensorType;
+        auto normalized = sensorType;
         normalized.trim();
         normalized.toUpperCase();
         if (normalized == "INVALID")
@@ -46,7 +46,7 @@ namespace GnssCmdBuilder {
 
     Command commandListToBytes(const CommandList &commands)
     {
-        size_t totalSize = 0;
+        auto totalSize = 0;
         for (const Command &command : commands)
             totalSize += command.size();
 

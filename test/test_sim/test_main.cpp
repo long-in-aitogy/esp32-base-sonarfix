@@ -16,14 +16,14 @@ void tearDown(void)
 
 void test_startSIM() {
     Serial.println("Testing startSIM...");
-    bool result = startSIM();
+    auto result = startSIM();
     TEST_ASSERT_TRUE(result);
 }
 
 void test_TCP_connection() {
     Serial.println("Testing TCP connection...");
     // Require a reachable TCP service at this test-network address and caster port.
-    bool result = testClient.connect("192.168.102.111", NTRIP_CASTER_PORT);
+    auto result = testClient.connect("192.168.102.111", NTRIP_CASTER_PORT);
     TEST_ASSERT_TRUE(result);
 }
 

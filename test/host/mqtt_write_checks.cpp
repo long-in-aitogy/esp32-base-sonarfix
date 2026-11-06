@@ -8,7 +8,7 @@ int main() {
     std::vector<uint8_t> packet(5411);
     for (size_t i = 0; i < packet.size(); ++i) packet[i] = static_cast<uint8_t>(i);
     std::vector<uint8_t> received;
-    size_t calls = 0;
+    auto calls = 0;
     auto fullWrite = [&](const uint8_t* data, size_t count) {
         assert(count <= 1024);
         received.insert(received.end(), data, data + count);

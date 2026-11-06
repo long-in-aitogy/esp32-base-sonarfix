@@ -28,7 +28,7 @@ String BackendAgent::buildLwtPayload() const {
 
 String BackendAgent::statusForPayload(bool anyStream, bool onDemand) const {
     if (stationLock_.all) return "locked";
-    const bool stableState = agentState_ == "configuring" || agentState_ == "rebooting"
+    const auto stableState = agentState_ == "configuring" || agentState_ == "rebooting"
         || agentState_ == "rebooting_for_reset" || agentState_.startsWith("auto_setup")
         || agentState_.startsWith("reference_check");
     if (stableState) return agentState_;
@@ -119,7 +119,7 @@ void BackendAgent::appendStartupInfo(JsonObject system) const {
 
 JsonObject BackendAgent::appendSurveyInfo(JsonObject system, uint32_t nowMs) const {
     JsonObject survey = system.createNestedObject("survey_in_status");
-    const bool readbackFresh = receiverBaseReadbackMs_ > 0
+    const auto readbackFresh = receiverBaseReadbackMs_ > 0
         && nowMs - receiverBaseReadbackMs_ <= 45000UL && surveyInReadbackHasPosition_;
     const char *surveyState = "waiting_base";
     if (!surveyInMonitoring_) surveyState = "not_monitoring";
@@ -261,12 +261,12 @@ void BackendAgent::appendNtripStatus(JsonDocument &doc, const JsonObjectConst &s
     JsonObject streams = doc.createNestedObject("ntrip_stream_state");
     streams["selected_mountpoint"] = jsonString(service, "active_mountpoint");
     for (uint8_t id = 1; id <= 2; ++id) {
-        const String prefix = String("server") + String(id);
-        const bool active = id == 1 ? server1Active : server2Active;
-        const bool onDemand = jsonBool(service, prefix + "_stream_on_demand",
+        const auto prefix = String("server") + String(id);
+        const auto active = id == 1 ? server1Active : server2Active;
+        const auto onDemand = jsonBool(service, prefix + "_stream_on_demand",
                                        jsonBool(service, "stream_on_demand", false));
-        const bool enabled = jsonBool(service, prefix + "_enabled", false);
-        const bool configured = licenseValid_ && provisioned_
+        const auto enabled = jsonBool(service, prefix + "_enabled", false);
+        const auto configured = licenseValid_ && provisioned_
             && effectiveStreamActive(service, id, false);
         JsonObject stream = streams.createNestedObject(prefix);
         stream["enabled"] = enabled;
@@ -287,10 +287,10 @@ void BackendAgent::appendNtripStatus(JsonDocument &doc, const JsonObjectConst &s
 void BackendAgent::appendTransportStatus(JsonDocument &doc,
                                          const GnssTelemetrySnapshot &gnss,
                                          uint32_t nowMs, int32_t signal) const {
-    const bool mqtt_connected = mqttConnected();
-    const bool websocket = websocketConnected();
+    const auto mqtt_connected = mqttConnected();
+    const auto websocket = websocketConnected();
     JsonObject antenna = doc.createNestedObject("antenna_status");
-    const bool gnssOk = gnss.hasData && nowMs - gnss.lastDataMs <= 15000UL;
+    const auto gnssOk = gnss.hasData && nowMs - gnss.lastDataMs <= 15000UL;
     antenna["state"] = gnssOk ? "OK" : "FAULT";
     if (!gnssOk) antenna["message"] = "Không nhận được dữ liệu GNSS trong 15 giây";
     JsonObject transport = doc.createNestedObject("transport_status");
@@ -322,15 +322,15 @@ String BackendAgent::buildStatusPayload() {
     DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
     deserializeJson(serviceDoc, serviceConfig_);
     const JsonObjectConst service = serviceDoc.as<JsonObjectConst>();
-    const bool server1Active = licenseValid_ && provisioned_ && !isServerLocked(1)
+    const auto server1Active = licenseValid_ && provisioned_ && !isServerLocked(1)
         && effectiveStreamActive(service, 1, controlPlaneFailOpen_);
-    const bool server2Active = licenseValid_ && provisioned_ && !isServerLocked(2)
+    const auto server2Active = licenseValid_ && provisioned_ && !isServerLocked(2)
         && effectiveStreamActive(service, 2, controlPlaneFailOpen_);
-    const bool onDemand = jsonBool(service, "stream_on_demand", false);
+    const auto onDemand = jsonBool(service, "stream_on_demand", false);
     const GnssTelemetrySnapshot gnss = getGnssTelemetrySnapshot();
     const uint32_t nowMs = millis();
     const int32_t signal = isWifiConnection() ? WiFi.RSSI() : modem.getSignalQuality();
-    const String timestamp = epochString();
+    const auto timestamp = epochString();
     appendStatusFields(doc, statusForPayload(server1Active || server2Active, onDemand),
                        gnss, nowMs, timestamp);
     appendAutoBaseProgress(doc, gnss, nowMs);

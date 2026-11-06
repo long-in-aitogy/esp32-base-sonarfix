@@ -11,7 +11,7 @@ TinyGsm        modem(SerialAT);
 
 bool startSIM() {
     
-    int retrys = 1;
+    auto retrys = 1;
  
     digitalWrite(LED_PIN, HIGH);
     pinMode(MODEM_DC_PIN, OUTPUT);
@@ -28,7 +28,7 @@ bool startSIM() {
     modem.init();
     #endif
 
-    String modemInfo = modem.getModemInfo();
+    auto modemInfo = modem.getModemInfo();
     while (modemInfo.length() == 0) {
         if (retrys > 10) {
             SerialMon.println("[GSM] Lay thong tin modem that bai sau nhieu lan thu ! Khoi dong modem that bai !");
@@ -54,7 +54,7 @@ bool connectGSM(uint8_t maxAttempts) {
     uint8_t retries = 0;
     while (retries < maxAttempts) {
         retries++;
-        String simOperator = modem.getProvider();
+        auto simOperator = modem.getProvider();
         SerialMon.println("[GSM] Nha mang GSM: " + simOperator);
         String apn = "";
         if (simOperator.indexOf("VIETTEL") >= 0) {
@@ -68,8 +68,8 @@ bool connectGSM(uint8_t maxAttempts) {
             apn = String(APN);
         }
         prefs.begin("myPrefs", true);
-        String gprsUser = prefs.getString("GPRS_USER", String(GPRS_USER));
-        String gprsPass = prefs.getString("GPRS_PASS", String(GPRS_PASS));
+        auto gprsUser = prefs.getString("GPRS_USER", String(GPRS_USER));
+        auto gprsPass = prefs.getString("GPRS_PASS", String(GPRS_PASS));
         prefs.end();
 
         SerialMon.println("[GSM] Dang ket noi mang GSM...");

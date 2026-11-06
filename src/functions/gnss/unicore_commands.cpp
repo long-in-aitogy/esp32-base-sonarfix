@@ -87,8 +87,8 @@ using namespace GnssCmdBuilder;
             for (const char *item : messages)
             {
                 const String message(item);
-                const bool ephemeris = message == "1019" || message == "1020" || message == "1042" || message == "1044" || message == "1045";
-                const bool matches = (o.msmLevel == MsmLevel::Both && (message.endsWith("4") || message.endsWith("7"))) || message.endsWith(String(static_cast<uint8_t>(o.msmLevel)));
+                const auto ephemeris = message == "1019" || message == "1020" || message == "1042" || message == "1044" || message == "1045";
+                const auto matches = (o.msmLevel == MsmLevel::Both && (message.endsWith("4") || message.endsWith("7"))) || message.endsWith(String(static_cast<uint8_t>(o.msmLevel)));
                 if (ephemeris || matches)
                     rtcm.push_back(message);
             }
@@ -124,7 +124,7 @@ using namespace GnssCmdBuilder;
 
     CommandList buildEphemerisOutputCommands(const String &port)
     {
-        String normalizedPort = port;
+        auto normalizedPort = port;
         normalizedPort.trim();
         normalizedPort.toUpperCase();
         if (!isValidUnicorePort(normalizedPort)) return {};
@@ -139,11 +139,11 @@ using namespace GnssCmdBuilder;
         commands.push_back(asciiCommand("unlogall\r\n"));
         commands.push_back(delayCommand(1000));
         commands.push_back(asciiCommand("config undulation 0.0\r\n"));
-        const String cmd = "mode base time " + String(duration) + " 0\r\n";
+        const auto cmd = "mode base time " + String(duration) + " 0\r\n";
         Serial.printf("Survey-In command: %s", cmd.c_str());
         commands.push_back(asciiCommand(cmd));
         commands.push_back(delayCommand(2000));
-        const String port = configuredOutputPort();
+        const auto port = configuredOutputPort();
         Serial.printf("Configuring Unicore output messages on %s\n", port.isEmpty() ? "current command port" : port.c_str());
         appendUnicoreOutputCommands(commands, port, options);
         commands.push_back(asciiCommand("saveconfig\r\n"));
@@ -155,11 +155,11 @@ using namespace GnssCmdBuilder;
         CommandList commands;
         commands.push_back(asciiCommand("unlogall\r\n"));
         commands.push_back(delayCommand(1000));
-        const String cmd = "mode base " + String(lat, 10) + " " + String(lon, 10) + " " + String(alt, 4) + "\r\n";
+        const auto cmd = "mode base " + String(lat, 10) + " " + String(lon, 10) + " " + String(alt, 4) + "\r\n";
         Serial.printf("Fixed position command: %s", cmd.c_str());
         commands.push_back(asciiCommand(cmd));
         commands.push_back(delayCommand(2000));
-        const String port = configuredOutputPort();
+        const auto port = configuredOutputPort();
         Serial.printf("Configuring Unicore output messages on %s\n", port.isEmpty() ? "current command port" : port.c_str());
         appendUnicoreOutputCommands(commands, port, options);
         commands.push_back(asciiCommand("saveconfig\r\n"));
@@ -169,8 +169,8 @@ using namespace GnssCmdBuilder;
 
     CommandList buildBaseRtcmOutputCommand(const String &message, const String &port, bool enabled) {
 
-        String normalizedMessage = message;
-        String normalizedPort = port;
+        auto normalizedMessage = message;
+        auto normalizedPort = port;
         normalizedMessage.trim();
         normalizedMessage.toUpperCase();
         normalizedPort.trim();
@@ -190,7 +190,7 @@ using namespace GnssCmdBuilder;
     }
 
     CommandList buildBaseAllRtcmOutputCommand(const String &port, bool enabled) {
-        String normalizedPort = port;
+        auto normalizedPort = port;
         normalizedPort.trim();
         normalizedPort.toUpperCase();
         if (!isValidUnicorePort(normalizedPort)) return {};
@@ -208,7 +208,7 @@ using namespace GnssCmdBuilder;
     }
 
     CommandList buildRoverCommand() {
-        const String port = outputPortArgument(configuredOutputPort());
+        const auto port = outputPortArgument(configuredOutputPort());
         return {asciiCommand("mode rover\r\n"),
                 asciiCommand("gpgga " + port + "1\r\n"),
                 asciiCommand("gpgst " + port + "1\r\n"),

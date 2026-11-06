@@ -27,7 +27,7 @@ String normalizedStreamValue(String value, bool stripLeadingSlash) {
 }
 
 int streamServerId(JsonObjectConst payload) {
-    int serverId = payload["server_id"] | 0;
+    auto serverId = payload["server_id"] | 0;
     if (serverId != 1 && serverId != 2) serverId = payload["server_idx"] | 0;
     if (serverId != 1 && serverId != 2) serverId = payload["server"] | 0;
     return serverId;
@@ -35,8 +35,8 @@ int streamServerId(JsonObjectConst payload) {
 
 void setStreamServerState(JsonObject service, uint8_t id, bool active,
                           const String &mountpoint) {
-    const String prefix = String("server") + String(id);
-    const bool onDemand = jsonBool(
+    const auto prefix = String("server") + String(id);
+    const auto onDemand = jsonBool(
         service, prefix + "_stream_on_demand",
         jsonBool(service, "stream_on_demand", false));
     if (!active && !onDemand) return;
@@ -46,8 +46,8 @@ void setStreamServerState(JsonObject service, uint8_t id, bool active,
         return;
     }
     if (!active) {
-        const String configured = jsonString(service, String("mountpoint") + String(id));
-        const String current = jsonString(service, "active_mountpoint");
+        const auto configured = jsonString(service, String("mountpoint") + String(id));
+        const auto current = jsonString(service, "active_mountpoint");
         if (mountpoint.isEmpty() || mountpoint.equalsIgnoreCase(configured)
             || current.equalsIgnoreCase(configured)) {
             service.remove("active_mountpoint");
@@ -56,8 +56,8 @@ void setStreamServerState(JsonObject service, uint8_t id, bool active,
 }
 
 bool serverMatchesAddress(JsonObjectConst service, uint8_t id, const String &address) {
-    const String prefix = String("server") + String(id);
-    String configured = jsonString(service, prefix + "_host",
+    const auto prefix = String("server") + String(id);
+    auto configured = jsonString(service, prefix + "_host",
                                    jsonString(service, String("serverhost") + String(id)));
     configured = normalizedStreamValue(configured, false);
     return !configured.isEmpty()
@@ -66,7 +66,7 @@ bool serverMatchesAddress(JsonObjectConst service, uint8_t id, const String &add
 
 bool serverMatchesMountpoint(JsonObjectConst service, uint8_t id,
                              const String &mountpoint) {
-    String configured = normalizedStreamValue(
+    auto configured = normalizedStreamValue(
         jsonString(service, String("mountpoint") + String(id)), true);
     return !configured.isEmpty() && configured == mountpoint;
 }
@@ -78,7 +78,7 @@ bool applyTargetedStreamState(JsonObject service, int serverId, bool active,
         return true;
     }
     if (!address.isEmpty()) {
-        bool targeted = false;
+        auto targeted = false;
         for (uint8_t id = 1; id <= 2; ++id) {
             if (!serverMatchesAddress(service, id, address)) continue;
             setStreamServerState(service, id, active, mountpoint);
@@ -87,7 +87,7 @@ bool applyTargetedStreamState(JsonObject service, int serverId, bool active,
         return targeted;
     }
     if (!mountpoint.isEmpty()) {
-        bool targeted = false;
+        auto targeted = false;
         for (uint8_t id = 1; id <= 2; ++id) {
             if (!serverMatchesMountpoint(service, id, mountpoint)) continue;
             setStreamServerState(service, id, active, mountpoint);
@@ -121,7 +121,7 @@ void BackendAgent::recordCommandResult(const String &command, const String &sour
     doc["timestamp"] = epochString().toInt();
     lastCommandResult_.clear();
     serializeJson(doc, lastCommandResult_);
-    const bool saved = saveStatePreferences();
+    const auto saved = saveStatePreferences();
     Serial.printf("[BACKEND][CMD] %s id=%s source=%s status=%s; NVS=%s\n",
                   command.c_str(), commandId.c_str(), source.c_str(), status.c_str(),
                   saved ? "OK" : "LOI");
@@ -140,7 +140,7 @@ void BackendAgent::publishConfigState(const char *kind) {
     }
     String output;
     serializeJson(doc, output);
-    const String topic = String("pi/devices/") + serialNumber_ + "/" + kind;
+    const auto topic = String("pi/devices/") + serialNumber_ + "/" + kind;
     mqtt.publish(topic.c_str(), output.c_str(), true);
 }
 
@@ -151,14 +151,14 @@ void BackendAgent::applyServiceStreamCommand(JsonObject payload) {
         serviceDoc.to<JsonObject>();
     }
     JsonObject service = serviceDoc.as<JsonObject>();
-    const bool active = payload["active"] | false;
-    String mountpoint = normalizedStreamValue(payload["mountpoint"] | String(), true);
-    String address = payload["address"] | String();
+    const auto active = payload["active"] | false;
+    auto mountpoint = normalizedStreamValue(payload["mountpoint"] | String(), true);
+    auto address = payload["address"] | String();
     if (address.isEmpty()) address = payload["caster_host"] | String();
     if (address.isEmpty()) address = payload["ip"] | String();
     if (address.isEmpty()) address = payload["host"] | String();
     address = normalizedStreamValue(address, false);
-    const int serverId = streamServerId(payload);
+    const auto serverId = streamServerId(payload);
 
     if (!applyTargetedStreamState(service, serverId, active, address, mountpoint))
         applyGlobalStreamState(service, active, mountpoint);
@@ -184,14 +184,14 @@ bool BackendAgent::applyLockCommand(JsonObjectConst payload, String &error) {
     }
 
     int serverIds[2] = {};
-    size_t count = 0;
+    auto count = 0;
     uint8_t seen = 0;
     for (JsonVariantConst id : ids) {
         if (!id.is<int>() || id.as<int>() < 1 || id.as<int>() > 2) {
             error = "payload.locked_servers must contain only server IDs 1 or 2";
             return false;
         }
-        const int serverId = id.as<int>();
+        const auto serverId = id.as<int>();
         const auto bit = static_cast<uint8_t>(1U << (serverId - 1));
         if ((seen & bit) == 0 && count < 2) {
             serverIds[count++] = serverId;
@@ -216,12 +216,12 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
     }
     uint8_t decoded[3072] = {};
     for (JsonVariant item : commands) {
-        const String encoded = item.as<String>();
+        const auto encoded = item.as<String>();
         if (encoded.isEmpty() || encoded.length() > 4096) {
             error = "invalid raw command item";
             return false;
         }
-        size_t length = decodeBase64(encoded, decoded, sizeof(decoded));
+        auto length = decodeBase64(encoded, decoded, sizeof(decoded));
         if (length == 0) {
             error = "raw command is not valid base64";
             return false;
@@ -233,7 +233,7 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
         }
         if (sensorType == "Unicorecomm") length = routeUnicoreOutput(decoded, length, GNSS_UNICORE_PORT);
         else if (sensorType == "Ublox") GnssCmdBuilder::routeUbloxOutput(decoded, length);
-        const bool unicore = sensorType == "Unicorecomm" || (sensorType.isEmpty() && sensorType_ == "Unicorecomm");
+        const auto unicore = sensorType == "Unicorecomm" || (sensorType.isEmpty() && sensorType_ == "Unicorecomm");
         if (unicore) {
             if (!writeUnicoreCommand(decoded, length, error)) return false;
             continue;
@@ -261,9 +261,9 @@ void BackendAgent::handleCommand(const String &source, const String &message) {
         return;
     }
 
-    const String command = doc["command"] | String();
+    const auto command = doc["command"] | String();
     const JsonObject payload = doc["payload"].as<JsonObject>();
-    String commandId = doc["command_id"] | String();
+    auto commandId = doc["command_id"] | String();
     if (commandId.isEmpty() && !payload.isNull()) commandId = payload["command_id"] | String();
     if (commandId.isEmpty()) commandId = String("esp32-") + String(millis());
     Serial.printf("[BACKEND][CMD] Nhan command=%s id=%s qua %s.\n",
@@ -274,7 +274,7 @@ void BackendAgent::handleCommand(const String &source, const String &message) {
         return;
     }
 
-    const bool allowed = command == "LOCK_DEVICE" || command == "UNLOCK_DEVICE"
+    const auto allowed = command == "LOCK_DEVICE" || command == "UNLOCK_DEVICE"
         || command == "PROVISION_DEVICE" || command == "DEPLOY_LICENSE"
         || command == "TRIGGER_AUTO_BASE" || command == "TRIGGER_BASE_REFERENCE_CHECK"
         || command == "STOP_AUTO_BASE" || command == "APPLY_VN2000_PROVINCE"
@@ -304,7 +304,7 @@ void BackendAgent::handleCommand(const String &source, const String &message) {
 
 bool BackendAgent::executeLicenseCommand(JsonObject payload, String &error,
                                          String &detail, bool &restartAfterCommand) {
-    const String license = payload["license_key"] | String();
+    const auto license = payload["license_key"] | String();
     if (license.isEmpty()) {
         Serial.println("[BACKEND][LICENSE] Lenh DEPLOY_LICENSE khong co license_key.");
         error = "missing payload.license_key";
@@ -315,11 +315,11 @@ bool BackendAgent::executeLicenseCommand(JsonObject payload, String &error,
         return false;
     }
     Serial.println("[BACKEND][LICENSE] Da nhan license_key (khong in noi dung key).");
-    const String previousToken = licenseToken_;
-    const bool previousValid = licenseValid_;
+    const auto previousToken = licenseToken_;
+    const auto previousValid = licenseValid_;
     licenseToken_ = license;
     licenseValid_ = true;
-    const bool saved = saveStatePreferences();
+    const auto saved = saveStatePreferences();
     Serial.printf("[BACKEND][LICENSE] Kiem tra: %s; luu NVS: %s.\n",
                   licenseValid_ ? "HOP LE" : "KHONG HOP LE",
                   saved ? "THANH CONG" : "THAT BAI");
@@ -389,8 +389,8 @@ bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload,
                                      String &error, String &detail) {
     JsonArray commands = payload["commands_b64"].as<JsonArray>();
     const JsonObject originalConfig = doc["original_config"].as<JsonObject>();
-    const bool configuringBase = String(originalConfig["mode"] | "") == "BASE";
-    const String sensorType = originalConfig["sensor_type"] | sensorType_;
+    const auto configuringBase = String(originalConfig["mode"] | "") == "BASE";
+    const auto sensorType = originalConfig["sensor_type"] | sensorType_;
     if (workflowActive()) {
         requestWorkflowStop();
         const uint32_t stopWaitMs = millis();
@@ -435,9 +435,9 @@ bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload,
 
 bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
                                           String &detail) {
-    const String sensorType = payload["sensor_type"] | sensorType_;
-    const int requestedPort = payload["port"] | 0;
-    const bool hasConnection = !String(payload["ip"] | String()).isEmpty()
+    const auto sensorType = payload["sensor_type"] | sensorType_;
+    const auto requestedPort = payload["port"] | 0;
+    const auto hasConnection = !String(payload["ip"] | String()).isEmpty()
         && !String(payload["user"] | String()).isEmpty()
         && !String(payload["password"] | String()).isEmpty()
         && !String(payload["mountpoint"] | String()).isEmpty()
@@ -477,11 +477,11 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
 bool BackendAgent::executeReferenceCheckCommand(JsonObject payload, String &error,
                                                 String &detail) {
     const JsonObject reference = payload["reference_coords"].as<JsonObject>();
-    const int requestedPort = payload["port"] | 0;
-    const bool validReference = !reference.isNull()
+    const auto requestedPort = payload["port"] | 0;
+    const auto validReference = !reference.isNull()
         && !reference["lat"].isNull() && !reference["lon"].isNull()
         && !reference["alt"].isNull();
-    const bool hasConnection = !String(payload["ip"] | String()).isEmpty()
+    const auto hasConnection = !String(payload["ip"] | String()).isEmpty()
         && !String(payload["user"] | String()).isEmpty()
         && !String(payload["password"] | String()).isEmpty()
         && !String(payload["mountpoint"] | String()).isEmpty()
@@ -508,21 +508,21 @@ bool BackendAgent::executeReferenceCheckCommand(JsonObject payload, String &erro
 
 bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
                                           String &detail) {
-    String province = payload["province_code"] | String();
+    auto province = payload["province_code"] | String();
     province.toUpperCase();
     double centralMeridianDeg = 0.0;
     double scale = 0.0;
     String provinceName;
     DynamicJsonDocument baseDoc(CONFIG_DOCUMENT_SIZE);
-    const bool baseParsed = deserializeJson(baseDoc, baseConfig_) == DeserializationError::Ok
+    const auto baseParsed = deserializeJson(baseDoc, baseConfig_) == DeserializationError::Ok
         && baseDoc.is<JsonObject>();
     JsonObject base = baseDoc.as<JsonObject>();
     JsonObject rawCoordinates = base["auto_base_raw_itrf_llh"].as<JsonObject>();
     if (rawCoordinates.isNull()) rawCoordinates = base["coords"].as<JsonObject>();
     if (rawCoordinates.isNull()) rawCoordinates = base;
-    const double rawLatitude = rawCoordinates["lat"] | NAN;
-    const double rawLongitude = rawCoordinates["lon"] | NAN;
-    const double rawAltitude = rawCoordinates["alt"] | NAN;
+    const auto rawLatitude = rawCoordinates["lat"] | NAN;
+    const auto rawLongitude = rawCoordinates["lon"] | NAN;
+    const auto rawAltitude = rawCoordinates["alt"] | NAN;
     double localLatitude = rawLatitude;
     double localLongitude = rawLongitude;
     double localAltitude = rawAltitude;
@@ -536,7 +536,7 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
         error = "invalid province_code";
         return false;
     }
-    const bool validCoordinates = baseParsed && std::isfinite(rawLatitude)
+    const auto validCoordinates = baseParsed && std::isfinite(rawLatitude)
         && std::isfinite(rawLongitude) && std::isfinite(rawAltitude)
         && transformToVn2000(rawLatitude, rawLongitude, rawAltitude,
                               centralMeridianDeg, scale, localLatitude,
@@ -587,7 +587,7 @@ bool BackendAgent::executeBasicCommand(const String &command, JsonObject payload
         return true;
     }
     if (command != "PROVISION_DEVICE") return false;
-    const String name = payload["name"] | String();
+    const auto name = payload["name"] | String();
     if (name.isEmpty()) {
         error = "missing payload.name";
         return false;
@@ -640,7 +640,7 @@ void BackendAgent::finishCommand(const String &source, const String &command,
                                  const String &commandId, bool success,
                                  const String &error, const String &detail,
                                  bool restartAfterCommand) {
-    const bool workflowState = command == "TRIGGER_AUTO_BASE"
+    const auto workflowState = command == "TRIGGER_AUTO_BASE"
         || command == "TRIGGER_BASE_REFERENCE_CHECK"
         || (command == "STOP_AUTO_BASE" && workflowActive());
     if (success && command != "REBOOT_DEVICE" && command != "DELETE_DEVICE"
@@ -664,9 +664,9 @@ void BackendAgent::executeCommand(const String &source, const String &command,
                                   JsonObject payload) {
     setAgentState("configuring");
     String error;
-    bool success = true;
+    auto success = true;
     String detail;
-    bool restartAfterCommand = false;
+    auto restartAfterCommand = false;
 
     if (command == "LOCK_DEVICE" || command == "UNLOCK_DEVICE"
         || command == "PROVISION_DEVICE") {

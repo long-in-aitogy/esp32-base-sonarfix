@@ -164,8 +164,8 @@ namespace UbloxCommands {
     {
         if (!strcmp(message, "1005"))
             return true;
-        const bool msm4 = o.msmLevel == MsmLevel::Msm4 || o.msmLevel == MsmLevel::Both;
-        const bool msm7 = o.msmLevel == MsmLevel::Msm7 || o.msmLevel == MsmLevel::Both;
+        const auto msm4 = o.msmLevel == MsmLevel::Msm4 || o.msmLevel == MsmLevel::Both;
+        const auto msm7 = o.msmLevel == MsmLevel::Msm7 || o.msmLevel == MsmLevel::Both;
         if (!strcmp(message, "1074"))
             return msm4 && o.gps;
         if (!strcmp(message, "1084"))
@@ -201,7 +201,7 @@ namespace UbloxCommands {
     Command buildOutputConfigCommand(const GnssOptions &options)
     {
         const GnssOptions o = normalizeGnssOptions(options);
-        const bool diagnostics = o.outputMode != OutputMode::RtcmOnly;
+        const auto diagnostics = o.outputMode != OutputMode::RtcmOnly;
         std::vector<std::pair<uint32_t, bool>> entries;
         constexpr std::array<PortKeys, 3> protocols = {{
             {0x10740001, 0x10760001, 0x10780001},
@@ -237,7 +237,7 @@ namespace UbloxCommands {
         for (const auto &id : ids)
             for (uint8_t level : {(uint8_t)4, (uint8_t)7})
             {
-                const bool enabled = id.constellation && (o.msmLevel == MsmLevel::Both || static_cast<uint8_t>(o.msmLevel) == level);
+                const auto enabled = id.constellation && (o.msmLevel == MsmLevel::Both || static_cast<uint8_t>(o.msmLevel) == level);
                 Command packet = ubxCfgMsg(0xF5, level == 4 ? id.msm4 : id.msm7, enabled ? o.ports : std::vector<String>{}, enabled ? 1 : 0);
                 command.insert(command.end(), packet.begin(), packet.end());
             }
@@ -278,7 +278,7 @@ namespace UbloxCommands {
 
     bool processUbloxPacket(uint8_t *packet, size_t remaining)
     {
-        const size_t payloadLength = packet[4] | (static_cast<size_t>(packet[5]) << 8);
+        const auto payloadLength = packet[4] | (static_cast<size_t>(packet[5]) << 8);
         if (payloadLength + 8 > remaining) return false;
         if (packet[2] == 0x06 && packet[3] == 0x8A && payloadLength >= 4) {
             if (!remapValsetEntries(packet, payloadLength)) return false;
@@ -299,10 +299,10 @@ namespace UbloxCommands {
 
     void routeUbloxOutput(uint8_t *data, size_t length)
     {
-        size_t offset = 0;
+        auto offset = 0;
         while (offset + 8 <= length && data[offset] == 0xB5 && data[offset + 1] == 0x62) {
             if (!processUbloxPacket(data + offset, length - offset)) return;
-            const size_t payloadLength = std::to_integer<size_t>(
+            const auto payloadLength = std::to_integer<size_t>(
                 static_cast<std::byte>(data[offset + 4]))
                 | (std::to_integer<size_t>(static_cast<std::byte>(data[offset + 5])) << 8);
             offset += payloadLength + 8;
@@ -348,8 +348,8 @@ namespace UbloxCommands {
 
     CommandList buildBaseRtcmOutputCommand(const String &message, const String &port, bool enabled) {
 
-        String normalizedMessage = message;
-        String normalizedPort = port;
+        auto normalizedMessage = message;
+        auto normalizedPort = port;
         normalizedMessage.trim();
         normalizedMessage.toUpperCase();
         normalizedPort.trim();
@@ -375,7 +375,7 @@ namespace UbloxCommands {
     }
 
     CommandList buildBaseAllRtcmOutputCommand(const String &port, bool enabled) {
-        String normalizedPort = port;
+        auto normalizedPort = port;
         normalizedPort.trim();
         normalizedPort.toUpperCase();
 

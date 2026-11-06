@@ -73,7 +73,7 @@ bool migrateBackendPreferences() {
     if (!backendPrefs.begin(BACKEND_PREFS_NAMESPACE, false, BACKEND_PREFS_PARTITION)) {
         return false;
     }
-    const bool alreadyMigrated = backendPrefs.isKey("MIGRATED");
+    const auto alreadyMigrated = backendPrefs.isKey("MIGRATED");
     backendPrefs.end();
     if (alreadyMigrated) return true;
 
@@ -85,7 +85,7 @@ bool migrateBackendPreferences() {
 
     auto copyString = [](const char *key) {
         if (!prefs.isKey(key)) return true;
-        const String value = prefs.getString(key);
+        const auto value = prefs.getString(key);
         return backendPrefs.putString(key, value) == value.length();
     };
     auto copyBool = [](const char *key) {
@@ -93,7 +93,7 @@ bool migrateBackendPreferences() {
         return backendPrefs.putBool(key, prefs.getBool(key)) == 1;
     };
 
-    bool migrated = true;
+    auto migrated = true;
     migrated &= copyString("DEVICE_SERIAL");
     migrated &= copyString("DEVICE_NAME");
     migrated &= copyString("SENSOR_TYPE");
@@ -117,7 +117,7 @@ bool migrateBackendPreferences() {
 
 String readPreference(const char *key, const String &fallback) {
     prefs.begin("myPrefs", true);
-    const String value = prefs.isKey(key) ? prefs.getString(key) : fallback;
+    const auto value = prefs.isKey(key) ? prefs.getString(key) : fallback;
     prefs.end();
     return value;
 }
@@ -140,7 +140,7 @@ bool jsonBool(JsonObjectConst object, const String &key, bool fallback) {
         return value.as<bool>();
     }
     if (value.is<const char *>()) {
-        const String text = value.as<const char *>();
+        const String text = value.as<String>();
         if (text.equalsIgnoreCase("true") || text == "1" || text.equalsIgnoreCase("on")) {
             return true;
         }
@@ -233,15 +233,15 @@ int base64Value(char c) {
 }
 
 size_t decodeBase64(const String &encoded, uint8_t *output, size_t outputCapacity) {
-    int value = 0;
-    int bits = -8;
-    size_t outputLength = 0;
+    auto value = 0;
+    auto bits = -8;
+    auto outputLength = 0;
     for (size_t i = 0; i < encoded.length(); ++i) {
-        const char c = encoded[i];
+        const auto c = encoded[i];
         if (c == '=') {
             break;
         }
-        const int decoded = base64Value(c);
+        const auto decoded = base64Value(c);
         if (decoded < 0) {
             if (c == '\r' || c == '\n' || c == ' ' || c == '\t') {
                 continue;
@@ -280,16 +280,16 @@ bool delayMarker(const uint8_t *data, size_t length, uint32_t &delayMs) {
 }
 
 String licenseCodeFromBase(const String &base) {
-    const int length = static_cast<int>(base.length());
+    const auto length = static_cast<int>(base.length());
     if (length < 2 || length > 31) return String();
 
     std::vector<int> parts(static_cast<size_t>(length), 0);
     std::vector<double> smoothed(static_cast<size_t>(length) + 1U, 0.0);
-    double number = atof(base.c_str());
+    auto number = atof(base.c_str());
     if (!std::isfinite(number)) return String();
 
     number *= length;
-    int remainingDigits = length;
+    auto remainingDigits = length;
     parts[0] = static_cast<int>(number * pow(10.0, -static_cast<double>(remainingDigits)));
     for (int index = 1; index < length; ++index) {
         number -= static_cast<double>(parts[index - 1])
@@ -298,18 +298,18 @@ String licenseCodeFromBase(const String &base) {
         parts[index] = static_cast<int>(number * pow(10.0, -static_cast<double>(remainingDigits)));
     }
     // Keep the averaged final part in floating point; truncation changes the license code.
-    const double finalPart = (parts[length - 2] + parts[length - 1]) / 2.0 + 1.0;
+    const auto finalPart = (parts[length - 2] + parts[length - 1]) / 2.0 + 1.0;
     smoothed[0] = static_cast<double>(parts[0]);
 
     String output;
     output.reserve(static_cast<size_t>(length) * 2U);
-    const double logarithm = log10(finalPart);
+    const auto logarithm = log10(finalPart);
     for (int index = 0; index < length; ++index) {
-        const double nextPart = index + 1 == length
+        const auto nextPart = index + 1 == length
             ? finalPart : static_cast<double>(parts[index + 1]);
         smoothed[index + 1] = (smoothed[index] + nextPart) / 2.0;
-        const double first = smoothed[index + 1] * exp(-0.2);
-        const double second = logarithm * pow(nextPart, 0.2);
+        const auto first = smoothed[index + 1] * exp(-0.2);
+        const auto second = logarithm * pow(nextPart, 0.2);
         // Use round-to-nearest, ties-to-even under the default rounding mode.
         output += String(static_cast<long>(std::nearbyint(first + second)));
     }
@@ -317,11 +317,11 @@ String licenseCodeFromBase(const String &base) {
 }
 
 String licenseBaseForSerial(const String &serial) {
-    const int start = serial.length() > 10
+    const auto start = serial.length() > 10
         ? static_cast<int>(serial.length() - 10U) : 0;
     String base;
     for (int index = start; index < static_cast<int>(serial.length()); ++index) {
-        char character = serial[static_cast<unsigned int>(index)];
+        auto character = serial[static_cast<unsigned int>(index)];
         if (character >= 'a' && character <= 'z') character -= 'a' - 'A';
         base += String(static_cast<int>(static_cast<unsigned char>(character)));
     }
@@ -379,7 +379,7 @@ void BackendAgent::loadPreferences() {
     Preferences &statePrefs = backendPreferences();
 
     serialNumber_ = statePrefs.getString("DEVICE_SERIAL", String());
-    bool serialNeedsSave = false;
+    auto serialNeedsSave = false;
     if (serialNumber_.isEmpty()) {
         uint64_t mac = 0;
 #if !defined(NATIVE_BUILD)
@@ -412,8 +412,8 @@ void BackendAgent::loadPreferences() {
     const uint32_t bootCounter = static_cast<uint32_t>(prefs.getInt("RSTRT_COUNT", 0));
     prefs.end();
     if (serialNeedsSave) {
-        const bool opened = beginBackendPreferences(false);
-        const bool saved = opened
+        const auto opened = beginBackendPreferences(false);
+        const auto saved = opened
             && backendPreferences().putString("DEVICE_SERIAL", serialNumber_) == serialNumber_.length();
         if (opened) backendPreferences().end();
         Serial.printf("[BACKEND] Serial %s: %s\n", serialNumber_.c_str(), saved ? "da luu NVS" : "LOI luu NVS");
@@ -440,10 +440,10 @@ void BackendAgent::ensureDefaultServiceConfig() {
     }
 
     prefs.begin("myPrefs", true);
-    const String host = prefs.getString("NTRIP_SERVER", String(NTRIP_CASTER_ADDRESS));
+    const auto host = prefs.getString("NTRIP_SERVER", String(NTRIP_CASTER_ADDRESS));
     const uint16_t port = prefs.getUShort("NTRIP_PORT", NTRIP_CASTER_PORT);
-    String mountpoint = prefs.getString("NTRIP_MPT", String(NTRIP_MOUNTPOINT));
-    const String password = prefs.getString("NT_AUTH_BS", String(NTRIP_AUTH_BASE_STATION));
+    auto mountpoint = prefs.getString("NTRIP_MPT", String(NTRIP_MOUNTPOINT));
+    const auto password = prefs.getString("NT_AUTH_BS", String(NTRIP_AUTH_BASE_STATION));
     prefs.end();
     while (mountpoint.startsWith("/")) mountpoint.remove(0, 1);
 
@@ -484,7 +484,7 @@ bool BackendAgent::saveStatePreferences() {
         Serial.printf("[BACKEND][NVS] Open failed: %s (0x%x)\n", esp_err_to_name(opened), opened);
         return false;
     }
-    bool saved = true;
+    auto saved = true;
     const auto check = [&](const char *key, esp_err_t error) {
         if (error != ESP_OK) {
             Serial.printf("[BACKEND][NVS] Write %s failed: %s (0x%x)\n", key, esp_err_to_name(error), error);
@@ -642,12 +642,12 @@ bool BackendAgent::effectiveStreamActive(const JsonObjectConst &service,
                                          uint8_t serverId,
                                          bool failOpen) {
     if (serverId < 1 || serverId > 2) return false;
-    const String prefix = String("server") + String(serverId);
-    const bool enabled = jsonBool(service, prefix + "_enabled", false);
+    const auto prefix = String("server") + String(serverId);
+    const auto enabled = jsonBool(service, prefix + "_enabled", false);
     if (!enabled) return false;
-    const bool globalOnDemand = jsonBool(service, "stream_on_demand", false);
-    const bool onDemand = jsonBool(service, prefix + "_stream_on_demand", globalOnDemand);
-    const bool active = jsonBool(service, prefix + "_stream_active",
+    const auto globalOnDemand = jsonBool(service, "stream_on_demand", false);
+    const auto onDemand = jsonBool(service, prefix + "_stream_on_demand", globalOnDemand);
+    const auto active = jsonBool(service, prefix + "_stream_active",
                                  jsonBool(service, "stream_active", !onDemand));
     return failOpen || !onDemand || active;
 }
@@ -670,9 +670,9 @@ void BackendAgent::publishStatus(bool force) {
     if (statusSequence_ == 0) controlPlaneArmedMs_ = millis();
     lastStatusMs_ = millis();
     ++statusSequence_;
-    const String payload = buildStatusPayload();
+    const auto payload = buildStatusPayload();
     if (mqttConnected()) {
-        const bool sent = mqtt.publish(statusTopic().c_str(), payload.c_str(), true);
+        const auto sent = mqtt.publish(statusTopic().c_str(), payload.c_str(), true);
         if (!sent || !statusPublishConfirmed_) {
             Serial.printf("[BACKEND][MQTT] STATUS %s topic=%s bytes=%u\n",
                           sent ? "SENT" : "FAILED", statusTopic().c_str(),
@@ -747,7 +747,7 @@ void BackendAgent::enqueueRtcm(const uint8_t *data, size_t length) {
 void BackendAgent::drainDataQueues() {
     NmeaPacket nmea;
     while (nmeaQueue_ && xQueueReceive(nmeaQueue_, &nmea, 0) == pdTRUE) {
-        bool delivered = false;
+        auto delivered = false;
         if (mqttConnected()) {
             delivered = mqtt.publish(rawDataTopic().c_str(), nmea.data, nmea.length);
         }
@@ -787,11 +787,11 @@ void BackendAgent::drainDataQueues() {
 void BackendAgent::setupWebsocket() {
 #if BACKEND_WEBSOCKET_ENABLED
     if (!websocket_) return;
-    const String host = readPreference("BACKEND_HOST", BACKEND_HOST);
+    const auto host = readPreference("BACKEND_HOST", BACKEND_HOST);
     prefs.begin("myPrefs", true);
     const uint16_t port = prefs.getUShort("BACKEND_PORT", BACKEND_WEBSOCKET_PORT);
     prefs.end();
-    const String path = String("/ws/pi/") + serialNumber_
+    const auto path = String("/ws/pi/") + serialNumber_
         + (licenseToken_.isEmpty() ? String() : String("?token=") + urlEncode(licenseToken_));
     if (isWifiConnection()) {
         websocket_->begin(host, port, path, backendWebsocketWifiClient);
@@ -824,10 +824,10 @@ void BackendAgent::evaluateControlPlaneFailover() {
     if (statusSequence_ <= 0) return;
 
     const uint32_t now = millis();
-    const bool mqttStale = lastMqttAckMs_ == 0
+    const auto mqttStale = lastMqttAckMs_ == 0
         ? now - controlPlaneArmedMs_ >= BACKEND_CONTROL_STALE_MS
         : now - lastMqttAckMs_ >= BACKEND_CONTROL_STALE_MS;
-    const bool websocketStale = lastWebsocketAckMs_ == 0
+    const auto websocketStale = lastWebsocketAckMs_ == 0
         ? now - controlPlaneArmedMs_ >= BACKEND_CONTROL_STALE_MS
         : now - lastWebsocketAckMs_ >= BACKEND_CONTROL_STALE_MS;
 
@@ -842,7 +842,7 @@ void BackendAgent::evaluateControlPlaneFailover() {
     }
 
     if (controlPlaneFailOpen_) {
-        const bool freshAck = (lastMqttAckSequence_ > failOpenEntrySequence_)
+        const auto freshAck = (lastMqttAckSequence_ > failOpenEntrySequence_)
             || (lastWebsocketAckSequence_ > failOpenEntrySequence_);
         if (freshAck && (!mqttStale || !websocketStale)) {
             if (recoveryStartedMs_ == 0) recoveryStartedMs_ = now;

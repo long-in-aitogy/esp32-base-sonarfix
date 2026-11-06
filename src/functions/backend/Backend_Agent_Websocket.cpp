@@ -70,7 +70,7 @@ void BackendAgentWebsocket::loop() {
 
     uint8_t chunk[256];
     while (client_->available() > 0) {
-        const int count = client_->read(chunk, sizeof(chunk));
+        const auto count = client_->read(chunk, sizeof(chunk));
         if (count <= 0) {
             break;
         }
@@ -103,9 +103,9 @@ bool BackendAgentWebsocket::sendText(const String &text) {
         return false;
     }
 
-    const size_t length = text.length();
+    const auto length = text.length();
     uint8_t header[10] = {};
-    size_t headerLength = 2;
+    auto headerLength = 2;
     header[0] = 0x81; // FIN + text frame
     if (length < 126) {
         header[1] = static_cast<uint8_t>(0x80 | length);
@@ -142,7 +142,7 @@ bool BackendAgentWebsocket::sendText(const String &text) {
 
     uint8_t maskedChunk[256] = {};
     for (size_t offset = 0; offset < length; offset += sizeof(maskedChunk)) {
-        const size_t chunkLength = min(sizeof(maskedChunk), length - offset);
+        const auto chunkLength = min(sizeof(maskedChunk), length - offset);
         for (size_t i = 0; i < chunkLength; ++i) {
             maskedChunk[i] = static_cast<uint8_t>(text[offset + i])
                 ^ maskBytes[(offset + i) & 3];
@@ -164,7 +164,7 @@ void BackendAgentWebsocket::connectNow() {
     }
 
     // RFC6455 requires this header to decode to exactly 16 random bytes.
-    const String key = websocketNonce();
+    const auto key = websocketNonce();
     client_->print(String("GET ") + path_ + " HTTP/1.1\r\n"
                    + "Host: " + host_ + ":" + String(port_) + "\r\n"
                    + "Upgrade: websocket\r\n"
@@ -176,7 +176,7 @@ void BackendAgentWebsocket::connectNow() {
     const uint32_t deadline = millis() + 5000UL;
     while (millis() < deadline && response.length() < 4096) {
         while (client_->available() > 0) {
-            const int byte = client_->read();
+            const auto byte = client_->read();
             if (byte < 0) break;
             response += static_cast<char>(byte);
             if (response.endsWith("\r\n\r\n")) {
@@ -206,9 +206,9 @@ void BackendAgentWebsocket::connectNow() {
 bool BackendAgentWebsocket::readFrame(uint8_t &opcode, String &payload) {
     const uint8_t first = rx_[0];
     const uint8_t second = rx_[1];
-    const bool masked = (second & 0x80) != 0;
+    const auto masked = (second & 0x80) != 0;
     uint64_t payloadLength = second & 0x7F;
-    size_t headerLength = 2;
+    auto headerLength = 2;
 
     if (payloadLength == 126) {
         if (rx_.size() < 4) return false;

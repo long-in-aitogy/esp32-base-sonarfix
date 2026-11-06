@@ -22,7 +22,7 @@ void BackendAgent::saveSurveyResult(JsonObjectConst bestPosition, const String &
 
 bool BackendAgent::refreshUbloxReadback(String &error) {
     UbxBaseStatus status;
-    const bool success = UbloxReadback::readBaseStatus(status, error);
+    const auto success = UbloxReadback::readBaseStatus(status, error);
     DynamicJsonDocument doc(1536);
     doc["state"] = success ? "ok" : "error";
     doc["chip"] = "Ublox";
@@ -102,7 +102,7 @@ void BackendAgent::appendUbloxPosition(DynamicJsonDocument &doc,
 
 bool BackendAgent::refreshUnicoreReadback(String &error) {
     String mode;
-    const bool success = UnicoreReadback::readMode(mode, error);
+    const auto success = UnicoreReadback::readMode(mode, error);
     DynamicJsonDocument readbackDoc(1024);
     readbackDoc["state"] = success ? "ok" : "error";
     readbackDoc["chip"] = "Unicorecomm";
@@ -117,7 +117,7 @@ bool BackendAgent::refreshUnicoreReadback(String &error) {
                 surveyInStartedMs_ = 0;
                 surveyInTargetSeconds_ = 0;
             }
-            unsigned long target = 0;
+            auto target = 0;
             if (std::sscanf(mode.c_str(), "MODE BASE TIME %lu", &target) == 1)
                 surveyInTargetSeconds_ = target;
         } else {

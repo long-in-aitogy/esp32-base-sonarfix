@@ -5,7 +5,7 @@
 namespace {
 
 size_t checksumMarker(const char *line, size_t length) {
-    size_t marker = length;
+    auto marker = length;
     while (marker > 0 && line[marker - 1] != '*') --marker;
     return marker == 0 ? length : marker - 1;
 }
@@ -20,7 +20,7 @@ inline int hexValue(char c) {
 bool readExpectedChecksum(
     const char *line, size_t marker, size_t length, uint32_t &expected) {
     for (size_t i = marker + 1; i < length; ++i) {
-        const int value = hexValue(line[i]);
+        const auto value = hexValue(line[i]);
         if (value < 0) return false;
         expected = (expected << 4) | static_cast<uint32_t>(value);
     }
@@ -45,9 +45,9 @@ uint32_t calculateChecksum(
 
 bool validUnicoreLogChecksum(const char *line, size_t length) {
     if (!line || length < 4 || line[0] != '#') return false;
-    const size_t star = checksumMarker(line, length);
+    const auto star = checksumMarker(line, length);
     if (star == length) return false;
-    const size_t digits = length - star - 1;
+    const auto digits = length - star - 1;
     if (digits != 2 && digits != 8) return false;
     uint32_t expected = 0;
     if (!readExpectedChecksum(line, star, length, expected)) return false;

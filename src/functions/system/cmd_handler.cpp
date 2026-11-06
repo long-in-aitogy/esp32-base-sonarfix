@@ -15,7 +15,7 @@ namespace cmd_helper {
 
     void printGnssResponse(const uint8_t *data, size_t length)
     {
-        bool printable = length > 0;
+        auto printable = length > 0;
         for (size_t i = 0; i < length; ++i) {
             if (data[i] < 0x20 && data[i] != '\r' && data[i] != '\n' && data[i] != '\t') {
                 printable = false;
@@ -52,13 +52,13 @@ namespace cmd_helper {
         constexpr uint32_t RESPONSE_IDLE_MS = 80;
         constexpr size_t RESPONSE_BUFFER_SIZE = 512;
         uint8_t response[RESPONSE_BUFFER_SIZE] = {};
-        size_t length = 0;
+        auto length = 0;
         uint32_t lastByteAt = millis();
         const uint32_t startedAt = millis();
 
         while (millis() - startedAt < RESPONSE_TIMEOUT_MS) {
             while (Serial1.available() > 0) {
-                const int value = Serial1.read();
+                const auto value = Serial1.read();
                 if (length < RESPONSE_BUFFER_SIZE) {
                     response[length++] = static_cast<uint8_t>(value);
                 }
@@ -151,12 +151,12 @@ namespace cmd_helper {
 std::vector<String> splitCommand(const String &command) {
     std::vector<String> cmdWords;
 
-    int start = 0;
-    const int commandLength = command.length();
+    auto start = 0;
+    const auto commandLength = command.length();
 
     while (start <= commandLength) {
-        const int end = command.indexOf(' ', start);
-        String word = end == -1 ? command.substring(start) : command.substring(start, end);
+        const auto end = command.indexOf(' ', start);
+        auto word = end == -1 ? command.substring(start) : command.substring(start, end);
         word.trim();
 
         if (!word.isEmpty()) {
@@ -179,7 +179,7 @@ cmd_action_t handleGnssBaseCommand(const std::vector<String> &cmdWords) {
     options.outputMode = GnssCmdBuilder::OutputMode::RtcmOnly;
     GnssCmdBuilder::CommandList commands;
     prefs.begin("myPrefs", true);
-    const String configuredSensorType = prefs.isKey("GNSS_MDL_TYPE")
+    const auto configuredSensorType = prefs.isKey("GNSS_MDL_TYPE")
         ? prefs.getString("GNSS_MDL_TYPE")
         : "UBLOX";
     const GnssCmdBuilder::GnssSensorType sensorType =
@@ -203,7 +203,7 @@ cmd_action_t handleGnssBaseCommand(const std::vector<String> &cmdWords) {
             return CMD_ACTION_NONE;
         }
         if (cmdWords.size() == 4) {
-            String outputMode = cmdWords[3];
+            auto outputMode = cmdWords[3];
             outputMode.toUpperCase();
             if (outputMode != "W_DIAG") {
                 Serial.println("[MQTT COMMAND DOWNLINK] LOI - Tham so thu ba phai la W_DIAG.");
@@ -212,7 +212,7 @@ cmd_action_t handleGnssBaseCommand(const std::vector<String> &cmdWords) {
             options.outputMode = GnssCmdBuilder::OutputMode::DiagnosticsRtcm;
         }
         uint32_t duration = cmdWords[1].toInt();
-        float accuracy = cmdWords[2].toFloat();
+        auto accuracy = cmdWords[2].toFloat();
         
         commands = GnssCmdBuilder::buildBaseSurveyInCommand(duration, accuracy, sensorType, options);
         cmd_helper::sendGnssCommands(commands);
@@ -224,10 +224,10 @@ cmd_action_t handleGnssBaseCommand(const std::vector<String> &cmdWords) {
         if (!cmd_helper::hasExactArgumentCount(cmdWords, 5, "GNSS BASE FIXED")) {
             return CMD_ACTION_NONE;
         }
-        double lat = cmdWords[1].toDouble();
-        double lon = cmdWords[2].toDouble();
-        double alt = cmdWords[3].toDouble();
-        float accuracy = cmdWords[4].toFloat();
+        auto lat = cmdWords[1].toDouble();
+        auto lon = cmdWords[2].toDouble();
+        auto alt = cmdWords[3].toDouble();
+        auto accuracy = cmdWords[4].toFloat();
 
         commands = GnssCmdBuilder::buildBaseFixedLlaCommand(lat, lon, alt, accuracy, sensorType, options);
         cmd_helper::sendGnssCommands(commands);
@@ -235,15 +235,15 @@ cmd_action_t handleGnssBaseCommand(const std::vector<String> &cmdWords) {
 
         return CMD_ACTION_NONE;
     } else if (cmdWords.size() == 3) {
-        String message = cmdWords[0];
+        auto message = cmdWords[0];
         message.toUpperCase();
-        String action = cmdWords[2];
+        auto action = cmdWords[2];
         action.toUpperCase();
         if (action != "ON" && action != "OFF") {
             Serial.println("[MQTT COMMAND DOWNLINK] LOI - Trang thai RTCM phai la ON hoac OFF.");
             return CMD_ACTION_NONE;
         }
-        const bool enabled = action == "ON";
+        const auto enabled = action == "ON";
         Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau " + action + " RTCM " + cmdWords[0] +
                        " tren cong " + cmdWords[1]);
         commands = message == "ALL"
@@ -272,7 +272,7 @@ cmd_action_t handleGnssSetCommand(const std::vector<String> &cmdWords) {
         return CMD_ACTION_NONE;
     }
 
-    String sensorType = cmdWords[2];
+    auto sensorType = cmdWords[2];
     sensorType.toUpperCase();
     if (sensorType != "UBLOX" && sensorType != "UNICORE") {
         Serial.println("[MQTT COMMAND DOWNLINK] LOI - Chip GNSS phai la UBLOX hoac UNICORE.");
@@ -313,7 +313,7 @@ cmd_action_t handleEspValueSet(const std::vector<String> &cmdWords) {
         {"4G APN", "APN"}, {"4G USER", "GPRS_USER"},
         {"4G PASS", "GPRS_PASS"}, {"BACKEND HOST", "BACKEND_HOST"},
     }};
-    const String setting = cmdWords[1] + " " + cmdWords[2];
+    const auto setting = cmdWords[1] + " " + cmdWords[2];
     const char *key = cmd_helper::findPreferenceKey(setting, settings.data(), settings.size());
     if (key != nullptr) {
         if (setting != "BACKEND HOST") {
@@ -322,7 +322,7 @@ cmd_action_t handleEspValueSet(const std::vector<String> &cmdWords) {
         return cmd_helper::saveStringPreference(key, cmdWords[3]);
     }
     if (setting != "BACKEND PORT") return CMD_ACTION_NONE;
-    const long port = cmdWords[3].toInt();
+    const auto port = cmdWords[3].toInt();
     if (port < 1 || port > 65535) {
         Serial.println("[BACKEND] Port must be 1..65535.");
         return CMD_ACTION_NONE;
@@ -404,7 +404,7 @@ cmd_action_t handleGnssCommand(std::vector<String> &cmdWords) {
         if (backendAgent.workflowActive()) {
             Serial.println("[GNSS ROVER][ERROR] Dung workflow hien tai truoc khi thu lai");
         } else {
-            const bool confirmed = backendAgent.applyRoverMode();
+            const auto confirmed = backendAgent.applyRoverMode();
             Serial.println(confirmed ? "[GNSS ROVER] Rover va GGA da xac nhan"
                                      : "[GNSS ROVER][ERROR] Chua xac nhan Rover/GGA");
         }

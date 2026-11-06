@@ -43,7 +43,7 @@ namespace {
 
   void waitForUm980Input()
   {
-    const unsigned long started = millis();
+    const auto started = millis();
     while (!Serial1.available() && millis() - started < 2000) delay(10);
   }
 
@@ -51,7 +51,7 @@ namespace {
   {
 #ifdef PROGRAM_DEBUG
     waitForUm980Input();
-    const String response = Serial1.readStringUntil('\n');
+    const auto response = Serial1.readStringUntil('\n');
     Serial.println("[NMEA CMD] Response: " + response);
 #endif
   }
@@ -80,10 +80,10 @@ namespace {
         continue;
       }
 
-      const size_t payloadLength =
+      const auto payloadLength =
           static_cast<size_t>(data[start + 4]) |
           (static_cast<size_t>(data[start + 5]) << 8);
-      const size_t frameLength = payloadLength + 8;
+      const auto frameLength = payloadLength + 8;
       // A MON-VER response contains SW (30 bytes) and HW (10 bytes), never an empty poll.
       if (payloadLength < 40 || frameLength > 512) continue;
       if (start + frameLength > length) {
@@ -108,12 +108,12 @@ namespace {
   bool receiveUbxFrame(uint32_t timeoutMs)
   {
     uint8_t buffer[512] = {};
-    size_t length = 0;
+    auto length = 0;
     const uint32_t start = millis();
 
     while (millis() - start < timeoutMs) {
       while (Serial1.available() > 0) {
-        const int value = Serial1.read();
+        const auto value = Serial1.read();
         if (length < sizeof(buffer)) {
           buffer[length++] = static_cast<uint8_t>(value);
         } else {
@@ -153,7 +153,7 @@ bool jsonBool(JsonObjectConst object, const String &key, bool fallback = false) 
     if (value.isNull()) return fallback;
     if (value.is<bool>()) return value.as<bool>();
     if (value.is<const char *>()) {
-        const String text = value.as<const char *>();
+        const String text = value.as<String>();
         if (text.equalsIgnoreCase("true") || text == "1" || text.equalsIgnoreCase("on")) return true;
         if (text.equalsIgnoreCase("false") || text == "0" || text.equalsIgnoreCase("off")) return false;
     }
@@ -189,8 +189,8 @@ LegacyNtripConfig loadLegacyNtripConfig() {
 
 String endpointHost(JsonObjectConst service, uint8_t index) {
     const auto suffix = String(index + 1);
-    const String generic = index == 0 ? "ip" : "ip2";
-    const String fallback = index == 0 ? jsonString(service, "host", String()) : String();
+    const auto generic = index == 0 ? "ip" : "ip2";
+    const auto fallback = index == 0 ? jsonString(service, "host", String()) : String();
     return jsonString(service, "serverhost" + suffix,
         jsonString(service, "server" + suffix + "_host",
             jsonString(service, "host" + suffix,
@@ -199,7 +199,7 @@ String endpointHost(JsonObjectConst service, uint8_t index) {
 
 uint16_t endpointPort(JsonObjectConst service, uint8_t index, uint16_t legacyPort) {
     const auto suffix = String(index + 1);
-    const String generic = index == 0 ? "port" : "port2";
+    const auto generic = index == 0 ? "port" : "port2";
     const uint16_t fallback = index == 0 ? legacyPort : 2101;
     return static_cast<uint16_t>(service["port" + suffix]
         | (service["serverport" + suffix] | (service[generic] | fallback)));
@@ -287,9 +287,9 @@ void normalizeEndpoint(NtripEndpoint &endpoint) {
 void loadEndpoint(NtripEndpoint &endpoint, uint8_t index, JsonObjectConst service,
                   bool hasServiceConfig, const LegacyNtripConfig &legacy) {
     const auto suffix = String(index + 1);
-    String genericUser = "user2";
-    String genericPassword = "password2";
-    String genericMountpoint = "mountpoint2";
+    auto genericUser = "user2";
+    auto genericPassword = "password2";
+    auto genericMountpoint = "mountpoint2";
     String legacyHost;
     String legacyMountpoint;
     String legacyPassword;
@@ -332,8 +332,8 @@ void loadEndpoint(NtripEndpoint &endpoint, uint8_t index, JsonObjectConst servic
 
 void loadEndpoints() {
     DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
-    const String serialized = backendAgent.serviceConfigJson();
-    const bool hasServiceConfig = deserializeJson(serviceDoc, serialized) == DeserializationError::Ok
+    const auto serialized = backendAgent.serviceConfigJson();
+    const auto hasServiceConfig = deserializeJson(serviceDoc, serialized) == DeserializationError::Ok
         && serviceDoc.is<JsonObject>();
     const JsonObjectConst service = serviceDoc.as<JsonObjectConst>();
 
@@ -367,7 +367,7 @@ bool waitForNtripResponse(Client &client, String *statusLine = nullptr) {
     const uint32_t deadline = millis() + 10000UL;
     while ((client.connected() || client.available() > 0) && millis() < deadline && response.length() < 4096) {
         while (client.available() > 0 && response.length() < 4096) {
-            const int value = client.read();
+            const auto value = client.read();
             if (value < 0) break;
             response += static_cast<char>(value);
             if (response.endsWith("\r\n\r\n")) break;
@@ -376,7 +376,7 @@ bool waitForNtripResponse(Client &client, String *statusLine = nullptr) {
         delay(1);
     }
     if (statusLine) {
-        const int end = response.indexOf('\n');
+        const auto end = response.indexOf('\n');
         *statusLine = response.substring(0, end >= 0 ? end : 240);
         statusLine->trim();
         if (statusLine->isEmpty()) *statusLine = "No response from caster (timeout or closed connection)";
@@ -425,8 +425,8 @@ bool connectEndpoint(uint8_t index) {
         return false;
     }
 
-    const String user = endpoint.username.isEmpty() ? String("source") : endpoint.username;
-    const String auth = base64Encode(user + ":" + endpoint.password);
+    const auto user = endpoint.username.isEmpty() ? String("source") : endpoint.username;
+    const auto auth = base64Encode(user + ":" + endpoint.password);
     String request;
     if (endpoint.version == 2) {
         request = "POST /" + endpoint.mountpoint + " HTTP/1.1\r\n"
@@ -492,8 +492,8 @@ bool sendEndpointRtcm(NtripEndpoint &endpoint, Client &client, const String &rtc
         return false;
     }
 
-    const size_t payloadLength = rtcmData.length();
-    size_t sent = 0;
+    const auto payloadLength = rtcmData.length();
+    auto sent = 0;
     if (endpoint.version == 2) {
         client.print(String(payloadLength, HEX) + "\r\n");
         sent = client.write(reinterpret_cast<const uint8_t *>(rtcmData.c_str()), payloadLength);
@@ -609,7 +609,7 @@ int setupNTRIP() {
 
 int connectNTRIP() {
     loadEndpoints();
-    int connected = 0;
+    auto connected = 0;
     for (uint8_t index = 0; index < NTRIP_SERVER_COUNT; ++index) {
         if (connectEndpoint(index)) ++connected;
     }
@@ -619,9 +619,9 @@ int connectNTRIP() {
 int loopNTRIP(String &rtcmData) {
     if (roverSessionActive) return 504;
 
-    int returnCode = NTRIP_MODE;
-    bool anyConnected = false;
-    bool anySent = false;
+    auto returnCode = NTRIP_MODE;
+    auto anyConnected = false;
+    auto anySent = false;
 
     for (uint8_t index = 0; index < NTRIP_SERVER_COUNT; ++index) {
         NtripEndpoint &endpoint = endpoints[index];
@@ -701,8 +701,8 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
         return false;
     }
 
-    const String user = username.isEmpty() ? String("source") : username;
-    const String auth = base64Encode(user + ":" + password);
+    const auto user = username.isEmpty() ? String("source") : username;
+    const auto auth = base64Encode(user + ":" + password);
     String request;
     if (version == 2) {
         request = "GET /" + mountpoint + " HTTP/1.1\r\n"
@@ -749,9 +749,9 @@ int loopNtripRover() {
         || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE) {
         return 200;
     }
-    const int available = client.available();
-    const size_t bytesToRead = min(static_cast<size_t>(available), sizeof(buffer));
-    const int bytesRead = client.read(buffer, bytesToRead);
+    const auto available = client.available();
+    const auto bytesToRead = min(static_cast<size_t>(available), sizeof(buffer));
+    const auto bytesRead = client.read(buffer, bytesToRead);
     if (bytesRead > 0) {
         Serial1.write(buffer, static_cast<size_t>(bytesRead));
         roverBytesReceived += static_cast<uint32_t>(bytesRead);

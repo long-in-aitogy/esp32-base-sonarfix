@@ -54,14 +54,14 @@ String formDeviceHealthString([[maybe_unused]] int32_t signalQualityDbm, const b
                               [[maybe_unused]] const uint32_t *rtcmMessageCounts)
 {
     // 1. Lấy các thông số hệ thống
-    unsigned long uptime_s = millis() / 1000;
+    auto uptime_s = millis() / 1000;
     uint32_t freeHeap = ESP.getFreeHeap();
 
     const int32_t rssi = isWifiConnection() ? WiFi.RSSI() : signalQualityDbm;
     const String connected_via = isWifiConnection() ? "WiFi" : "GSM";
 
-    bool mqttOk = isMqttConnected();
-    bool ntripOk = isNtripConnected();
+    auto mqttOk = isMqttConnected();
+    auto ntripOk = isNtripConnected();
     // 2. Đóng gói thành JSON
     std::string healthPayload = "{";
     healthPayload += "\"uptime_s\":" + std::to_string(uptime_s);

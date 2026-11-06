@@ -59,11 +59,11 @@ struct EcefCoordinate {
 };
 
 EcefCoordinate llhToEcef(double latitudeDeg, double longitudeDeg, double height) {
-    const double latitude = latitudeDeg * 3.14159265358979323846 / 180.0;
-    const double longitude = longitudeDeg * 3.14159265358979323846 / 180.0;
-    const double sinLatitude = sin(latitude);
-    const double cosLatitude = cos(latitude);
-    const double radius = WGS84_A / sqrt(1.0 - WGS84_E2 * sinLatitude * sinLatitude);
+    const auto latitude = latitudeDeg * 3.14159265358979323846 / 180.0;
+    const auto longitude = longitudeDeg * 3.14159265358979323846 / 180.0;
+    const auto sinLatitude = sin(latitude);
+    const auto cosLatitude = cos(latitude);
+    const auto radius = WGS84_A / sqrt(1.0 - WGS84_E2 * sinLatitude * sinLatitude);
     return {
         (radius + height) * cosLatitude * cos(longitude),
         (radius + height) * cosLatitude * sin(longitude),
@@ -73,41 +73,41 @@ EcefCoordinate llhToEcef(double latitudeDeg, double longitudeDeg, double height)
 
 void ecefToLlh(const EcefCoordinate &coordinate, double &latitudeRad,
                double &longitudeRad, double &height) {
-    const double ep2 = (WGS84_A * WGS84_A - WGS84_B * WGS84_B)
+    const auto ep2 = (WGS84_A * WGS84_A - WGS84_B * WGS84_B)
         / (WGS84_B * WGS84_B);
-    const double p = sqrt(coordinate.x * coordinate.x + coordinate.y * coordinate.y);
+    const auto p = sqrt(coordinate.x * coordinate.x + coordinate.y * coordinate.y);
     if (p < 1e-12) {
         latitudeRad = copysign(3.14159265358979323846 / 2.0, coordinate.z);
         longitudeRad = 0.0;
         height = fabs(coordinate.z) - WGS84_B;
         return;
     }
-    const double theta = atan2(coordinate.z * WGS84_A, p * WGS84_B);
-    const double sinTheta = sin(theta);
-    const double cosTheta = cos(theta);
+    const auto theta = atan2(coordinate.z * WGS84_A, p * WGS84_B);
+    const auto sinTheta = sin(theta);
+    const auto cosTheta = cos(theta);
     latitudeRad = atan2(
         coordinate.z + ep2 * WGS84_B * sinTheta * sinTheta * sinTheta,
         p - WGS84_E2 * WGS84_A * cosTheta * cosTheta * cosTheta);
     longitudeRad = atan2(coordinate.y, coordinate.x);
-    const double sinLatitude = sin(latitudeRad);
-    const double radius = WGS84_A / sqrt(1.0 - WGS84_E2 * sinLatitude * sinLatitude);
+    const auto sinLatitude = sin(latitudeRad);
+    const auto radius = WGS84_A / sqrt(1.0 - WGS84_E2 * sinLatitude * sinLatitude);
     height = p / cos(latitudeRad) - radius;
 }
 
 void blhToUtm(double centralMeridianRad, double scale, double latitudeRad,
               double longitudeRad, double height, double &northing,
               double &easting) {
-    const double ep2 = WGS84_E2 / (1.0 - WGS84_E2);
-    const double sinLatitude = sin(latitudeRad);
-    const double cosLatitude = cos(latitudeRad);
-    const double tangent = tan(latitudeRad);
-    const double radius = WGS84_A / sqrt(1.0 - WGS84_E2 * sinLatitude * sinLatitude);
-    const double t = tangent * tangent;
-    const double c = ep2 * cosLatitude * cosLatitude;
-    const double a = (longitudeRad - centralMeridianRad) * cosLatitude;
-    const double e4 = WGS84_E2 * WGS84_E2;
-    const double e6 = e4 * WGS84_E2;
-    const double meridian = WGS84_A * (
+    const auto ep2 = WGS84_E2 / (1.0 - WGS84_E2);
+    const auto sinLatitude = sin(latitudeRad);
+    const auto cosLatitude = cos(latitudeRad);
+    const auto tangent = tan(latitudeRad);
+    const auto radius = WGS84_A / sqrt(1.0 - WGS84_E2 * sinLatitude * sinLatitude);
+    const auto t = tangent * tangent;
+    const auto c = ep2 * cosLatitude * cosLatitude;
+    const auto a = (longitudeRad - centralMeridianRad) * cosLatitude;
+    const auto e4 = WGS84_E2 * WGS84_E2;
+    const auto e6 = e4 * WGS84_E2;
+    const auto meridian = WGS84_A * (
         (1.0 - WGS84_E2 / 4.0 - 3.0 * e4 / 64.0 - 5.0 * e6 / 256.0) * latitudeRad
         - (3.0 * WGS84_E2 / 8.0 + 3.0 * e4 / 32.0 + 45.0 * e6 / 1024.0) * sin(2.0 * latitudeRad)
         + (15.0 * e4 / 256.0 + 45.0 * e6 / 1024.0) * sin(4.0 * latitudeRad)
@@ -125,30 +125,30 @@ void blhToUtm(double centralMeridianRad, double scale, double latitudeRad,
 void utmToBlh(double centralMeridianRad, double scale, double northing,
               double easting, double height, double &latitudeRad,
               double &longitudeRad) {
-    const double ep2 = WGS84_E2 / (1.0 - WGS84_E2);
-    const double x = northing / scale;
-    const double y = (easting - 500000.0) / scale;
-    const double e4 = WGS84_E2 * WGS84_E2;
-    const double e6 = e4 * WGS84_E2;
-    const double mu = x / (WGS84_A * (1.0 - WGS84_E2 / 4.0
+    const auto ep2 = WGS84_E2 / (1.0 - WGS84_E2);
+    const auto x = northing / scale;
+    const auto y = (easting - 500000.0) / scale;
+    const auto e4 = WGS84_E2 * WGS84_E2;
+    const auto e6 = e4 * WGS84_E2;
+    const auto mu = x / (WGS84_A * (1.0 - WGS84_E2 / 4.0
         - 3.0 * e4 / 64.0 - 5.0 * e6 / 256.0));
-    const double e1 = (1.0 - sqrt(1.0 - WGS84_E2))
+    const auto e1 = (1.0 - sqrt(1.0 - WGS84_E2))
         / (1.0 + sqrt(1.0 - WGS84_E2));
-    const double j1 = 3.0 * e1 / 2.0 - 27.0 * pow(e1, 3) / 32.0;
-    const double j2 = 21.0 * pow(e1, 2) / 16.0 - 55.0 * pow(e1, 4) / 32.0;
-    const double j3 = 151.0 * pow(e1, 3) / 96.0;
-    const double j4 = 1097.0 * pow(e1, 4) / 512.0;
-    const double footpoint = mu + j1 * sin(2.0 * mu) + j2 * sin(4.0 * mu)
+    const auto j1 = 3.0 * e1 / 2.0 - 27.0 * pow(e1, 3) / 32.0;
+    const auto j2 = 21.0 * pow(e1, 2) / 16.0 - 55.0 * pow(e1, 4) / 32.0;
+    const auto j3 = 151.0 * pow(e1, 3) / 96.0;
+    const auto j4 = 1097.0 * pow(e1, 4) / 512.0;
+    const auto footpoint = mu + j1 * sin(2.0 * mu) + j2 * sin(4.0 * mu)
         + j3 * sin(6.0 * mu) + j4 * sin(8.0 * mu);
-    const double sinFootpoint = sin(footpoint);
-    const double cosFootpoint = cos(footpoint);
-    const double tangent = tan(footpoint);
-    const double c1 = ep2 * cosFootpoint * cosFootpoint;
-    const double t1 = tangent * tangent;
-    const double radius = WGS84_A / sqrt(1.0 - WGS84_E2 * sinFootpoint * sinFootpoint);
-    const double meridianRadius = radius * (1.0 - WGS84_E2)
+    const auto sinFootpoint = sin(footpoint);
+    const auto cosFootpoint = cos(footpoint);
+    const auto tangent = tan(footpoint);
+    const auto c1 = ep2 * cosFootpoint * cosFootpoint;
+    const auto t1 = tangent * tangent;
+    const auto radius = WGS84_A / sqrt(1.0 - WGS84_E2 * sinFootpoint * sinFootpoint);
+    const auto meridianRadius = radius * (1.0 - WGS84_E2)
         / (1.0 - WGS84_E2 * sinFootpoint * sinFootpoint);
-    const double d = y / radius;
+    const auto d = y / radius;
     latitudeRad = footpoint - (radius * tangent / meridianRadius) * (
         d * d / 2.0
         - (5.0 + 3.0 * t1 + 10.0 * c1 - 4.0 * c1 * c1 - 9.0 * ep2) * pow(d, 4) / 24.0
@@ -167,21 +167,21 @@ bool transformItrfToVn2000(double latitudeDeg, double longitudeDeg, double heigh
                            double &localAltitude, double &northing,
                            double &easting) {
     const EcefCoordinate source = llhToEcef(latitudeDeg, longitudeDeg, height);
-    const double omega = 0.00928836 * ARCSEC_TO_RAD;
-    const double phi = -0.01975479 * ARCSEC_TO_RAD;
-    const double epsilon = 0.00427372 * ARCSEC_TO_RAD;
-    const double k = 0.999999747093722;
+    const auto omega = 0.00928836 * ARCSEC_TO_RAD;
+    const auto phi = -0.01975479 * ARCSEC_TO_RAD;
+    const auto epsilon = 0.00427372 * ARCSEC_TO_RAD;
+    const auto k = 0.999999747093722;
     const EcefCoordinate transformed = {
         191.90441429 + k * (source.x + epsilon * source.y - phi * source.z),
         39.30318279 + k * (-epsilon * source.x + source.y + omega * source.z),
         111.45032835 + k * (phi * source.x - omega * source.y + source.z),
     };
 
-    double latitudeRad = 0.0;
-    double longitudeRad = 0.0;
-    double transformedHeight = 0.0;
+    auto latitudeRad = 0.0;
+    auto longitudeRad = 0.0;
+    auto transformedHeight = 0.0;
     ecefToLlh(transformed, latitudeRad, longitudeRad, transformedHeight);
-    const double centralMeridianRad = centralMeridianDeg * 3.14159265358979323846 / 180.0;
+    const auto centralMeridianRad = centralMeridianDeg * 3.14159265358979323846 / 180.0;
     blhToUtm(centralMeridianRad, scale, latitudeRad, longitudeRad,
              transformedHeight, northing, easting);
     utmToBlh(centralMeridianRad, scale, northing, easting, transformedHeight,
@@ -191,10 +191,10 @@ bool transformItrfToVn2000(double latitudeDeg, double longitudeDeg, double heigh
         latitudeRad * 180.0 / 3.14159265358979323846,
         longitudeRad * 180.0 / 3.14159265358979323846,
         transformedHeight);
-    const double reverseOmega = -0.00928836 * ARCSEC_TO_RAD;
-    const double reversePhi = 0.01975479 * ARCSEC_TO_RAD;
-    const double reverseEpsilon = -0.00427372 * ARCSEC_TO_RAD;
-    const double reverseK = 1.000000252906278;
+    const auto reverseOmega = -0.00928836 * ARCSEC_TO_RAD;
+    const auto reversePhi = 0.01975479 * ARCSEC_TO_RAD;
+    const auto reverseEpsilon = -0.00427372 * ARCSEC_TO_RAD;
+    const auto reverseK = 1.000000252906278;
     const EcefCoordinate local = {
         -191.90441429 + reverseK * (vn2000.x + reverseEpsilon * vn2000.y - reversePhi * vn2000.z),
         -39.30318279 + reverseK * (-reverseEpsilon * vn2000.x + vn2000.y + reverseOmega * vn2000.z),

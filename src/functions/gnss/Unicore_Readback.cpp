@@ -37,7 +37,7 @@ bool processUnicoreQueryByte(uint8_t byte, const char *prefix, UnicoreReply &rep
                              String &candidate, String &response, String &error) {
     const auto value = static_cast<char>(byte);
     bufferGnssQueryByte(byte);
-    const bool acknowledged = reply.feed(byte);
+    const auto acknowledged = reply.feed(byte);
     if (acknowledged && reply.state == UnicoreReply::State::Error) {
         Serial.printf("[GNSS][READBACK][ACK] %s\n", reply.line);
         error = String("Unicore rejected query: ") + reply.line;
@@ -83,7 +83,7 @@ bool queryUnicoreLine(const char *query, const char *prefix, String &response, S
     Serial.printf("[GNSS][READBACK][TX] %s; baud=%lu\n", query,
                   static_cast<unsigned long>(Serial1.baudRate()));
     // Finish any partial input line left on the mixed binary/ASCII command port.
-    const bool written = Serial1.write(reinterpret_cast<const uint8_t *>("\r\n"), 2) == 2
+    const auto written = Serial1.write(reinterpret_cast<const uint8_t *>("\r\n"), 2) == 2
         && Serial1.write(
             reinterpret_cast<const uint8_t *>(command.c_str()), command.length()) == command.length();
     Serial1.flush();
@@ -123,13 +123,13 @@ bool readMode(String &mode, String &error) {
         Serial.printf("[GNSS][READBACK][ERROR] %s\n", error.c_str());
         return false;
     }
-    const int separator = response.indexOf(';');
+    const auto separator = response.indexOf(';');
     if (separator < 0) {
         error = "Unicore MODE response is malformed";
         return false;
     }
     mode = response.substring(separator + 1);
-    const int checksum = mode.indexOf('*');
+    const auto checksum = mode.indexOf('*');
     if (checksum >= 0) mode.remove(checksum);
     mode.trim();
     if (mode.endsWith(",")) mode.remove(mode.length() - 1);
@@ -151,23 +151,23 @@ bool readBestPosition(JsonObject position, String &error) {
     }
     position["message"] = "BESTNAV";
     position["raw"] = response;
-    const int separator = response.indexOf(';');
+    const auto separator = response.indexOf(';');
     if (separator < 0) {
         error = "Unicore BESTNAV response is malformed";
         return false;
     }
-    String payload = response.substring(separator + 1);
-    const int checksum = payload.indexOf('*');
+    auto payload = response.substring(separator + 1);
+    const auto checksum = payload.indexOf('*');
     if (checksum >= 0) payload.remove(checksum);
     String fields[5];
-    int start = 0;
+    auto start = 0;
     for (size_t index = 0; index < 5; ++index) {
-        const int comma = payload.indexOf(',', start);
+        const auto comma = payload.indexOf(',', start);
         if (index < 4 && comma < 0) {
             error = "Unicore BESTNAV response is incomplete";
             return false;
         }
-        const int end = comma < 0 ? payload.length() : comma;
+        const auto end = comma < 0 ? payload.length() : comma;
         fields[index] = payload.substring(start, end);
         start = end + 1;
     }
@@ -180,17 +180,17 @@ bool readBestPosition(JsonObject position, String &error) {
         return false;
     }
     char *end = nullptr;
-    const double latitude = std::strtod(fields[2].c_str(), &end);
+    const auto latitude = std::strtod(fields[2].c_str(), &end);
     if (end == fields[2].c_str() || *end != '\0') {
         error = "Unicore BESTNAV latitude is invalid";
         return false;
     }
-    const double longitude = std::strtod(fields[3].c_str(), &end);
+    const auto longitude = std::strtod(fields[3].c_str(), &end);
     if (end == fields[3].c_str() || *end != '\0') {
         error = "Unicore BESTNAV longitude is invalid";
         return false;
     }
-    const double height = std::strtod(fields[4].c_str(), &end);
+    const auto height = std::strtod(fields[4].c_str(), &end);
     if (end == fields[4].c_str() || *end != '\0') {
         error = "Unicore BESTNAV height is invalid";
         return false;
