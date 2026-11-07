@@ -9,6 +9,7 @@ source = (root / 'src/functions/backend/Backend_Agent_Startup.cpp').read_text()
 helpers = source[source.index('double configNumber('):source.index('\n}\n\nbool BackendAgent::initializeBaseAtBoot')]
 storage = (root / 'src/functions/backend/Backend_Agent_Storage.cpp').read_text()
 restore_progress = storage[storage.index('String restoreWorkflowProgress('):storage.index('} // namespace')]
+startup_readback = source[source.index('bool BackendAgent::readStartupReceiverMode('):source.index('\nvoid BackendAgent::reconcileBaseStartupReadback(')]
 reconcile = source[source.index('void BackendAgent::reconcileBaseStartupReadback('):]
 verification = (root / 'src/functions/backend/Backend_Agent_Gnss.cpp').read_text()
 verification = verification[verification.index('bool BackendAgent::verifyUnicoreConfig('):verification.index('bool BackendAgent::verifyGnssConfig(')]
@@ -24,6 +25,8 @@ harness = r'''
 #include <cstring>
 #include <ArduinoJson.h>
 #include "functions/gnss/Unicore_Config_Verification.h"
+namespace GnssCmdBuilder { enum class GnssSensorType { Unicore }; }
+struct UbxBaseStatus {};
 String operator+(const String &text, uint8_t value) { return String(std::string(text) + std::to_string(value)); }
 constexpr size_t CONFIG_DOCUMENT_SIZE = 4096, VERIFICATION_DOCUMENT_SIZE = 12288;
 constexpr uint8_t GNSS_UNICORE_PORT = 0;
@@ -36,6 +39,9 @@ bool readLogList(String &logs, String &) {
     logs = "#UNILOGLIST,header;< 2\r\n< RTCM1006 COM1 1\r\n< RTCM1006 COM2 2\r\n\r\n"; return true;
 }
 }
+namespace UbloxReadback {
+bool readBaseStatus(UbxBaseStatus &, String &) { return false; }
+}
 
 struct BackendAgent {
     String baseConfig_, sensorType_ = "Unicorecomm";
@@ -45,12 +51,17 @@ struct BackendAgent {
     String gnssVerification_, nvsInventory_;
     uint32_t gnssVerificationMs_ = 0;
     bool verifyUnicoreConfig(JsonObjectConst, const String &, String &);
+    bool readStartupReceiverMode(GnssCmdBuilder::GnssSensorType, String &);
     void markStatusDirty() { dirty = true; }
     void reconcileBaseStartupReadback(JsonObjectConst);
 };
 '''
 checks = r'''
 int main() {
+    String startupError;
+    assert(BackendAgent{}.readStartupReceiverMode(GnssCmdBuilder::GnssSensorType::Unicore, startupError));
+    assert(startupError.isEmpty());
+
     for (const char *saved : {"{}", "{broken", R"({"phase":"queued"})",
             R"({"phase":"wait_fix","last_raw_gga":"old"})", R"({"phase":"averaging"})",
             R"({"phase":"resolving_location"})", R"({"phase":"stopping"})",
@@ -147,7 +158,7 @@ reconcile = mapped(root / 'src/functions/backend/Backend_Agent_Startup.cpp', rec
 verification = mapped(root / 'src/functions/backend/Backend_Agent_Gnss.cpp', verification)
 with tempfile.TemporaryDirectory(prefix='base-confirmation-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + harness + helpers + restore_progress + reconcile + verification + checks)
+    (path / 'check.cpp').write_text(shim + harness + helpers + restore_progress + startup_readback + reconcile + verification + checks)
     compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     '-I' + str(root / 'include'),
