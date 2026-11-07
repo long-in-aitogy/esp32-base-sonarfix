@@ -154,6 +154,7 @@ int main() {
 }
 '''
 helpers = mapped(root / 'src/functions/backend/Backend_Agent_Startup.cpp', helpers)
+startup_readback = mapped(root / 'src/functions/backend/Backend_Agent_Startup.cpp', startup_readback)
 reconcile = mapped(root / 'src/functions/backend/Backend_Agent_Startup.cpp', reconcile)
 verification = mapped(root / 'src/functions/backend/Backend_Agent_Gnss.cpp', verification)
 with tempfile.TemporaryDirectory(prefix='base-confirmation-') as directory:
