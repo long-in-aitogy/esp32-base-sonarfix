@@ -314,8 +314,7 @@ cmd_action_t handleEspValueSet(const std::vector<String> &cmdWords) {
         {"4G PASS", "GPRS_PASS"}, {"BACKEND HOST", "BACKEND_HOST"},
     }};
     const auto setting = cmdWords[1] + " " + cmdWords[2];
-    const char *key = cmd_helper::findPreferenceKey(setting, settings.data(), settings.size());
-    if (key != nullptr) {
+    if (const char *key = cmd_helper::findPreferenceKey(setting, settings.data(), settings.size()); key != nullptr) {
         if (setting != "BACKEND HOST") {
             Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh " + setting);
         }

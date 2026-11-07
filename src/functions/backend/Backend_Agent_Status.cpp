@@ -28,10 +28,9 @@ String BackendAgent::buildLwtPayload() const {
 
 String BackendAgent::statusForPayload(bool anyStream, bool onDemand) const {
     if (stationLock_.all) return "locked";
-    const auto stableState = agentState_ == "configuring" || agentState_ == "rebooting"
+    if (const auto stableState = agentState_ == "configuring" || agentState_ == "rebooting"
         || agentState_ == "rebooting_for_reset" || agentState_.startsWith("auto_setup")
-        || agentState_.startsWith("reference_check");
-    if (stableState) return agentState_;
+        || agentState_.startsWith("reference_check"); stableState) return agentState_;
     if (!licenseValid_) return "awaiting_license";
     if (!provisioned_) return "unprovisioned";
     if (onDemand && !anyStream) return "sleep";
@@ -129,13 +128,13 @@ JsonObject BackendAgent::appendSurveyInfo(JsonObject system, uint32_t nowMs) con
     if (surveyInMonitoring_) {
         if (surveyInStartedMs_ > 0)
             survey["elapsed_since_ack_seconds"] =
-                static_cast<uint32_t>(nowMs - surveyInStartedMs_) / 1000UL;
+                (nowMs - surveyInStartedMs_) / 1000UL;
         else survey["elapsed_since_ack_seconds"] = nullptr;
         survey["target_seconds"] = surveyInTargetSeconds_;
         survey["fix_status"] = surveyInReadbackReady_ ? "FIXEDPOS" : "UNVERIFIED";
         survey["source"] = sensorType_ == "Ublox" ? "NAV-SVIN" : "BESTNAV";
         survey["readback_age_seconds"] = receiverBaseReadbackMs_ > 0
-            ? static_cast<uint32_t>(nowMs - receiverBaseReadbackMs_) / 1000UL : UINT32_MAX;
+            ? (nowMs - receiverBaseReadbackMs_) / 1000UL : UINT32_MAX;
     }
     return survey;
 }
@@ -154,7 +153,7 @@ void BackendAgent::appendReceiverReadback(JsonObject system, JsonObject survey) 
                 survey["active"] = readbackDoc["active"];
             }
             readback["age_seconds"] = receiverBaseReadbackMs_ > 0
-                ? static_cast<uint32_t>(millis() - receiverBaseReadbackMs_) / 1000UL : 0;
+                ? (millis() - receiverBaseReadbackMs_) / 1000UL : 0;
         }
     }
 }

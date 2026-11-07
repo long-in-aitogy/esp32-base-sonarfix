@@ -178,8 +178,8 @@ using namespace GnssCmdBuilder;
 
         CommandList commands;
         if (!isValidUnicorePort(normalizedPort) || normalizedMessage.length() != 4) return commands;
-        for (uint8_t i = 0; i < normalizedMessage.length(); ++i)
-            if (!isDigit(normalizedMessage[i]))
+        for (const char digit : normalizedMessage)
+            if (!isDigit(digit))
                 return commands;
 
         commands.push_back(asciiCommand("rtcm" + normalizedMessage + " " + outputPortArgument(normalizedPort)

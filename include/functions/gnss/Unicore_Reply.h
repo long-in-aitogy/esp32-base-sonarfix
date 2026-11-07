@@ -25,7 +25,8 @@ struct UnicoreReply {
             if (c == '\r' || c == '\n') ended = true;
             else if (ended && !std::isspace(c)) return;
         }
-        size_t i = 0, n = 0;
+        size_t i = 0;
+        size_t n = 0;
         while (i < length && std::isspace(command[i])) ++i;
         if (i < length && command[i] == '$') ++i;
         while (i < length && !std::isspace(command[i]) && command[i] != '*') {
@@ -67,8 +68,7 @@ struct UnicoreReply {
         if (strnlen(response, line.size()) < 9 || !equal(response, 9, "response:")) return false;
         response += 9;
         const char *end = line.data() + strnlen(line.data(), line.size());
-        const char *star = std::strchr(response, '*');
-        if (star) {
+        if (const char *star = std::strchr(response, '*'); star) {
             if (end - star != 3 || hex(star[1]) < 0 || hex(star[2]) < 0) return false;
             std::byte checksum = {};
             // N4 '$command' replies include '$' in XOR (unlike standard NMEA).
