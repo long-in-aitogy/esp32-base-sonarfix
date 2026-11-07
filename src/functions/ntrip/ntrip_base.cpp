@@ -1,4 +1,4 @@
-ỏ #define NTRIP_HANDLER_IP_CODE
+#define NTRIP_HANDLER_IP_CODE
 
 #include "functions/ntrip/ntrip_base.h"
 #include "functions/ntrip/unicore_bootstrap_cmds.h"
