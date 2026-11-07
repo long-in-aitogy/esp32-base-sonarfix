@@ -4,8 +4,8 @@
 #include "functions/ntrip/ntrip_common.h"
 
 bool startNtripRover(const String &host, uint16_t port, const String &username,
-                    const String &password, String mountpoint,
-                    uint8_t version = 1);
+                     const String &password, String mountpoint,
+                     uint8_t version = 1);
 int loopNtripRover();
 void stopNtripRover();
 bool ntripRoverActive();

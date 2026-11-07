@@ -15,7 +15,8 @@
 // ================= ĐỊNH NGHĨA CÁC BIẾN TOÀN CỤC =================
 extern TinyGsm modem;
 
-class SerialCommandProcessor {
+class SerialCommandProcessor
+{
 public:
 	void processPending();
 

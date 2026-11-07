@@ -6,13 +6,14 @@
 #include <cstddef>
 #include <cstring>
 
-namespace UbloxCommands {
+namespace UbloxCommands
+{
     using GnssCmdBuilder::Command;
     using GnssCmdBuilder::CommandList;
-    using GnssCmdBuilder::MsmLevel;
     using GnssCmdBuilder::GnssOptions;
+    using GnssCmdBuilder::MsmLevel;
     using GnssCmdBuilder::OutputMode;
-    
+
     constexpr std::array<uint8_t, 21> UBLOX_SAVE_CONFIG = {
         0xB5, 0x62, 0x06, 0x09, 0x0D, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF,
         0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x1D, 0xAB};
@@ -49,14 +50,10 @@ namespace UbloxCommands {
             {"PUBX00", {0x209100ED, 0x209100EE, 0x209100EF}},
             {"PUBX03", {0x209100F2, 0x209100F3, 0x209100F4}},
             {"PUBX04", {0x209100F7, 0x209100F8, 0x209100F9}},
-        }
-    };
+        }};
 
     constexpr std::array<PortKeys, 2> NAV_KEYS = {
-        {
-            {0x20910007, 0x20910008, 0x20910009}, {0x20910034, 0x20910035, 0x20910036}
-        }
-    };
+        {{0x20910007, 0x20910008, 0x20910009}, {0x20910034, 0x20910035, 0x20910036}}};
 
     constexpr std::array<MessageKeys, 9> RTCM_KEYS = {
         {
@@ -69,17 +66,13 @@ namespace UbloxCommands {
             {"1087", {0x209102D2, 0x209102D3, 0x209102D4, 0x209102D1, 0x209102D5}},
             {"1097", {0x209102D7, 0x209102D8, 0x209102D9, 0x209102D6, 0x209102DA}},
             {"1230", {0x20910304, 0x20910305, 0x20910306, 0x20910303, 0x20910307}},
-        }
-    };
+        }};
 
     inline bool isValidRtcmPort(const String &port)
     {
         return port == "I2C" || port == "UART1" || port == "UART2" ||
                port == "USB" || port == "SPI";
     }
-
-
-
 
     uint32_t keyForPort(const PortKeys &keys, const String &port)
     {
@@ -231,8 +224,10 @@ namespace UbloxCommands {
             uint8_t msm7;
         };
         const std::array<MsmId, 4> ids = {{
-            {o.gps, 0x4A, 0x4D}, {o.glo, 0x54, 0x57},
-            {o.gal, 0x5E, 0x61}, {o.bds, 0x7C, 0x7F},
+            {o.gps, 0x4A, 0x4D},
+            {o.glo, 0x54, 0x57},
+            {o.gal, 0x5E, 0x61},
+            {o.bds, 0x7C, 0x7F},
         }};
         for (const auto &id : ids)
             for (uint8_t level : {(uint8_t)4, (uint8_t)7})
@@ -251,10 +246,14 @@ namespace UbloxCommands {
 
     inline uint32_t remapValsetKey(uint32_t key)
     {
-        for (const auto &message : NMEA_KEYS) key = remapOutputKey(key, message.keys);
-        for (const auto &ports : NAV_KEYS) key = remapOutputKey(key, ports);
-        for (const auto &message : RTCM_KEYS) key = remapOutputKey(key, message.keys);
-        for (const uint8_t protocol : {1, 2, 4}) {
+        for (const auto &message : NMEA_KEYS)
+            key = remapOutputKey(key, message.keys);
+        for (const auto &ports : NAV_KEYS)
+            key = remapOutputKey(key, ports);
+        for (const auto &message : RTCM_KEYS)
+            key = remapOutputKey(key, message.keys);
+        for (const uint8_t protocol : {1, 2, 4})
+        {
             key = remapOutputKey(
                 key, {0x10740000U | protocol, 0x10760000U | protocol,
                       0x10780000U | protocol});
@@ -264,8 +263,10 @@ namespace UbloxCommands {
 
     inline bool remapValsetEntries(uint8_t *packet, size_t payloadLength)
     {
-        if ((payloadLength - 4) % 5 != 0) return false;
-        for (size_t i = 10; i + 5 <= payloadLength + 6; i += 5) {
+        if ((payloadLength - 4) % 5 != 0)
+            return false;
+        for (size_t i = 10; i + 5 <= payloadLength + 6; i += 5)
+        {
             uint32_t key = 0;
             for (uint8_t b = 0; b < 4; ++b)
                 key |= static_cast<uint32_t>(packet[i + b]) << (8 * b);
@@ -278,19 +279,24 @@ namespace UbloxCommands {
 
     bool processUbloxPacket(uint8_t *packet, size_t remaining)
     {
-        const auto payloadLength = std::to_integer<size_t>(static_cast<std::byte>(packet[4]))
-            | (std::to_integer<size_t>(static_cast<std::byte>(packet[5])) << 8);
-        if (payloadLength + 8 > remaining) return false;
-        if (packet[2] == 0x06 && packet[3] == 0x8A && payloadLength >= 4) {
-            if (!remapValsetEntries(packet, payloadLength)) return false;
-        } else if (packet[2] == 0x06 && packet[3] == 0x01 && payloadLength == 8) {
+        const auto payloadLength = std::to_integer<size_t>(static_cast<std::byte>(packet[4])) | (std::to_integer<size_t>(static_cast<std::byte>(packet[5])) << 8);
+        if (payloadLength + 8 > remaining)
+            return false;
+        if (packet[2] == 0x06 && packet[3] == 0x8A && payloadLength >= 4)
+        {
+            if (!remapValsetEntries(packet, payloadLength))
+                return false;
+        }
+        else if (packet[2] == 0x06 && packet[3] == 0x01 && payloadLength == 8)
+        {
             packet[9] = std::max(packet[9], std::max(packet[10], packet[11]));
             packet[10] = 0;
             packet[11] = 0;
         }
         uint8_t a = 0;
         uint8_t b = 0;
-        for (size_t i = 2; i < payloadLength + 6; ++i) {
+        for (size_t i = 2; i < payloadLength + 6; ++i)
+        {
             a += packet[i];
             b += a;
         }
@@ -302,16 +308,19 @@ namespace UbloxCommands {
     void routeUbloxOutput(uint8_t *data, size_t length)
     {
         auto offset = 0;
-        while (offset + 8 <= length && data[offset] == 0xB5 && data[offset + 1] == 0x62) {
-            if (!processUbloxPacket(data + offset, length - offset)) return;
+        while (offset + 8 <= length && data[offset] == 0xB5 && data[offset + 1] == 0x62)
+        {
+            if (!processUbloxPacket(data + offset, length - offset))
+                return;
             const auto payloadLength = std::to_integer<size_t>(
-                static_cast<std::byte>(data[offset + 4]))
-                | (std::to_integer<size_t>(static_cast<std::byte>(data[offset + 5])) << 8);
+                                           static_cast<std::byte>(data[offset + 4])) |
+                                       (std::to_integer<size_t>(static_cast<std::byte>(data[offset + 5])) << 8);
             offset += payloadLength + 8;
         }
     }
 
-    CommandList buildBaseSurveyInCommand(uint32_t duration, float accuracy, const GnssOptions &options) {
+    CommandList buildBaseSurveyInCommand(uint32_t duration, float accuracy, const GnssOptions &options)
+    {
         CommandList commands;
         Command message = buildTmode3Message();
         message[8] = 1;
@@ -325,7 +334,8 @@ namespace UbloxCommands {
         return commands;
     }
 
-    CommandList buildBaseFixedLlaCommand(double lat, double lon, double alt, float accuracy, const GnssOptions &options) {
+    CommandList buildBaseFixedLlaCommand(double lat, double lon, double alt, float accuracy, const GnssOptions &options)
+    {
         CommandList commands;
         Command message = buildTmode3Message();
         message[8] = 2;
@@ -348,7 +358,8 @@ namespace UbloxCommands {
         return commands;
     }
 
-    CommandList buildBaseRtcmOutputCommand(const String &message, const String &port, bool enabled) {
+    CommandList buildBaseRtcmOutputCommand(const String &message, const String &port, bool enabled)
+    {
 
         auto normalizedMessage = message;
         auto normalizedPort = port;
@@ -365,9 +376,7 @@ namespace UbloxCommands {
         {
             if (normalizedMessage == rtcm.name)
             {
-                commands.push_back(ubxCfgValsetU1({
-                    {keyForPort(rtcm.keys, normalizedPort), enabled}
-                }));
+                commands.push_back(ubxCfgValsetU1({{keyForPort(rtcm.keys, normalizedPort), enabled}}));
                 commands.emplace_back(std::begin(UBLOX_SAVE_CONFIG), std::end(UBLOX_SAVE_CONFIG));
                 return commands;
             }
@@ -376,7 +385,8 @@ namespace UbloxCommands {
         return commands;
     }
 
-    CommandList buildBaseAllRtcmOutputCommand(const String &port, bool enabled) {
+    CommandList buildBaseAllRtcmOutputCommand(const String &port, bool enabled)
+    {
         auto normalizedPort = port;
         normalizedPort.trim();
         normalizedPort.toUpperCase();
@@ -393,7 +403,8 @@ namespace UbloxCommands {
         return commands;
     }
 
-    CommandList buildRoverCommand() {
+    CommandList buildRoverCommand()
+    {
         // Enable correction input and GGA/GST output on UART1, UART2 and USB.
         Command mode = buildTmode3Message();
         finishTmode3Checksum(mode);
@@ -402,19 +413,18 @@ namespace UbloxCommands {
         // Configure each port separately so a port-specific NAK cannot reject
         // the other port settings or the separately sent TMODE configuration.
         CommandList commands = {ubxCfgValsetU1({{0x20030001, false}}), mode};
-        for (uint32_t port = 0; port < 3; ++port) {
+        for (uint32_t port = 0; port < 3; ++port)
+        {
             const uint32_t input = 0x10730000U + port * 0x20000U;
             const uint32_t output = input + 0x10000U;
-            commands.push_back(ubxCfgValsetU1({{input | 1U, true}, {input | 4U, true},
-                {output | 1U, true}, {output | 2U, true}}));
+            commands.push_back(ubxCfgValsetU1({{input | 1U, true}, {input | 4U, true}, {output | 1U, true}, {output | 2U, true}}));
             commands.push_back(ubxCfgValsetU1({{0x209100BBU + port, true},
-                                             {0x209100D4U + port, true}}));
+                                               {0x209100D4U + port, true}}));
         }
         commands.push_back(ubxCfgMsg(0xF0, 0x00, options.ports, 1));
         commands.push_back(ubxCfgMsg(0xF0, 0x07, options.ports, 1));
         commands.push_back(ubxCfgMsg(0xF5, 0x05, {}, 0));
         commands.emplace_back(std::begin(UBLOX_SAVE_CONFIG), std::end(UBLOX_SAVE_CONFIG));
         return commands;
-
     }
 }

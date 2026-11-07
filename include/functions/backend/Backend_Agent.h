@@ -18,7 +18,8 @@ struct GnssTelemetrySnapshot;
 
 // Device agent for backend commands, status, provisioning and base workflows.
 // Receiver coordinates come from NMEA or Unicore readback; RTCM is forwarded.
-class BackendAgent {
+class BackendAgent
+{
 public:
     void begin();
     bool initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected);
@@ -45,10 +46,9 @@ public:
     bool isServerLocked(uint8_t serverId) const { return stationLock_.locked(serverId); }
     bool isProvisioned() const { return provisioned_; }
     bool licenseValid() const { return licenseValid_; }
-    bool baseStartupConfigured() const {
-        return baseStartupState_ == "fixed_restored" || baseStartupState_ == "survey_started"
-            || baseStartupState_ == "preserved"
-            || baseStartupState_ == "configured";
+    bool baseStartupConfigured() const
+    {
+        return baseStartupState_ == "fixed_restored" || baseStartupState_ == "survey_started" || baseStartupState_ == "preserved" || baseStartupState_ == "configured";
     }
     bool mqttConnected() const;
     bool websocketConnected() const;
@@ -185,7 +185,7 @@ private:
                                      String &password, String &mountpoint,
                                      uint32_t &timeoutSeconds, uint16_t &requestedSamples);
     inline bool startReferenceRover(const String &host, uint16_t port, const String &username,
-                                   const String &password, const String &mountpoint);
+                                    const String &password, const String &mountpoint);
     bool waitForReferenceFix(uint32_t timeoutSeconds, String &failureReason);
     bool collectReferenceSamples(uint16_t requestedSamples, std::vector<double> &latitudes,
                                  std::vector<double> &longitudes,
@@ -263,7 +263,7 @@ private:
     bool executeReferenceCheckCommand(JsonObject payload, String &error, String &detail);
     bool executeProvinceCommand(JsonObject payload, String &error, String &detail);
     bool executeBasicCommand(const String &command, JsonObject payload,
-                            String &error, String &detail);
+                             String &error, String &detail);
     bool executeStreamCommand(JsonObject payload, String &error, String &detail);
     bool executeBaseStatusCommand(String &error, String &detail);
     bool executeStopWorkflowCommand(String &detail);

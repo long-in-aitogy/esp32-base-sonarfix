@@ -5,19 +5,22 @@
 #include <algorithm>
 #include <cstring>
 
-namespace UnicoreCommands {
-using namespace GnssCmdBuilder;
+namespace UnicoreCommands
+{
+    using namespace GnssCmdBuilder;
 
     inline bool isValidUnicorePort(const String &port)
     {
         return port == "COM1" || port == "COM2" || port == "COM3" || port == "CURRENT";
     }
 
-    inline String outputPortArgument(const String &port) {
+    inline String outputPortArgument(const String &port)
+    {
         return port.isEmpty() || port == "CURRENT" ? String() : port + " ";
     }
 
-    inline String configuredOutputPort() {
+    inline String configuredOutputPort()
+    {
         return GNSS_UNICORE_PORT == 0 ? String() : "com" + String(GNSS_UNICORE_PORT);
     }
 
@@ -26,7 +29,8 @@ using namespace GnssCmdBuilder;
         return Command(text.begin(), text.end());
     }
 
-    inline Command delayCommand(uint16_t delayMs) {
+    inline Command delayCommand(uint16_t delayMs)
+    {
         return asciiCommand("$DELAY_" + String(delayMs) + "$");
     }
 
@@ -41,21 +45,17 @@ using namespace GnssCmdBuilder;
             size_t count;
         };
 
-        static constexpr std::array<const char*, 4> GPS = {
-            {"gpgga", "gpgsa", "gpgsv", "gpgst"}
-        };
+        static constexpr std::array<const char *, 4> GPS = {
+            {"gpgga", "gpgsa", "gpgsv", "gpgst"}};
 
-        static constexpr std::array<const char*, 3> GLO = {
-            {"glgga", "glgsa", "glgsv"}
-        };
+        static constexpr std::array<const char *, 3> GLO = {
+            {"glgga", "glgsa", "glgsv"}};
 
-        static constexpr std::array<const char*, 3> GAL = {
-            {"gagga", "gagsa", "gagsv"}
-        };
+        static constexpr std::array<const char *, 3> GAL = {
+            {"gagga", "gagsa", "gagsv"}};
 
-        static constexpr std::array<const char*, 3> BDS = {
-            {"bdgga", "bdgsa", "bdgsv"}
-        };
+        static constexpr std::array<const char *, 3> BDS = {
+            {"bdgga", "bdgsa", "bdgsv"}};
 
         const std::array<Messages, 4> nmea = {{
             {o.gps, GPS.data(), GPS.size()},
@@ -64,7 +64,8 @@ using namespace GnssCmdBuilder;
             {o.bds, BDS.data(), BDS.size()},
         }};
 
-        const auto appendNmeaGroup = [&](const Messages &group) {
+        const auto appendNmeaGroup = [&](const Messages &group)
+        {
             if (!group.enabled)
                 return;
 
@@ -94,20 +95,15 @@ using namespace GnssCmdBuilder;
             }
         };
         static constexpr std::array<const char *, 3> GPS_R = {
-            {"1074", "1077", "1019"}
-        };
+            {"1074", "1077", "1019"}};
         static constexpr std::array<const char *, 3> GLO_R = {
-            {"1084", "1087", "1020"}
-        };
+            {"1084", "1087", "1020"}};
         static constexpr std::array<const char *, 3> GAL_R = {
-            {"1094", "1097", "1045"}
-        };
+            {"1094", "1097", "1045"}};
         static constexpr std::array<const char *, 3> BDS_R = {
-            {"1124", "1127", "1042"}
-        };
+            {"1124", "1127", "1042"}};
         static constexpr std::array<const char *, 3> QZSS_R = {
-            {"1114", "1117", "1044"}
-        };
+            {"1114", "1117", "1044"}};
 
         add(o.gps, GPS_R);
         add(o.glo, GLO_R);
@@ -127,14 +123,16 @@ using namespace GnssCmdBuilder;
         auto normalizedPort = port;
         normalizedPort.trim();
         normalizedPort.toUpperCase();
-        if (!isValidUnicorePort(normalizedPort)) return {};
+        if (!isValidUnicorePort(normalizedPort))
+            return {};
         CommandList commands;
         for (const char *message : {"1019", "1020", "1042", "1044", "1045"})
             commands.push_back(asciiCommand("rtcm" + String(message) + " " + outputPortArgument(normalizedPort) + "1\r\n"));
         return commands;
     }
 
-    CommandList buildBaseSurveyInCommand(uint32_t duration, [[maybe_unused]] float accuracy, const GnssOptions &options) {
+    CommandList buildBaseSurveyInCommand(uint32_t duration, [[maybe_unused]] float accuracy, const GnssOptions &options)
+    {
         CommandList commands;
         commands.push_back(asciiCommand("unlogall\r\n"));
         commands.push_back(delayCommand(1000));
@@ -151,7 +149,8 @@ using namespace GnssCmdBuilder;
         return commands;
     }
 
-    CommandList buildBaseFixedLlaCommand(double lat, double lon, double alt, [[maybe_unused]] float accuracy, const GnssOptions &options) {
+    CommandList buildBaseFixedLlaCommand(double lat, double lon, double alt, [[maybe_unused]] float accuracy, const GnssOptions &options)
+    {
         CommandList commands;
         commands.push_back(asciiCommand("unlogall\r\n"));
         commands.push_back(delayCommand(1000));
@@ -167,7 +166,8 @@ using namespace GnssCmdBuilder;
         return commands;
     }
 
-    CommandList buildBaseRtcmOutputCommand(const String &message, const String &port, bool enabled) {
+    CommandList buildBaseRtcmOutputCommand(const String &message, const String &port, bool enabled)
+    {
 
         auto normalizedMessage = message;
         auto normalizedPort = port;
@@ -177,42 +177,42 @@ using namespace GnssCmdBuilder;
         normalizedPort.toUpperCase();
 
         CommandList commands;
-        if (!isValidUnicorePort(normalizedPort) || normalizedMessage.length() != 4) return commands;
+        if (!isValidUnicorePort(normalizedPort) || normalizedMessage.length() != 4)
+            return commands;
         for (const char digit : normalizedMessage)
             if (!isDigit(digit))
                 return commands;
 
-        commands.push_back(asciiCommand("rtcm" + normalizedMessage + " " + outputPortArgument(normalizedPort)
-                                        + String(enabled ? 1 : 0) + "\r\n"));
+        commands.push_back(asciiCommand("rtcm" + normalizedMessage + " " + outputPortArgument(normalizedPort) + String(enabled ? 1 : 0) + "\r\n"));
         commands.push_back(asciiCommand("saveconfig\r\n"));
 
         return commands;
     }
 
-    CommandList buildBaseAllRtcmOutputCommand(const String &port, bool enabled) {
+    CommandList buildBaseAllRtcmOutputCommand(const String &port, bool enabled)
+    {
         auto normalizedPort = port;
         normalizedPort.trim();
         normalizedPort.toUpperCase();
-        if (!isValidUnicorePort(normalizedPort)) return {};
+        if (!isValidUnicorePort(normalizedPort))
+            return {};
 
         static constexpr std::array<const char *, 17> RTCM = {
             {"1006", "1033", "1074", "1124", "1084", "1094", "1114", "1077", "1127",
-             "1087", "1097", "1117", "1042", "1019", "1020", "1045", "1044"}
-        };
+             "1087", "1097", "1117", "1042", "1019", "1020", "1045", "1044"}};
         CommandList commands;
         for (const char *message : RTCM)
-            commands.push_back(asciiCommand("rtcm" + String(message) + " " + outputPortArgument(normalizedPort)
-                                            + String(enabled ? 1 : 0) + "\r\n"));
+            commands.push_back(asciiCommand("rtcm" + String(message) + " " + outputPortArgument(normalizedPort) + String(enabled ? 1 : 0) + "\r\n"));
         commands.push_back(asciiCommand("saveconfig\r\n"));
         return commands;
     }
 
-    CommandList buildRoverCommand() {
+    CommandList buildRoverCommand()
+    {
         const auto port = outputPortArgument(configuredOutputPort());
         return {asciiCommand("mode rover\r\n"),
                 asciiCommand("gpgga " + port + "1\r\n"),
                 asciiCommand("gpgst " + port + "1\r\n"),
                 asciiCommand("saveconfig\r\n")};
-
     }
 }

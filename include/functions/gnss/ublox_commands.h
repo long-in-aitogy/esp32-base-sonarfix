@@ -1,7 +1,8 @@
 #pragma once
 #include "functions/gnss/gnss_cmd_builder.h"
 
-namespace UbloxCommands {
+namespace UbloxCommands
+{
     using GnssCmdBuilder::Command;
     using GnssCmdBuilder::CommandList;
     using GnssCmdBuilder::GnssOptions;

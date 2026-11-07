@@ -13,7 +13,8 @@
 
 using namespace BackendAgentInternal;
 
-String BackendAgent::buildLwtPayload() const {
+String BackendAgent::buildLwtPayload() const
+{
     DynamicJsonDocument doc(1024);
     doc["serial"] = serialNumber_;
     doc["status"] = "offline";
@@ -27,20 +28,25 @@ String BackendAgent::buildLwtPayload() const {
     return output;
 }
 
-String BackendAgent::statusForPayload(bool anyStream, bool onDemand) const {
-    if (stationLock_.all) return "locked";
-    if (const auto stableState = agentState_ == "configuring" || agentState_ == "rebooting"
-        || agentState_ == "rebooting_for_reset" || agentState_.startsWith("auto_setup")
-        || agentState_.startsWith("reference_check"); stableState) return agentState_;
-    if (!licenseValid_) return "awaiting_license";
-    if (!provisioned_) return "unprovisioned";
-    if (onDemand && !anyStream) return "sleep";
+String BackendAgent::statusForPayload(bool anyStream, bool onDemand) const
+{
+    if (stationLock_.all)
+        return "locked";
+    if (const auto stableState = agentState_ == "configuring" || agentState_ == "rebooting" || agentState_ == "rebooting_for_reset" || agentState_.startsWith("auto_setup") || agentState_.startsWith("reference_check"); stableState)
+        return agentState_;
+    if (!licenseValid_)
+        return "awaiting_license";
+    if (!provisioned_)
+        return "unprovisioned";
+    if (onDemand && !anyStream)
+        return "sleep";
     return "online";
 }
 
 void BackendAgent::appendStatusFields(JsonDocument &doc, const String &status,
                                       const GnssTelemetrySnapshot &gnss, uint32_t nowMs,
-                                      const String &timestamp) const {
+                                      const String &timestamp) const
+{
     doc["serial"] = serialNumber_;
     doc["name"] = deviceName_;
     doc["status"] = status;
@@ -53,8 +59,10 @@ void BackendAgent::appendStatusFields(JsonDocument &doc, const String &status,
     doc["rtk_fix_status"] = gnss.fixStatus.data();
     doc["last_raw_gga"] = gnss.lastGga.data();
     doc["last_gga_fix_status"] = gnss.fixStatus.data();
-    if (gnss.lastGgaMs != 0) doc["last_raw_gga_age"] = (nowMs - gnss.lastGgaMs) / 1000.0;
-    else doc["last_raw_gga_age"] = nullptr;
+    if (gnss.lastGgaMs != 0)
+        doc["last_raw_gga_age"] = (nowMs - gnss.lastGgaMs) / 1000.0;
+    else
+        doc["last_raw_gga_age"] = nullptr;
     doc["base_mode_active"] = baseConfig_ != "{}" && baseConfig_.length() > 2;
     doc["detected_chip_type"] = sensorType_;
     doc["detected_chip_port"] = "Serial1";
@@ -74,10 +82,13 @@ void BackendAgent::appendStatusFields(JsonDocument &doc, const String &status,
 
 void BackendAgent::appendAutoBaseProgress(JsonDocument &doc,
                                           const GnssTelemetrySnapshot &gnss,
-                                          [[maybe_unused]] uint32_t nowMs) const {
+                                          [[maybe_unused]] uint32_t nowMs) const
+{
     JsonObject progress = doc["auto_base_progress"].as<JsonObject>();
-    if (progress.isNull() || progress.size() == 0) return;
-    if (progress["phase"] == "completed" && !(progress["fixed_samples_only"] | false)) {
+    if (progress.isNull() || progress.size() == 0)
+        return;
+    if (progress["phase"] == "completed" && !(progress["fixed_samples_only"] | false))
+    {
         progress["phase"] = "unverified";
         progress["reason"] = "Ket qua cu chua duoc xac nhan RTK Fixed; can chay lai Auto Base";
     }
@@ -93,7 +104,8 @@ void BackendAgent::appendAutoBaseProgress(JsonDocument &doc,
 }
 
 void BackendAgent::appendSystemInfo(JsonDocument &doc, uint32_t nowMs,
-                                    const String &timestamp) const {
+                                    const String &timestamp) const
+{
     JsonObject system = doc.createNestedObject("system_info");
     appendStartupInfo(system);
     JsonObject survey = appendSurveyInfo(system, nowMs);
@@ -103,63 +115,79 @@ void BackendAgent::appendSystemInfo(JsonDocument &doc, uint32_t nowMs,
     deviceLock["scoped"] = true;
     deviceLock["all"] = stationLock_.all;
     JsonArray lockedServers = deviceLock.createNestedArray("locked_servers");
-    for (uint8_t id = 1; id <= 2; ++id) if (isServerLocked(id)) lockedServers.add(id);
+    for (uint8_t id = 1; id <= 2; ++id)
+        if (isServerLocked(id))
+            lockedServers.add(id);
 }
 
-void BackendAgent::appendStartupInfo(JsonObject system) const {
+void BackendAgent::appendStartupInfo(JsonObject system) const
+{
     JsonObject startup = system.createNestedObject("base_startup");
     startup["state"] = baseStartupState_;
-    if (!baseStartupError_.isEmpty()) startup["error"] = baseStartupError_;
-    if (surveyInResult_.length() > 2) {
+    if (!baseStartupError_.isEmpty())
+        startup["error"] = baseStartupError_;
+    if (surveyInResult_.length() > 2)
+    {
         DynamicJsonDocument savedSurvey(1024);
         if (deserializeJson(savedSurvey, surveyInResult_) == DeserializationError::Ok)
             system["survey_in_result"].set(savedSurvey.as<JsonObjectConst>());
     }
 }
 
-JsonObject BackendAgent::appendSurveyInfo(JsonObject system, uint32_t nowMs) const {
+JsonObject BackendAgent::appendSurveyInfo(JsonObject system, uint32_t nowMs) const
+{
     JsonObject survey = system.createNestedObject("survey_in_status");
-    const auto readbackFresh = receiverBaseReadbackMs_ > 0
-        && nowMs - receiverBaseReadbackMs_ <= 45000UL && surveyInReadbackHasPosition_;
+    const auto readbackFresh = receiverBaseReadbackMs_ > 0 && nowMs - receiverBaseReadbackMs_ <= 45000UL && surveyInReadbackHasPosition_;
     const char *surveyState = "waiting_base";
-    if (!surveyInMonitoring_) surveyState = "not_monitoring";
-    else if (!readbackFresh) surveyState = "awaiting_readback";
-    else if (surveyInReadbackReady_) surveyState = "base_ready";
+    if (!surveyInMonitoring_)
+        surveyState = "not_monitoring";
+    else if (!readbackFresh)
+        surveyState = "awaiting_readback";
+    else if (surveyInReadbackReady_)
+        surveyState = "base_ready";
     survey["state"] = surveyState;
-    if (surveyInMonitoring_) {
+    if (surveyInMonitoring_)
+    {
         if (surveyInStartedMs_ > 0)
             survey["elapsed_since_ack_seconds"] =
                 (nowMs - surveyInStartedMs_) / 1000UL;
-        else survey["elapsed_since_ack_seconds"] = nullptr;
+        else
+            survey["elapsed_since_ack_seconds"] = nullptr;
         survey["target_seconds"] = surveyInTargetSeconds_;
         survey["fix_status"] = surveyInReadbackReady_ ? "FIXEDPOS" : "UNVERIFIED";
         survey["source"] = sensorType_ == "Ublox" ? "NAV-SVIN" : "BESTNAV";
         survey["readback_age_seconds"] = receiverBaseReadbackMs_ > 0
-            ? (nowMs - receiverBaseReadbackMs_) / 1000UL : UINT32_MAX;
+                                             ? (nowMs - receiverBaseReadbackMs_) / 1000UL
+                                             : UINT32_MAX;
     }
     return survey;
 }
 
-void BackendAgent::appendReceiverReadback(JsonObject system, JsonObject survey) const {
-    if (receiverBaseReadback_.length() > 2) {
+void BackendAgent::appendReceiverReadback(JsonObject system, JsonObject survey) const
+{
+    if (receiverBaseReadback_.length() > 2)
+    {
         DynamicJsonDocument readbackDoc(1024);
-        if (deserializeJson(readbackDoc, receiverBaseReadback_) == DeserializationError::Ok
-            && readbackDoc.is<JsonObject>()) {
+        if (deserializeJson(readbackDoc, receiverBaseReadback_) == DeserializationError::Ok && readbackDoc.is<JsonObject>())
+        {
             JsonObject readback = system.createNestedObject("receiver_base_readback");
             readback.set(readbackDoc.as<JsonObjectConst>());
-            if (surveyInMonitoring_ && sensorType_ == "Ublox" && readbackDoc["state"] == "ok") {
+            if (surveyInMonitoring_ && sensorType_ == "Ublox" && readbackDoc["state"] == "ok")
+            {
                 survey["elapsed_seconds"] = readbackDoc["elapsed_seconds"];
                 survey["observations"] = readbackDoc["observations"];
                 survey["mean_accuracy_m"] = readbackDoc["mean_accuracy_m"];
                 survey["active"] = readbackDoc["active"];
             }
-            readback["age_seconds"] = receiverBaseReadbackMs_ > 0
-                ? (millis() - receiverBaseReadbackMs_) / 1000UL : 0;
+            readbaock["age_seconds"] = receiverBaseReadbackMs_ > 0
+                                          ? (millis() - receiverBaseReadbackMs_) / 1000UL
+                                          : 0;
         }
     }
 }
 
-void BackendAgent::appendResourceInfo(JsonObject system, const String &timestamp) const {
+void BackendAgent::appendResourceInfo(JsonObject system, const String &timestamp) const
+{
     JsonObject cpu = system.createNestedObject("cpu");
     cpu["usage_percent"] = 0.0;
     cpu["frequency_mhz"] = ESP.getCpuFreqMHz();
@@ -176,7 +204,8 @@ void BackendAgent::appendResourceInfo(JsonObject system, const String &timestamp
     memory["used_mb"] = static_cast<double>(heapUsed) / (1024.0 * 1024.0);
     memory["total_mb"] = static_cast<double>(heapTotal) / (1024.0 * 1024.0);
     memory["percent"] = heapTotal > 0
-        ? round((100.0 - static_cast<double>(heapFree) * 100.0 / heapTotal) * 10.0) / 10.0 : 0.0;
+                            ? round((100.0 - static_cast<double>(heapFree) * 100.0 / heapTotal) * 10.0) / 10.0
+                            : 0.0;
     JsonObject disk = system.createNestedObject("disk");
     const uint32_t flashTotal = ESP.getFlashChipSize();
     const uint32_t flashUsed = firmwareSize_;
@@ -196,7 +225,8 @@ void BackendAgent::appendResourceInfo(JsonObject system, const String &timestamp
 }
 
 void BackendAgent::appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapshot &gnss,
-                                    uint32_t nowMs) const {
+                                    uint32_t nowMs) const
+{
     JsonObject nmeaHealth = doc.createNestedObject("nmea_health");
     JsonObject typeCounts = nmeaHealth.createNestedObject("type_counts");
     typeCounts["GGA"] = gnss.ggaCount;
@@ -204,12 +234,16 @@ void BackendAgent::appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapsh
     typeCounts["GSV"] = gnss.gsvCount;
     typeCounts["GST"] = gnss.gstCount;
     nmeaHealth["gsv_snr_samples"] = gnss.snrSamples;
-    if (gnss.lastGsvMs > 0 && nowMs - gnss.lastGsvMs <= 15000UL) {
+    if (gnss.lastGsvMs > 0 && nowMs - gnss.lastGsvMs <= 15000UL)
+    {
         nmeaHealth["gsv_snr_samples"] = gnss.latestGsvSamples;
         nmeaHealth["avg_snr"] = gnss.latestAverageSnr;
         nmeaHealth["seconds_since_gsv"] = (nowMs - gnss.lastGsvMs) / 1000.0;
-    } else if (gnss.snrSamples > 0) nmeaHealth["avg_snr"] = gnss.averageSnr;
-    if (gnss.lastGstMs > 0 && nowMs - gnss.lastGstMs <= 15000UL) {
+    }
+    else if (gnss.snrSamples > 0)
+        nmeaHealth["avg_snr"] = gnss.averageSnr;
+    if (gnss.lastGstMs > 0 && nowMs - gnss.lastGstMs <= 15000UL)
+    {
         nmeaHealth["gst_semi_major_sigma"] = gnss.gstSemiMajor;
         nmeaHealth["gst_semi_minor_sigma"] = gnss.gstSemiMinor;
         nmeaHealth["hacc"] = gnss.gstHacc;
@@ -221,10 +255,12 @@ void BackendAgent::appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapsh
     position["longitude"] = gnss.longitude;
     position["altitude"] = gnss.altitude;
     doc["rtk_fix_status"] = gnss.fixStatus.data();
-    if (gnss.satellites > 0) doc["satellite_count"] = gnss.satellites;
+    if (gnss.satellites > 0)
+        doc["satellite_count"] = gnss.satellites;
     if (gnss.gstHacc > 0 && gnss.lastGstMs > 0 && nowMs - gnss.lastGstMs <= 15000UL)
         doc["hacc"] = gnss.gstHacc;
-    else if (gnss.hdop > 0) doc["hacc"] = gnss.hdop;
+    else if (gnss.hdop > 0)
+        doc["hacc"] = gnss.hdop;
     JsonObject stats = doc.createNestedObject("gnss_stats");
     stats["rtcm_packets"] = gnss.rtcmFrames;
     stats["nmea_packets"] = gnss.nmeaSentences;
@@ -237,7 +273,8 @@ void BackendAgent::appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapsh
 }
 
 void BackendAgent::appendNtripStatus(JsonDocument &doc, const JsonObjectConst &service,
-                                     bool server1Active, bool server2Active) const {
+                                     bool server1Active, bool server2Active) const
+{
     JsonObject stats = doc.createNestedObject("ntrip_stats");
     stats["rtcm_input_bps"] = getRtcmInputBps();
     stats["server1_bps"] = ntripServerBps(1);
@@ -260,14 +297,14 @@ void BackendAgent::appendNtripStatus(JsonDocument &doc, const JsonObjectConst &s
     doc["ntrip_connected"] = ntripServerConnected(1) || ntripServerConnected(2);
     JsonObject streams = doc.createNestedObject("ntrip_stream_state");
     streams["selected_mountpoint"] = jsonString(service, "active_mountpoint");
-    for (uint8_t id = 1; id <= 2; ++id) {
+    for (uint8_t id = 1; id <= 2; ++id)
+    {
         const auto prefix = String("server") + String(id);
         const auto active = id == 1 ? server1Active : server2Active;
         const auto onDemand = jsonBool(service, prefix + "_stream_on_demand",
                                        jsonBool(service, "stream_on_demand", false));
         const auto enabled = jsonBool(service, prefix + "_enabled", false);
-        const auto configured = licenseValid_ && provisioned_
-            && effectiveStreamActive(service, id, false);
+        const auto configured = licenseValid_ && provisioned_ && effectiveStreamActive(service, id, false);
         JsonObject stream = streams.createNestedObject(prefix);
         stream["enabled"] = enabled;
         stream["on_demand"] = onDemand;
@@ -286,19 +323,23 @@ void BackendAgent::appendNtripStatus(JsonDocument &doc, const JsonObjectConst &s
 
 void BackendAgent::appendTransportStatus(JsonDocument &doc,
                                          const GnssTelemetrySnapshot &gnss,
-                                         uint32_t nowMs, int32_t signal) const {
+                                         uint32_t nowMs, int32_t signal) const
+{
     const auto mqtt_connected = mqttConnected();
     const auto websocket = websocketConnected();
     JsonObject antenna = doc.createNestedObject("antenna_status");
     const auto gnssOk = gnss.hasData && nowMs - gnss.lastDataMs <= 15000UL;
     antenna["state"] = gnssOk ? "OK" : "FAULT";
-    if (!gnssOk) antenna["message"] = "Không nhận được dữ liệu GNSS trong 15 giây";
+    if (!gnssOk)
+        antenna["message"] = "Không nhận được dữ liệu GNSS trong 15 giây";
     JsonObject transport = doc.createNestedObject("transport_status");
     transport["mqtt_connected"] = mqtt_connected;
     transport["websocket_connected"] = websocket;
     const char *activeChannel = "none";
-    if (websocket) activeChannel = "websocket";
-    else if (mqtt_connected) activeChannel = "mqtt";
+    if (websocket)
+        activeChannel = "websocket";
+    else if (mqtt_connected)
+        activeChannel = "mqtt";
     transport["active_channel"] = activeChannel;
     transport["mqtt_broker"] = readPreference("MQTT_SERVER", MQTT_SERVER);
     transport["websocket_host"] = readPreference("BACKEND_HOST", BACKEND_HOST);
@@ -317,15 +358,14 @@ void BackendAgent::appendTransportStatus(JsonDocument &doc,
     doc["uptime_s"] = millis() / 1000UL;
 }
 
-String BackendAgent::buildStatusPayload() {
+String BackendAgent::buildStatusPayload()
+{
     DynamicJsonDocument doc(STATUS_DOCUMENT_SIZE);
     DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
     deserializeJson(serviceDoc, serviceConfig_);
     const JsonObjectConst service = serviceDoc.as<JsonObjectConst>();
-    const auto server1Active = licenseValid_ && provisioned_ && !isServerLocked(1)
-        && effectiveStreamActive(service, 1, controlPlaneFailOpen_);
-    const auto server2Active = licenseValid_ && provisioned_ && !isServerLocked(2)
-        && effectiveStreamActive(service, 2, controlPlaneFailOpen_);
+    const auto server1Active = licenseValid_ && provisioned_ && !isServerLocked(1) && effectiveStreamActive(service, 1, controlPlaneFailOpen_);
+    const auto server2Active = licenseValid_ && provisioned_ && !isServerLocked(2) && effectiveStreamActive(service, 2, controlPlaneFailOpen_);
     const auto onDemand = jsonBool(service, "stream_on_demand", false);
     const GnssTelemetrySnapshot gnss = getGnssTelemetrySnapshot();
     const uint32_t nowMs = millis();

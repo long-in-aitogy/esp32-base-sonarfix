@@ -1,7 +1,8 @@
 #include "Prog_Config.h"
 #include "hardware/Wifi_handler.h"
 
-bool setupWiFi() {
+bool setupWiFi()
+{
   prefs.begin("myPrefs", false);
   auto ssid = prefs.getString("WIFI_SSID", "AITOGY-VP");
   auto password = prefs.getString("WIFI_PASS", "123456789");
@@ -12,10 +13,12 @@ bool setupWiFi() {
   WiFi.begin(ssid.c_str(), password.c_str());
 
   auto attempt = 0;
-  while (WiFiClass::status() != WL_CONNECTED) {
+  while (WiFiClass::status() != WL_CONNECTED)
+  {
     delay(500);
     Serial.print(".");
-    if (++attempt > 10) {
+    if (++attempt > 10)
+    {
       Serial.println("\n[ERROR] Ket noi WiFi that bai!");
       return false;
     }

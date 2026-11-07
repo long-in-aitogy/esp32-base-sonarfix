@@ -7,9 +7,11 @@
 #include <algorithm>
 #include <cstring>
 
-namespace GnssCmdBuilder {
+namespace GnssCmdBuilder
+{
 
-    inline bool isValidPort(const String &port) {
+    inline bool isValidPort(const String &port)
+    {
         return port == "UART1" || port == "UART2" || port == "USB";
     }
 
@@ -62,41 +64,53 @@ namespace GnssCmdBuilder {
     CommandList buildBaseSurveyInCommand(uint32_t duration, float accuracy,
                                          GnssSensorType sensorType, const GnssOptions &options)
     {
-        if (sensorType == GnssSensorType::Ublox) return UbloxCommands::buildBaseSurveyInCommand(duration, accuracy, options);
-        if (sensorType == GnssSensorType::Unicore) return UnicoreCommands::buildBaseSurveyInCommand(duration, accuracy, options);
+        if (sensorType == GnssSensorType::Ublox)
+            return UbloxCommands::buildBaseSurveyInCommand(duration, accuracy, options);
+        if (sensorType == GnssSensorType::Unicore)
+            return UnicoreCommands::buildBaseSurveyInCommand(duration, accuracy, options);
         return {};
     }
 
     CommandList buildBaseFixedLlaCommand(double lat, double lon, double alt, float accuracy,
                                          GnssSensorType sensorType, const GnssOptions &options)
     {
-        if (sensorType == GnssSensorType::Ublox) return UbloxCommands::buildBaseFixedLlaCommand(lat, lon, alt, accuracy, options);
-        if (sensorType == GnssSensorType::Unicore) return UnicoreCommands::buildBaseFixedLlaCommand(lat, lon, alt, accuracy, options);
+        if (sensorType == GnssSensorType::Ublox)
+            return UbloxCommands::buildBaseFixedLlaCommand(lat, lon, alt, accuracy, options);
+        if (sensorType == GnssSensorType::Unicore)
+            return UnicoreCommands::buildBaseFixedLlaCommand(lat, lon, alt, accuracy, options);
         return {};
     }
 
     CommandList buildBaseRtcmOutputCommand(const String &message, const String &port, bool enabled,
                                            GnssSensorType sensorType)
     {
-        if (sensorType == GnssSensorType::Ublox) return UbloxCommands::buildBaseRtcmOutputCommand(message, port, enabled);
-        if (sensorType == GnssSensorType::Unicore) return UnicoreCommands::buildBaseRtcmOutputCommand(message, port, enabled);
+        if (sensorType == GnssSensorType::Ublox)
+            return UbloxCommands::buildBaseRtcmOutputCommand(message, port, enabled);
+        if (sensorType == GnssSensorType::Unicore)
+            return UnicoreCommands::buildBaseRtcmOutputCommand(message, port, enabled);
         return {};
     }
 
     CommandList buildBaseAllRtcmOutputCommand(const String &port, bool enabled,
                                               GnssSensorType sensorType)
     {
-        if (sensorType == GnssSensorType::Ublox) return UbloxCommands::buildBaseAllRtcmOutputCommand(port, enabled);
-        if (sensorType == GnssSensorType::Unicore) return UnicoreCommands::buildBaseAllRtcmOutputCommand(port, enabled);
+        if (sensorType == GnssSensorType::Ublox)
+            return UbloxCommands::buildBaseAllRtcmOutputCommand(port, enabled);
+        if (sensorType == GnssSensorType::Unicore)
+            return UnicoreCommands::buildBaseAllRtcmOutputCommand(port, enabled);
         return {};
     }
 
-    CommandList buildRoverCommand(GnssSensorType type) {
-        if (type == GnssSensorType::Ublox) return UbloxCommands::buildRoverCommand();
-        if (type == GnssSensorType::Unicore) return UnicoreCommands::buildRoverCommand();
+    CommandList buildRoverCommand(GnssSensorType type)
+    {
+        if (type == GnssSensorType::Ublox)
+            return UbloxCommands::buildRoverCommand();
+        if (type == GnssSensorType::Unicore)
+            return UnicoreCommands::buildRoverCommand();
         return {};
     }
-    Command buildUbloxOutputConfigCommand(const GnssOptions &options) {
+    Command buildUbloxOutputConfigCommand(const GnssOptions &options)
+    {
         return UbloxCommands::buildOutputConfigCommand(options);
     }
 #if PROGRAM_DEBUG

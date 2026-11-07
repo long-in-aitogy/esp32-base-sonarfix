@@ -14,16 +14,15 @@
 // #define DUMP_AT_COMMANDS
 #define TINY_GSM_DEBUG SerialMon
 
-
 #include <TinyGsmClient.h>
 #include "Top_Lvl_Config.h"
 
 #ifdef DUMP_AT_COMMANDS
 #include <StreamDebugger.h>
 extern StreamDebugger debugger;
-extern TinyGsm        modem;
+extern TinyGsm modem;
 #else
-extern TinyGsm        modem;
+extern TinyGsm modem;
 #endif
 
 bool startSIM();

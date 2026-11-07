@@ -71,9 +71,9 @@ namespace GnssCmdBuilder
     }
     Command commandListToBytes(const CommandList &commands);
 
-    #if PROGRAM_DEBUG
+#if PROGRAM_DEBUG
     String debugCommand(const Command &command);
-    #endif
+#endif
 
 } // namespace GnssCmdBuilder
 

@@ -4,7 +4,8 @@
 #include <Arduino.h>
 #include <vector>
 
-enum class cmd_action {
+enum class cmd_action
+{
     CMD_ACTION_NONE = 0,
     CMD_ACTION_ESP_RESTART = 1
 };
