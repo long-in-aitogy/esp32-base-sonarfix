@@ -86,7 +86,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     // Phân tích lệnh ATG để cấu hình ESP32, kết nối hoặc receiver GNSS.
     std::vector<String> cmdWords = splitCommand(cmd);
     cmd_action_t action = handleCommand(cmdWords);
-    if (action == CMD_ACTION_ESP_RESTART) {
+    if (action == cmd_action_t::CMD_ACTION_ESP_RESTART) {
       Serial.println("[MQTT DOWNLINK] Yeu cau ESP32 khoi dong lai.");
       shutdownTcpTransportBeforeRestart();
       ESP.restart();

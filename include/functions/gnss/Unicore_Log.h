@@ -34,8 +34,7 @@ inline size_t routeUnicoreOutput(uint8_t *data, size_t length, uint8_t port) {
         output = talker && (strcmp(name.data() + 2, "gga") == 0 || strcmp(name.data() + 2, "gsa") == 0
             || strcmp(name.data() + 2, "gsv") == 0 || strcmp(name.data() + 2, "gst") == 0);
     }
-    const size_t start = tokenLength + 1;
-    if (output && std::tolower(data[start]) == 'c' && std::tolower(data[start + 1]) == 'o'
+    if (const size_t start = tokenLength + 1; output && std::tolower(data[start]) == 'c' && std::tolower(data[start + 1]) == 'o'
         && std::tolower(data[start + 2]) == 'm' && data[start + 3] >= '1'
         && data[start + 3] <= '3' && data[start + 4] == ' ') {
         if (port == 0) {

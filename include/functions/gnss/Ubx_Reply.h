@@ -27,7 +27,8 @@ struct UbxReply {
         if (used < 8 || used != expected) return false;
         length = used;
         used = 0;
-        uint8_t a = 0, b = 0;
+        uint8_t a = 0;
+        uint8_t b = 0;
         for (size_t i = 2; i < length - 2; ++i) { a += frame[i]; b += a; }
         return a == frame[length - 2] && b == frame[length - 1];
     }

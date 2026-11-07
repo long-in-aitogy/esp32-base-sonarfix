@@ -10,7 +10,7 @@ void SerialCommandProcessor::execute(String command) {
 
     Serial.println("[SERIAL COMMAND] " + command);
     std::vector<String> cmdWords = splitCommand(command);
-    if (handleCommand(cmdWords) == CMD_ACTION_ESP_RESTART) {
+    if (handleCommand(cmdWords) == cmd_action_t::CMD_ACTION_ESP_RESTART) {
         Serial.println("[SERIAL COMMAND] Yeu cau ESP32 khoi dong lai.");
         shutdownTcpTransportBeforeRestart();
         ESP.restart();
