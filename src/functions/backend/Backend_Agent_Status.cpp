@@ -179,7 +179,7 @@ void BackendAgent::appendReceiverReadback(JsonObject system, JsonObject survey) 
                 survey["mean_accuracy_m"] = readbackDoc["mean_accuracy_m"];
                 survey["active"] = readbackDoc["active"];
             }
-            readbaock["age_seconds"] = receiverBaseReadbackMs_ > 0
+            readback["age_seconds"] = receiverBaseReadbackMs_ > 0
                                            ? (millis() - receiverBaseReadbackMs_) / 1000UL
                                            : 0;
         }
