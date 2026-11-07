@@ -1,14 +1,15 @@
-f#include "functions/backend/Backend_Agent.h"
+f #include "functions/backend/Backend_Agent.h"
 #include "functions/backend/Backend_Agent_Internal.h"
 #include "functions/gnss/Unicore_Readback.h"
 #include "functions/gnss/Ublox_Readback.h"
 #include <cstdio>
 
-using namespace BackendAgentInternal;
+    using namespace BackendAgentInternal;
 
-void BackendAgent::saveSurveyResult(JsonObjectConst bestPosition, const String &mode) {
-    if (!surveyInMonitoring_ || !surveyInReadbackReady_ || !surveyInReadbackHasPosition_
-        || (!surveyInResultPending_ && surveyInResult_.length() > 2)) return;
+void BackendAgent::saveSurveyResult(JsonObjectConst bestPosition, const String &mode)
+{
+    if (!surveyInMonitoring_ || !surveyInReadbackReady_ || !surveyInReadbackHasPosition_ || (!surveyInResultPending_ && surveyInResult_.length() > 2))
+        return;
     DynamicJsonDocument savedSurvey(1536);
     savedSurvey["chip"] = sensorType_;
     savedSurvey["bestpos"].set(bestPosition);
@@ -20,7 +21,8 @@ void BackendAgent::saveSurveyResult(JsonObjectConst bestPosition, const String &
     saveStatePreferences();
 }
 
-bool BackendAgent::refreshUbloxReadback(String &error) {
+bool BackendAgent::refreshUbloxReadback(String &error)
+{
     UbxBaseStatus status;
     const auto success = UbloxReadback::readBaseStatus(status, error);
     DynamicJsonDocument doc(1536);
@@ -43,13 +45,16 @@ bool BackendAgent::refreshUbloxReadback(String &error) {
 
     doc["mode_kind"] = success ? kind : "unknown";
     doc["mode_raw"] = mode;
-    
+
     surveyInReadbackHasPosition_ = success && status.hasPosition;
     surveyInReadbackReady_ = success && status.valid && !status.active && status.hasPosition;
-    if (!success) {
+    if (!success)
+    {
         Serial.printf("[GNSS][READBACK][ERROR] UBX: %s\n", error.c_str());
         doc["error"] = error;
-    } else {
+    }
+    else
+    {
         logUbloxReadback(status);
         updateUbloxSurveyState(status);
         doc["elapsed_seconds"] = status.duration;
@@ -65,13 +70,17 @@ bool BackendAgent::refreshUbloxReadback(String &error) {
     return success;
 }
 
-void BackendAgent::updateUbloxSurveyState(const UbxBaseStatus &status) {
+void BackendAgent::updateUbloxSurveyState(const UbxBaseStatus &status)
+{
     surveyInMonitoring_ = status.mode == 1;
-    if (surveyInMonitoring_) surveyInTargetSeconds_ = status.targetSeconds;
+    if (surveyInMonitoring_)
+        surveyInTargetSeconds_ = status.targetSeconds;
 }
 
-void BackendAgent::logUbloxReadback(const UbxBaseStatus &status) {
-    if (status.mode == 1) {
+void BackendAgent::logUbloxReadback(const UbxBaseStatus &status)
+{
+    if (status.mode == 1)
+    {
         Serial.printf("[GNSS][READBACK] UBX Survey-In elapsed=%lus/%lus observations=%lu accuracy=%.3fm active=%u valid=%u\n",
                       static_cast<unsigned long>(status.duration),
                       static_cast<unsigned long>(status.targetSeconds),
@@ -85,22 +94,29 @@ void BackendAgent::logUbloxReadback(const UbxBaseStatus &status) {
 }
 
 void BackendAgent::appendUbloxPosition(DynamicJsonDocument &doc,
-                                       const UbxBaseStatus &status, const String &mode) {
+                                       const UbxBaseStatus &status, const String &mode)
+{
     JsonObject position = doc.createNestedObject("bestpos");
     position["state"] = status.hasPosition ? "ok" : "unavailable";
-    if (!status.hasPosition) return;
+    if (!status.hasPosition)
+        return;
     position["message"] = "UBX";
     position["position_type"] = surveyInReadbackReady_ ? "FIXEDPOS" : "SURVEY-IN-ESTIMATE";
     position["datum"] = "WGS84";
     position["altitude_reference"] = "ELLIPSOID";
     char value[32];
-    snprintf(value, sizeof(value), "%.11f", status.latitude); position["lat"] = value;
-    snprintf(value, sizeof(value), "%.11f", status.longitude); position["lon"] = value;
-    snprintf(value, sizeof(value), "%.4f", status.height); position["alt"] = value;
-    if (surveyInReadbackReady_) saveSurveyResult(position, mode);
+    snprintf(value, sizeof(value), "%.11f", status.latitude);
+    position["lat"] = value;
+    snprintf(value, sizeof(value), "%.11f", status.longitude);
+    position["lon"] = value;
+    snprintf(value, sizeof(value), "%.4f", status.height);
+    position["alt"] = value;
+    if (surveyInReadbackReady_)
+        saveSurveyResult(position, mode);
 }
 
-bool BackendAgent::refreshUnicoreReadback(String &error) {
+bool BackendAgent::refreshUnicoreReadback(String &error)
+{
     String mode;
     const auto success = UnicoreReadback::readMode(mode, error);
     DynamicJsonDocument readbackDoc(1024);
@@ -110,9 +126,12 @@ bool BackendAgent::refreshUnicoreReadback(String &error) {
     readbackDoc["mode_raw"] = mode;
     readbackDoc["mode_kind"] = success ? UnicoreReadback::modeKind(mode) : "unknown";
     readbackDoc["query"] = "MODE";
-    if (success) {
-        if (String(UnicoreReadback::modeKind(mode)) == "survey_in") {
-            if (!surveyInMonitoring_) {
+    if (success)
+    {
+        if (String(UnicoreReadback::modeKind(mode)) == "survey_in")
+        {
+            if (!surveyInMonitoring_)
+            {
                 surveyInMonitoring_ = true;
                 surveyInStartedMs_ = 0;
                 surveyInTargetSeconds_ = 0;
@@ -120,22 +139,28 @@ bool BackendAgent::refreshUnicoreReadback(String &error) {
             auto target = 0;
             if (std::sscanf(mode.c_str(), "MODE BASE TIME %lu", &target) == 1)
                 surveyInTargetSeconds_ = target;
-        } else {
+        }
+        else
+        {
             surveyInMonitoring_ = false;
         }
         JsonObject bestPosition = readbackDoc.createNestedObject("bestpos");
         String positionError;
-        if (!UnicoreReadback::readBestPosition(bestPosition, positionError)) {
+        if (!UnicoreReadback::readBestPosition(bestPosition, positionError))
+        {
             surveyInReadbackHasPosition_ = false;
             bestPosition["state"] = "unavailable";
             bestPosition["error"] = positionError;
-        } else {
+        }
+        else
+        {
             surveyInReadbackHasPosition_ = true;
             surveyInReadbackReady_ = String(bestPosition["position_type"] | "") == "FIXEDPOS";
         }
         saveSurveyResult(bestPosition, mode);
-
-    } else {
+    }
+    else
+    {
         surveyInReadbackHasPosition_ = false;
         readbackDoc["error"] = error;
     }
@@ -146,19 +171,23 @@ bool BackendAgent::refreshUnicoreReadback(String &error) {
     return success;
 }
 
-bool BackendAgent::refreshReceiverReadback(String &error) {
+bool BackendAgent::refreshReceiverReadback(String &error)
+{
     lastReceiverPollMs_ = millis();
     surveyInReadbackReady_ = false;
     surveyInReadbackHasPosition_ = false;
-    if (sensorType_ == "Ublox") return refreshUbloxReadback(error);
+    if (sensorType_ == "Ublox")
+        return refreshUbloxReadback(error);
     return refreshUnicoreReadback(error);
 }
 
-void BackendAgent::pollGnssStatus() {
-    if ((sensorType_ != "Unicorecomm" && sensorType_ != "Ublox") || workflowActive() || stationLock_.all) return;
+void BackendAgent::pollGnssStatus()
+{
+    if ((sensorType_ != "Unicorecomm" && sensorType_ != "Ublox") || workflowActive() || stationLock_.all)
+        return;
     const uint32_t now = millis();
-    if ((lastReceiverPollMs_ == 0 && now >= 5000UL)
-        || (lastReceiverPollMs_ != 0 && now - lastReceiverPollMs_ >= 30000UL)) {
+    if ((lastReceiverPollMs_ == 0 && now >= 5000UL) || (lastReceiverPollMs_ != 0 && now - lastReceiverPollMs_ >= 30000UL))
+    {
         String error;
         refreshReceiverReadback(error);
     }
