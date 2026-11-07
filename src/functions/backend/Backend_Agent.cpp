@@ -4,7 +4,7 @@
 
 #include "Prog_Config.h"
 #include "functions/mqtt/MQTT_Manager.h"
-#include "functions/ntrip/NTRIP_Handler_IP.h"
+#include "functions/ntrip/ntrip_base.h"
 #include "functions/ntrip/RTCM_Receiver.h"
 #include "functions/backend/Device_Token.h"
 #include "functions/gnss/Unicore_Identification.h"

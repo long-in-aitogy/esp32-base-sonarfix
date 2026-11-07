@@ -1,7 +1,8 @@
 #include "functions/backend/Backend_Agent.h"
 #include "functions/backend/Backend_Agent_Internal.h"
 #include "Prog_Config.h"
-#include "functions/ntrip/NTRIP_Handler_IP.h"
+#include "functions/ntrip/ntrip_base.h"
+#include "functions/ntrip/ntrip_rover.h"
 #include "functions/ntrip/RTCM_Receiver.h"
 #include <cmath>
 
