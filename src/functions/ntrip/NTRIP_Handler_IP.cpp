@@ -169,15 +169,15 @@ bool safeNtripField(const String &value) {
     return value.indexOf('\r') < 0 && value.indexOf('\n') < 0;
 }
 
-struct LegacyNtripConfig {
+struct LocalNtripConfig {
     String host;
     String mountpoint;
     String password;
     uint16_t port = NTRIP_CASTER_PORT;
 };
 
-LegacyNtripConfig loadLegacyNtripConfig() {
-    LegacyNtripConfig legacy;
+LocalNtripConfig loadLocalNtripConfig() {
+    LocalNtripConfig legacy;
     prefs.begin("myPrefs", true);
     legacy.host = prefs.getString("NTRIP_SERVER", String(NTRIP_CASTER_ADDRESS));
     legacy.port = prefs.getUShort("NTRIP_PORT", NTRIP_CASTER_PORT);
@@ -285,7 +285,7 @@ void normalizeEndpoint(NtripEndpoint &endpoint) {
 }
 
 void loadEndpoint(NtripEndpoint &endpoint, uint8_t index, JsonObjectConst service,
-                  bool hasServiceConfig, const LegacyNtripConfig &legacy) {
+                  bool hasServiceConfig, const LocalNtripConfig &legacy) {
     const auto suffix = String(index + 1);
     auto genericUser = "user2";
     auto genericPassword = "password2";
@@ -337,7 +337,7 @@ void loadEndpoints() {
         && serviceDoc.is<JsonObject>();
     const JsonObjectConst service = serviceDoc.as<JsonObjectConst>();
 
-    const LegacyNtripConfig legacy = loadLegacyNtripConfig();
+    const LocalNtripConfig legacy = loadLocalNtripConfig();
 
     for (uint8_t index = 0; index < NTRIP_SERVER_COUNT; ++index) {
         loadEndpoint(endpoints[index], index, service, hasServiceConfig, legacy);
