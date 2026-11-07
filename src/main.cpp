@@ -260,7 +260,7 @@ __attribute__((noreturn)) void healthCheckTask([[maybe_unused]] void* const para
             if (xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS))) {
                 if (isGsmConnection()) signalQualityDbm = modem.getSignalQuality();
                 healthPayload = formDeviceHealthString(signalQualityDbm, gnssDataOk,
-                                                       messageCounts.values);
+                                                       messageCounts.values.data());
                 xSemaphoreGive(tcpStreamMutex);
             }
         }
@@ -337,8 +337,7 @@ void loop() {
 static bool tryWifiFallback(bool protocolsRunning) {
     Serial.println("[NETWORK] SIM khong truy cap duoc dich vu; thu Wi-Fi du phong da luu.");
     if (!setupWiFi()) return false;
-    const auto reachable = probeMqttTransport(false);
-    if (!reachable) {
+    if (const auto reachable = probeMqttTransport(false); !reachable) {
         Serial.println("[NETWORK] Wi-Fi chua truy cap duoc MQTT broker; giu SIM va se thu lai.");
         WiFi.disconnect();
         return false;
@@ -371,14 +370,13 @@ static void checkSimRecovery() {
     if (!wifiFallbackActive || !isWifiConnection()) return;
     const auto wifiConnected = WiFiClass::status() == WL_CONNECTED;
     const uint32_t now = millis();
-    const uint32_t interval = wifiConnected ? 60000UL : 15000UL;
-    if (now - lastSimProbeMs < interval) return;
+    if (const uint32_t interval = wifiConnected ? 60000UL : 15000UL;
+        now - lastSimProbeMs < interval) return;
     lastSimProbeMs = now;
     // Avoid a blocking registration wait while healthy Wi-Fi carries traffic.
-    const auto reachable = modem.isNetworkConnected()
-        && (modem.isGprsConnected() || connectGSM(1))
-        && probeMqttTransport(true);
-    if (!reachable) {
+    if (const auto reachable = modem.isNetworkConnected()
+            && (modem.isGprsConnected() || connectGSM(1))
+            && probeMqttTransport(true); !reachable) {
         simRecoverySuccesses = 0;
         return;
     }

@@ -74,8 +74,12 @@ struct UnicoreReply {
             // N4 '$command' replies include '$' in XOR (unlike standard NMEA).
             for (const char *p = line.data(); p < star; ++p)
                 checksum ^= std::byte{static_cast<unsigned char>(*p)};
-            const auto expected = std::byte{static_cast<unsigned char>((hex(star[1]) << 4) | hex(star[2]))};
-            if (checksum != expected) return false;
+            
+            if (
+                const auto expected = 
+                    std::byte{static_cast<unsigned char>((hex(star[1]) << 4) | hex(star[2]))};
+                checksum != expected
+            ) return false;
             end = star;
         }
         while (response < end && std::isspace(static_cast<unsigned char>(*response))) ++response;

@@ -13,7 +13,9 @@ struct UbxBaseStatus {
     uint32_t targetSeconds = 0;
     uint32_t observations = 0;
     double accuracy = 0;
-    double latitude = 0, longitude = 0, height = 0;
+    double latitude = 0;
+    double longitude = 0;
+    double height = 0;
 
     static uint32_t u32(const uint8_t *p) {
         return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -27,10 +29,14 @@ struct UbxBaseStatus {
     static int hp(uint8_t value) { return value < 128 ? value : int(value) - 256; }
 
     bool ecef(double x, double y, double z) {
-        constexpr double a = 6378137.0, f = 1.0 / 298.257223563;
-        constexpr double e2 = f * (2 - f), radToDeg = 180.0 / 3.14159265358979323846;
-        const double radius = std::sqrt(x*x + y*y + z*z), p = std::hypot(x, y);
-        if (!std::isfinite(radius) || radius < 5000000 || radius > 8000000) return false;
+        constexpr double a = 6378137.0;
+        constexpr double f = 1.0 / 298.257223563;
+        constexpr double e2 = f * (2 - f);
+        constexpr double radToDeg = 180.0 / 3.14159265358979323846;
+        const double p = std::hypot(x, y);
+        if (const double radius = std::sqrt(x*x + y*y + z*z);
+            !std::isfinite(radius) || radius < 5000000 || radius > 8000000)
+            return false;
         longitude = std::atan2(y, x) * radToDeg;
         if (p < 1e-8) {
             latitude = z >= 0 ? 90 : -90;
