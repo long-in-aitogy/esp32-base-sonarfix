@@ -6,6 +6,7 @@
 // Keep each modem send below its TCP command payload limit. A short write
 // ends this packet; its caller must reconnect instead of replaying its prefix.
 template <typename Write>
+/** @brief Implements writeMqttChunks. */
 size_t writeMqttChunks(const uint8_t *data, size_t size, Write write)
 {
     size_t sent = 0;

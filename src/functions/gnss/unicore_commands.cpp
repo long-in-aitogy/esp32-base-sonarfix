@@ -9,31 +9,37 @@ namespace UnicoreCommands
 {
     using namespace GnssCmdBuilder;
 
+/** @brief Implements isValidUnicorePort. */
     inline bool isValidUnicorePort(const String &port)
     {
         return port == "COM1" || port == "COM2" || port == "COM3" || port == "CURRENT";
     }
 
+/** @brief Implements outputPortArgument. */
     inline String outputPortArgument(const String &port)
     {
         return port.isEmpty() || port == "CURRENT" ? String() : port + " ";
     }
 
+/** @brief Implements configuredOutputPort. */
     inline String configuredOutputPort()
     {
         return GNSS_UNICORE_PORT == 0 ? String() : "com" + String(GNSS_UNICORE_PORT);
     }
 
+/** @brief Implements asciiCommand. */
     inline Command asciiCommand(const String &text)
     {
         return Command(text.begin(), text.end());
     }
 
+/** @brief Implements delayCommand. */
     inline Command delayCommand(uint16_t delayMs)
     {
         return asciiCommand("$DELAY_" + String(delayMs) + "$");
     }
 
+/** @brief Implements appendUnicoreOutputCommands. */
     void appendUnicoreOutputCommands(CommandList &commands, const String &port, const GnssOptions &options)
     {
         const GnssOptions o = normalizeGnssOptions(options);
@@ -118,6 +124,7 @@ namespace UnicoreCommands
             }
     }
 
+/** @brief Implements buildEphemerisOutputCommands. */
     CommandList buildEphemerisOutputCommands(const String &port)
     {
         auto normalizedPort = port;
@@ -131,6 +138,7 @@ namespace UnicoreCommands
         return commands;
     }
 
+/** @brief Implements buildBaseSurveyInCommand. */
     CommandList buildBaseSurveyInCommand(uint32_t duration, [[maybe_unused]] float accuracy, const GnssOptions &options)
     {
         CommandList commands;
@@ -149,6 +157,7 @@ namespace UnicoreCommands
         return commands;
     }
 
+/** @brief Implements buildBaseFixedLlaCommand. */
     CommandList buildBaseFixedLlaCommand(double lat, double lon, double alt, [[maybe_unused]] float accuracy, const GnssOptions &options)
     {
         CommandList commands;
@@ -166,6 +175,7 @@ namespace UnicoreCommands
         return commands;
     }
 
+/** @brief Implements buildBaseRtcmOutputCommand. */
     CommandList buildBaseRtcmOutputCommand(const String &message, const String &port, bool enabled)
     {
 
@@ -189,6 +199,7 @@ namespace UnicoreCommands
         return commands;
     }
 
+/** @brief Implements buildBaseAllRtcmOutputCommand. */
     CommandList buildBaseAllRtcmOutputCommand(const String &port, bool enabled)
     {
         auto normalizedPort = port;
@@ -207,6 +218,7 @@ namespace UnicoreCommands
         return commands;
     }
 
+/** @brief Implements buildRoverCommand. */
     CommandList buildRoverCommand()
     {
         const auto port = outputPortArgument(configuredOutputPort());

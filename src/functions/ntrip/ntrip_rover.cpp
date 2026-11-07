@@ -21,6 +21,7 @@ extern TinyGsm modem;
 
 using namespace ntrip_common;
 
+/** @brief Implements sendRoverGgaIfAvailable. */
 void sendRoverGgaIfAvailable(Client &client, const bool force = false)
 {
     if (!force && millis() - roverLastGgaMs < 5000UL)
@@ -46,6 +47,7 @@ void sendRoverGgaIfAvailable(Client &client, const bool force = false)
     roverLastGgaMs = millis();
 }
 
+/** @brief Implements startNtripRover. */
 bool startNtripRover(const String &host, const uint16_t port, const String &username,
                      const String &password, String mountpoint, const uint8_t version)
 {
@@ -112,6 +114,7 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
     return true;
 }
 
+/** @brief Implements loopNtripRover. */
 int loopNtripRover()
 {
     if (!roverSessionActive || !roverSessionAuthenticated)
@@ -145,6 +148,7 @@ int loopNtripRover()
     return bytesRead > 0 ? bytesRead : 200;
 }
 
+/** @brief Implements stopNtripRover. */
 void stopNtripRover()
 {
     if (roverSessionActive)
@@ -154,10 +158,13 @@ void stopNtripRover()
     roverLastGgaMs = 0;
 }
 
+/** @brief Implements ntripRoverActive. */
 bool ntripRoverActive()
 {
     return roverSessionActive && roverSessionAuthenticated;
 }
 
+/** @brief Implements ntripRoverBytesReceived. */
 uint32_t ntripRoverBytesReceived() { return roverBytesReceived; }
+/** @brief Implements ntripRoverPacketsReceived. */
 uint32_t ntripRoverPacketsReceived() { return roverPacketsReceived; }

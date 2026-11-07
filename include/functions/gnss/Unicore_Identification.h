@@ -11,6 +11,7 @@ struct UnicoreIdentification
     std::array<char, 512> line = {};
     size_t used = 0;
 
+/** @brief Implements feed. */
     bool feed(uint8_t byte)
     {
         if (byte == '#')

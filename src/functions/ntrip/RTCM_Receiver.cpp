@@ -28,6 +28,7 @@ namespace
     uint32_t inputWindowBytes = 0;
     uint32_t inputBytesPerSecond = 0;
 
+/** @brief Implements noteInputBytes. */
     void noteInputBytes(size_t count)
     {
         portENTER_CRITICAL(&telemetryMux);
@@ -37,6 +38,7 @@ namespace
         portEXIT_CRITICAL(&telemetryMux);
     }
 
+/** @brief Implements noteRtcmBytes. */
     void noteRtcmBytes(size_t count)
     {
         const uint32_t now = millis();
@@ -56,6 +58,7 @@ namespace
         portEXIT_CRITICAL(&telemetryMux);
     }
 
+/** @brief Implements nmeaCoordinate. */
     double nmeaCoordinate(const char *raw, const char *hemisphere)
     {
         if (!raw || !*raw)
@@ -71,6 +74,7 @@ namespace
         return coordinate;
     }
 
+/** @brief Implements setFixStatus. */
     void setFixStatus(std::array<char, 16> &target, int quality)
     {
         const char *status;
@@ -102,6 +106,7 @@ namespace
         target[target.size() - 1] = '\0';
     }
 
+/** @brief Implements parseGgaFields. */
     void parseGgaFields(char *const *fields, size_t fieldCount, bool &updateFix,
                         int &fixQuality, bool &updatePosition, double &latitude,
                         double &longitude, double &altitude, float &hdop,
@@ -121,6 +126,7 @@ namespace
         updatePosition = true;
     }
 
+/** @brief Implements parseGsvFields. */
     void parseGsvFields(char *const *fields, size_t fieldCount, bool &updateSnr,
                         float &snrSum, uint32_t &snrCount)
     {
@@ -137,6 +143,7 @@ namespace
         updateSnr = snrCount > 0;
     }
 
+/** @brief Implements parseGstFields. */
     void parseGstFields(char *const *fields, size_t fieldCount, bool &updateGst,
                         float &gstSemiMajor, float &gstSemiMinor, float &gstHacc)
     {
@@ -150,6 +157,7 @@ namespace
         updateGst = gstHacc > 0.0F;
     }
 
+/** @brief Implements parseNmeaSentence. */
     void parseNmeaSentence(const String &rawSentence)
     {
         auto sentence = rawSentence;
@@ -284,12 +292,14 @@ namespace
         }
     }
 
+/** @brief Implements resetRtcmParser. */
     void resetRtcmParser()
     {
         rtcmLength = 0;
         rtcmExpectedLength = 0;
     }
 
+/** @brief Implements processRtcmByte. */
     bool processRtcmByte(uint8_t value, String &rtcmOutput)
     {
         if (rtcmLength == 1 && (std::byte{value} & std::byte{0xFC}) != std::byte{})
@@ -331,6 +341,7 @@ namespace
         return true;
     }
 
+/** @brief Implements processUbxHeaderByte. */
     bool processUbxHeaderByte(uint8_t value)
     {
         if (ubxHeaderLength == 1 && value != 0x62)
@@ -350,6 +361,7 @@ namespace
         return true;
     }
 
+/** @brief Implements consumeByte. */
     void consumeByte(uint8_t value, String &rtcmOutput)
     {
         // UBX payload is binary and may contain '$', LF or 0xD3. Skip the whole
@@ -413,12 +425,14 @@ namespace
 
 } // namespace
 
+/** @brief Implements bufferGnssQueryByte. */
 void bufferGnssQueryByte(uint8_t value)
 {
     noteInputBytes(1);
     consumeByte(value, pendingRtcmData);
 }
 
+/** @brief Implements receiveRtcmFromGnss. */
 String receiveRtcmFromGnss()
 {
     String rtcmData;
@@ -479,12 +493,14 @@ String receiveRtcmFromGnss()
     return rtcmData;
 }
 
+/** @brief Implements consumeRtcmMessageCounts. */
 RtcmMessageCounts consumeRtcmMessageCounts()
 {
     // Return zero per-type counters; this parser does not classify RTCM messages.
     return RtcmMessageCounts{};
 }
 
+/** @brief Implements getGnssTelemetrySnapshot. */
 GnssTelemetrySnapshot getGnssTelemetrySnapshot()
 {
     GnssTelemetrySnapshot copy;
@@ -498,6 +514,7 @@ GnssTelemetrySnapshot getGnssTelemetrySnapshot()
     return copy;
 }
 
+/** @brief Implements getRtcmInputBps. */
 uint32_t getRtcmInputBps()
 {
     const uint32_t now = millis();

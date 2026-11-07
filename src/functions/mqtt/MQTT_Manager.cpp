@@ -69,6 +69,7 @@ Client &activeMqttClient()
 
 // ================= ĐỊNH NGHĨA HÀM =================
 
+/** @brief Implements mqttCallback. */
 void mqttCallback(char *topic, byte *payload, unsigned int length)
 {
   backendAgent.onMqttMessage(topic, payload, length);
@@ -106,6 +107,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
   }
 }
 
+/** @brief Implements probeMqttTransport. */
 bool probeMqttTransport(bool useGsm)
 {
   prefs.begin("myPrefs", true);
@@ -136,6 +138,7 @@ bool probeMqttTransport(bool useGsm)
   return reachable;
 }
 
+/** @brief Implements setupMQTT. */
 int setupMQTT()
 {
   mqtt.setClient(activeMqttClient());
@@ -159,6 +162,7 @@ int setupMQTT()
   return 0;
 }
 
+/** @brief Implements connectMQTT. */
 int connectMQTT()
 {
   if (!mqtt.connected())
@@ -207,6 +211,7 @@ int connectMQTT()
   return 0;
 }
 
+/** @brief Implements publishHealth. */
 int publishHealth(const String &payload)
 {
   if (payload.isEmpty())
@@ -246,6 +251,7 @@ int publishHealth(const String &payload)
   return -1;
 }
 
+/** @brief Implements isMqttConnected. */
 bool isMqttConnected()
 {
   return mqtt.connected();

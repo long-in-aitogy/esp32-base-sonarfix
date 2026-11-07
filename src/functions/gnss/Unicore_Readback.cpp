@@ -17,6 +17,7 @@ namespace UnicoreReadback
 {
     namespace
     {
+/** @brief Implements appendUnicoreCandidate. */
         bool appendUnicoreCandidate(char value, const char *prefix, String &candidate,
                                     String &response)
         {
@@ -43,6 +44,7 @@ namespace UnicoreReadback
             return false;
         }
 
+/** @brief Implements processUnicoreQueryByte. */
         bool processUnicoreQueryByte(uint8_t byte, const char *prefix, UnicoreReply &reply,
                                      String &candidate, String &response, String &error)
         {
@@ -61,6 +63,7 @@ namespace UnicoreReadback
             return true;
         }
 
+/** @brief Implements collectUnicoreResponse. */
         void collectUnicoreResponse(const char *prefix, UnicoreReply &reply,
                                     String &response, String &error, uint32_t &receivedBytes)
         {
@@ -81,6 +84,7 @@ namespace UnicoreReadback
             }
         }
 
+/** @brief Implements queryUnicoreLine. */
         bool queryUnicoreLine(const char *query, const char *prefix, String &response, String &error)
         {
             if (!rtcmBufferMutex || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
@@ -134,6 +138,7 @@ namespace UnicoreReadback
 
     } // namespace
 
+/** @brief Implements readMode. */
     bool readMode(String &mode, String &error)
     {
         String response;
@@ -172,6 +177,7 @@ namespace UnicoreReadback
         return true;
     }
 
+/** @brief Implements readBestPosition. */
     bool readBestPosition(JsonObject position, String &error)
     {
         String response;

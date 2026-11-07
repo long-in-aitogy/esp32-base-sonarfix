@@ -2,6 +2,7 @@
 #include "functions/system/cmd_handler.h"
 #include <string>
 
+/** @brief Implements SerialCommandProcessor::execute. */
 void SerialCommandProcessor::execute(String command)
 {
     command.trim();
@@ -20,6 +21,7 @@ void SerialCommandProcessor::execute(String command)
     }
 }
 
+/** @brief Implements SerialCommandProcessor::processPending. */
 void SerialCommandProcessor::processPending()
 {
     while (Serial.available() > 0)
@@ -45,6 +47,7 @@ void SerialCommandProcessor::processPending()
     }
 }
 
+/** @brief Implements shutdownTcpTransportBeforeRestart. */
 void shutdownTcpTransportBeforeRestart()
 {
     Serial.println("[SETUP] Dong cac ket noi TCP va GPRS truoc khi khoi dong lai...");
@@ -61,6 +64,7 @@ void shutdownTcpTransportBeforeRestart()
     }
 }
 
+/** @brief Implements formDeviceHealthString. */
 String formDeviceHealthString([[maybe_unused]] int32_t signalQualityDbm, const bool gnssDataOk,
                               [[maybe_unused]] const uint32_t *rtcmMessageCounts)
 {

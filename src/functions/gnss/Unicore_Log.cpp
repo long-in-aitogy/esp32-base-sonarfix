@@ -5,6 +5,7 @@
 namespace
 {
 
+/** @brief Implements checksumMarker. */
     size_t checksumMarker(const char *line, size_t length)
     {
         auto marker = length;
@@ -13,6 +14,7 @@ namespace
         return marker == 0 ? length : marker - 1;
     }
 
+/** @brief Implements hexValue. */
     inline int hexValue(char c)
     {
         if (c >= '0' && c <= '9')
@@ -24,6 +26,7 @@ namespace
         return -1;
     }
 
+/** @brief Implements readExpectedChecksum. */
     bool readExpectedChecksum(
         const char *line, size_t marker, size_t length, uint32_t &expected)
     {
@@ -37,6 +40,7 @@ namespace
         return true;
     }
 
+/** @brief Implements calculateChecksum. */
     uint32_t calculateChecksum(
         const char *line, size_t marker, size_t digits)
     {
@@ -56,6 +60,7 @@ namespace
 
 } // namespace
 
+/** @brief Implements validUnicoreLogChecksum. */
 bool validUnicoreLogChecksum(const char *line, size_t length)
 {
     if (!line || length < 4 || line[0] != '#')

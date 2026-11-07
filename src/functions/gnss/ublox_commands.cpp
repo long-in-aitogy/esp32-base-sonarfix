@@ -68,12 +68,14 @@ namespace UbloxCommands
             {"1230", {0x20910304, 0x20910305, 0x20910306, 0x20910303, 0x20910307}},
         }};
 
+/** @brief Implements isValidRtcmPort. */
     inline bool isValidRtcmPort(const String &port)
     {
         return port == "I2C" || port == "UART1" || port == "UART2" ||
                port == "USB" || port == "SPI";
     }
 
+/** @brief Implements keyForPort. */
     uint32_t keyForPort(const PortKeys &keys, const String &port)
     {
         if (port == "UART1")
@@ -89,18 +91,21 @@ namespace UbloxCommands
         return 0;
     }
 
+/** @brief Implements appendU32. */
     inline void appendU32(Command &data, uint32_t value)
     {
         for (uint8_t i = 0; i < 4; ++i)
             data.push_back(static_cast<uint8_t>(value >> (8 * i)));
     }
 
+/** @brief Implements writeU32. */
     inline void writeU32(Command &data, size_t index, uint32_t value)
     {
         for (uint8_t i = 0; i < 4; ++i)
             data[index + i] = static_cast<uint8_t>(value >> (8 * i));
     }
 
+/** @brief Implements ubxPacket. */
     Command ubxPacket(uint8_t messageClass, uint8_t messageId, const Command &payload)
     {
         Command result = {0xB5, 0x62, messageClass, messageId,
@@ -118,6 +123,7 @@ namespace UbloxCommands
         return result;
     }
 
+/** @brief Implements ubxCfgValsetU1. */
     Command ubxCfgValsetU1(const std::vector<std::pair<uint32_t, bool>> &entries)
     {
         Command payload = {0x00, 0x07, 0x00, 0x00};
@@ -129,6 +135,7 @@ namespace UbloxCommands
         return ubxPacket(0x06, 0x8A, payload);
     }
 
+/** @brief Implements ubxCfgMsg. */
     Command ubxCfgMsg(uint8_t messageClass, uint8_t messageId, const std::vector<String> &ports, uint8_t rate)
     {
         Command payload = {messageClass, messageId, 0, 0, 0, 0, 0, 0};
@@ -148,11 +155,13 @@ namespace UbloxCommands
         return ubxPacket(0x06, 0x01, payload);
     }
 
+/** @brief Implements isDiagnosticNmea. */
     inline bool isDiagnosticNmea(const char *name)
     {
         return !strcmp(name, "GGA") || !strcmp(name, "GSA") || !strcmp(name, "GSV") || !strcmp(name, "GST");
     }
 
+/** @brief Implements rtcmEnabled. */
     bool rtcmEnabled(const char *message, const GnssOptions &o)
     {
         if (!strcmp(message, "1005"))
@@ -176,8 +185,10 @@ namespace UbloxCommands
         return !strcmp(message, "1230") && o.glo;
     }
 
+/** @brief Implements buildTmode3Message. */
     Command buildTmode3Message() { return Command({0xB5, 0x62, 0x06, 0x71, 0x28, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}); }
 
+/** @brief Implements finishTmode3Checksum. */
     void finishTmode3Checksum(Command &message)
     {
         uint8_t a = 0;
@@ -191,6 +202,7 @@ namespace UbloxCommands
         message[47] = b;
     }
 
+/** @brief Implements buildOutputConfigCommand. */
     Command buildOutputConfigCommand(const GnssOptions &options)
     {
         const GnssOptions o = normalizeGnssOptions(options);
@@ -239,11 +251,13 @@ namespace UbloxCommands
         return command;
     }
 
+/** @brief Implements remapOutputKey. */
     inline uint32_t remapOutputKey(uint32_t key, const PortKeys &ports)
     {
         return key == ports.usb || key == ports.uart2 ? ports.uart1 : key;
     }
 
+/** @brief Implements remapValsetKey. */
     inline uint32_t remapValsetKey(uint32_t key)
     {
         for (const auto &message : NMEA_KEYS)
@@ -261,6 +275,7 @@ namespace UbloxCommands
         return key;
     }
 
+/** @brief Implements remapValsetEntries. */
     inline bool remapValsetEntries(uint8_t *packet, size_t payloadLength)
     {
         if ((payloadLength - 4) % 5 != 0)
@@ -277,6 +292,7 @@ namespace UbloxCommands
         return true;
     }
 
+/** @brief Implements processUbloxPacket. */
     bool processUbloxPacket(uint8_t *packet, size_t remaining)
     {
         const auto payloadLength = std::to_integer<size_t>(static_cast<std::byte>(packet[4])) | (std::to_integer<size_t>(static_cast<std::byte>(packet[5])) << 8);
@@ -305,6 +321,7 @@ namespace UbloxCommands
         return true;
     }
 
+/** @brief Implements routeUbloxOutput. */
     void routeUbloxOutput(uint8_t *data, size_t length)
     {
         auto offset = 0;
@@ -319,6 +336,7 @@ namespace UbloxCommands
         }
     }
 
+/** @brief Implements buildBaseSurveyInCommand. */
     CommandList buildBaseSurveyInCommand(uint32_t duration, float accuracy, const GnssOptions &options)
     {
         CommandList commands;
@@ -334,6 +352,7 @@ namespace UbloxCommands
         return commands;
     }
 
+/** @brief Implements buildBaseFixedLlaCommand. */
     CommandList buildBaseFixedLlaCommand(double lat, double lon, double alt, float accuracy, const GnssOptions &options)
     {
         CommandList commands;
@@ -358,6 +377,7 @@ namespace UbloxCommands
         return commands;
     }
 
+/** @brief Implements buildBaseRtcmOutputCommand. */
     CommandList buildBaseRtcmOutputCommand(const String &message, const String &port, bool enabled)
     {
 
@@ -385,6 +405,7 @@ namespace UbloxCommands
         return commands;
     }
 
+/** @brief Implements buildBaseAllRtcmOutputCommand. */
     CommandList buildBaseAllRtcmOutputCommand(const String &port, bool enabled)
     {
         auto normalizedPort = port;
@@ -403,6 +424,7 @@ namespace UbloxCommands
         return commands;
     }
 
+/** @brief Implements buildRoverCommand. */
     CommandList buildRoverCommand()
     {
         // Enable correction input and GGA/GST output on UART1, UART2 and USB.

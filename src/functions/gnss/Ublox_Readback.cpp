@@ -13,6 +13,7 @@ extern SemaphoreHandle_t gnssSerialMutex;
 namespace
 {
 
+/** @brief Implements query. */
     bool query(uint8_t cls, uint8_t id, UbxReply &reply, String &error)
     {
         if (!rtcmBufferMutex || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
@@ -70,6 +71,7 @@ namespace
 
 } // namespace
 
+/** @brief Implements UbloxReadback::readBaseStatus. */
 bool UbloxReadback::readBaseStatus(UbxBaseStatus &status, String &error)
 {
     UbxReply mode;

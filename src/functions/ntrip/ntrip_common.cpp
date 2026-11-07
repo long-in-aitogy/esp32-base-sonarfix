@@ -32,6 +32,7 @@ namespace
     inline constexpr std::array<uint8_t, 8> ubxMonVerPoll = {
         0xB5, 0x62, 0x0A, 0x04, 0x00, 0x00, 0x0E, 0x34};
 
+/** @brief Implements waitForUm980Input. */
     void waitForUm980Input()
     {
         const auto started = millis();
@@ -39,6 +40,7 @@ namespace
             delay(10);
     }
 
+/** @brief Implements logUm980Response. */
     void logUm980Response()
     {
 #ifdef PROGRAM_DEBUG
@@ -48,6 +50,7 @@ namespace
 #endif
     }
 
+/** @brief Implements sendUm980Command. */
     inline void sendUm980Command(const char *command, size_t maxLength, bool logResponse,
                                  uint32_t pauseMs)
     {
@@ -59,6 +62,7 @@ namespace
             delay(pauseMs);
     }
 
+/** @brief Implements clearGnssInput. */
     void clearGnssInput()
     {
         while (Serial1.available() > 0)
@@ -67,6 +71,7 @@ namespace
         }
     }
 
+/** @brief Implements hasValidUbxFrame. */
     bool hasValidUbxFrame(const uint8_t *data, size_t length)
     {
         for (size_t start = 0; start + 8 <= length; ++start)
@@ -106,6 +111,7 @@ namespace
         return false;
     }
 
+/** @brief Implements receiveUbxFrame. */
     bool receiveUbxFrame(uint32_t timeoutMs)
     {
         std::array<uint8_t, 512> buffer{};
@@ -136,6 +142,7 @@ namespace
         return false;
     }
 
+/** @brief Implements receiveUnicoreIdentification. */
     bool receiveUnicoreIdentification(uint32_t timeoutMs)
     {
         UnicoreIdentification identity;
@@ -157,6 +164,7 @@ namespace
     }
 } // namespace
 
+/** @brief Implements jsonBool. */
 bool jsonBool(JsonObjectConst object, const String &key, bool fallback = false)
 {
     const JsonVariantConst value = object[key.c_str()];
@@ -175,12 +183,14 @@ bool jsonBool(JsonObjectConst object, const String &key, bool fallback = false)
     return value.as<int>() != 0;
 }
 
+/** @brief Implements jsonString. */
 String jsonString(JsonObjectConst object, const String &key, const String &fallback = String())
 {
     const JsonVariantConst value = object[key.c_str()];
     return value.isNull() ? fallback : value.as<String>();
 }
 
+/** @brief Implements safeNtripField. */
 bool safeNtripField(const String &value)
 {
     return value.indexOf('\r') < 0 && value.indexOf('\n') < 0;
@@ -194,6 +204,7 @@ struct LocalNtripConfig
     uint16_t port = NTRIP_CASTER_PORT;
 };
 
+/** @brief Implements loadLocalNtripConfig. */
 LocalNtripConfig loadLocalNtripConfig()
 {
     LocalNtripConfig legacy;
@@ -206,6 +217,7 @@ LocalNtripConfig loadLocalNtripConfig()
     return legacy;
 }
 
+/** @brief Implements endpointHost. */
 String endpointHost(JsonObjectConst service, uint8_t index)
 {
     const auto suffix = String(index + 1);
@@ -217,6 +229,7 @@ String endpointHost(JsonObjectConst service, uint8_t index)
                                             jsonString(service, generic, fallback))));
 }
 
+/** @brief Implements endpointPort. */
 uint16_t endpointPort(JsonObjectConst service, uint8_t index, uint16_t legacyPort)
 {
     const auto suffix = String(index + 1);
@@ -225,6 +238,7 @@ uint16_t endpointPort(JsonObjectConst service, uint8_t index, uint16_t legacyPor
     return static_cast<uint16_t>(service["port" + suffix] | (service["serverport" + suffix] | (service[generic] | fallback)));
 }
 
+/** @brief Implements base64Encode. */
 String base64Encode(const String &plain)
 {
     static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -271,6 +285,7 @@ namespace ntrip_common
                    : static_cast<Client &>(gsmNtripClient2);
     }
 
+/** @brief Implements clearEndpointState. */
     void clearEndpointState(NtripEndpoint &endpoint)
     {
         endpoint.authenticated = false;
@@ -280,6 +295,7 @@ namespace ntrip_common
         endpoint.lastKeepAliveMs = endpoint.windowStartedMs;
     }
 
+/** @brief Implements normalizeEndpoint. */
     void normalizeEndpoint(NtripEndpoint &endpoint)
     {
         while (endpoint.mountpoint.startsWith("/"))
@@ -287,6 +303,7 @@ namespace ntrip_common
         endpoint.enabled = endpoint.enabled && !endpoint.host.isEmpty() && !endpoint.mountpoint.isEmpty() && endpoint.port > 0 && safeNtripField(endpoint.host) && safeNtripField(endpoint.mountpoint) && safeNtripField(endpoint.username) && safeNtripField(endpoint.password);
     }
 
+/** @brief Implements loadEndpoint. */
     void loadEndpoint(NtripEndpoint &endpoint, uint8_t index, JsonObjectConst service,
                       bool hasServiceConfig, const LocalNtripConfig &legacy)
     {
@@ -338,6 +355,7 @@ namespace ntrip_common
         normalizeEndpoint(endpoint);
     }
 
+/** @brief Implements loadEndpoints. */
     void loadEndpoints()
     {
         DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
@@ -353,6 +371,7 @@ namespace ntrip_common
         }
     }
 
+/** @brief Implements streamActive. */
     bool streamActive(uint8_t index)
     {
         if (index >= NTRIP_SERVER_COUNT || backendDeviceLocked(index + 1) || !backendLicenseValid() || !backendDeviceProvisioned() || !backendBaseStartupConfigured())
@@ -366,12 +385,14 @@ namespace ntrip_common
             serviceDoc.as<JsonObjectConst>(), index + 1, backendControlPlaneFailOpen());
     }
 
+/** @brief Implements stopEndpoint. */
     void stopEndpoint(uint8_t index)
     {
         clientFor(index).stop();
         clearEndpointState(endpoints[index]);
     }
 
+/** @brief Implements waitForNtripResponse. */
     bool waitForNtripResponse(Client &client, String *statusLine)
     {
         String response;

@@ -1,6 +1,7 @@
 #include "Prog_Config.h"
 #include "hardware/Wifi_handler.h"
 
+/** @brief Implements setupWiFi. */
 bool setupWiFi()
 {
   prefs.begin("myPrefs", false);

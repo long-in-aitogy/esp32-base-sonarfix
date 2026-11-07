@@ -34,6 +34,7 @@ namespace
   inline constexpr std::array<uint8_t, 8> ubxMonVerPoll = {
       0xB5, 0x62, 0x0A, 0x04, 0x00, 0x00, 0x0E, 0x34};
 
+/** @brief Implements waitForUm980Input. */
   void waitForUm980Input()
   {
     const auto started = millis();
@@ -41,6 +42,7 @@ namespace
       delay(10);
   }
 
+/** @brief Implements logUm980Response. */
   void logUm980Response()
   {
 #ifdef PROGRAM_DEBUG
@@ -50,6 +52,7 @@ namespace
 #endif
   }
 
+/** @brief Implements sendUm980Command. */
   inline void sendUm980Command(const char *command, size_t maxLength, bool logResponse,
                                uint32_t pauseMs)
   {
@@ -61,6 +64,7 @@ namespace
       delay(pauseMs);
   }
 
+/** @brief Implements clearGnssInput. */
   void clearGnssInput()
   {
     while (Serial1.available() > 0)
@@ -69,6 +73,7 @@ namespace
     }
   }
 
+/** @brief Implements hasValidUbxFrame. */
   bool hasValidUbxFrame(const uint8_t *data, size_t length)
   {
     for (size_t start = 0; start + 8 <= length; ++start)
@@ -108,6 +113,7 @@ namespace
     return false;
   }
 
+/** @brief Implements receiveUbxFrame. */
   bool receiveUbxFrame(uint32_t timeoutMs)
   {
     std::array<uint8_t, 512> buffer{};
@@ -138,6 +144,7 @@ namespace
     return false;
   }
 
+/** @brief Implements receiveUnicoreIdentification. */
   bool receiveUnicoreIdentification(uint32_t timeoutMs)
   {
     UnicoreIdentification identity;
@@ -159,6 +166,7 @@ namespace
   }
 } // namespace
 
+/** @brief Implements connectEndpoint. */
 bool connectEndpoint(uint8_t index)
 {
   if (index >= NTRIP_SERVER_COUNT || !endpoints[index].enabled || !streamActive(index))
@@ -230,6 +238,7 @@ bool connectEndpoint(uint8_t index)
   return true;
 }
 
+/** @brief Implements ntrip_common::updateBps. */
 void ntrip_common::updateBps(NtripEndpoint &endpoint)
 {
   const uint32_t now = millis();
@@ -251,6 +260,7 @@ Client &activeNtripClient()
   return clientFor(0);
 }
 
+/** @brief Implements ntrip_common::sendEndpointRtcm. */
 bool ntrip_common::sendEndpointRtcm(NtripEndpoint &endpoint, Client &client, const String &rtcmData)
 {
   if (rtcmData.isEmpty())
@@ -281,6 +291,7 @@ bool ntrip_common::sendEndpointRtcm(NtripEndpoint &endpoint, Client &client, con
   return true;
 }
 
+/** @brief Implements bootstrapUM980. */
 int bootstrapUM980()
 {
   sendUm980Command(nmeaCmdUnlog, 8, true, 20);
@@ -312,6 +323,7 @@ int bootstrapUM980()
   return 0;
 }
 
+/** @brief Implements bootstrapUblox. */
 int bootstrapUblox()
 {
   GnssCmdBuilder::GnssOptions options;
@@ -387,6 +399,7 @@ GnssCmdBuilder::GnssSensorType detectGnssSensorType()
   return GnssCmdBuilder::GnssSensorType::Invalid;
 }
 
+/** @brief Implements setupNTRIP. */
 int setupNTRIP()
 {
   for (uint8_t index = 0; index < NTRIP_SERVER_COUNT; ++index)
@@ -395,6 +408,7 @@ int setupNTRIP()
   return 0;
 }
 
+/** @brief Implements connectNTRIP. */
 int connectNTRIP()
 {
   loadEndpoints();
@@ -407,6 +421,7 @@ int connectNTRIP()
   return connected > 0 ? 0 : -1;
 }
 
+/** @brief Implements loopNTRIP. */
 int loopNTRIP(String &rtcmData)
 {
   if (roverSessionActive)
@@ -450,6 +465,7 @@ int loopNTRIP(String &rtcmData)
   return returnCode;
 }
 
+/** @brief Implements stopNtrip. */
 void stopNtrip()
 {
   for (uint8_t index = 0; index < NTRIP_SERVER_COUNT; ++index)
@@ -459,11 +475,13 @@ void stopNtrip()
   roverLastGgaMs = 0;
 }
 
+/** @brief Implements isNtripConnected. */
 bool isNtripConnected()
 {
   return ntripServerConnected(1) || ntripServerConnected(2);
 }
 
+/** @brief Implements ntripServerConnected. */
 bool ntripServerConnected(uint8_t serverId)
 {
   if (serverId < 1 || serverId > NTRIP_SERVER_COUNT)
@@ -472,6 +490,7 @@ bool ntripServerConnected(uint8_t serverId)
   return endpoints[index].authenticated && clientFor(index).connected();
 }
 
+/** @brief Implements ntripServerBps. */
 uint32_t ntripServerBps(uint8_t serverId)
 {
   if (serverId < 1 || serverId > NTRIP_SERVER_COUNT)
@@ -480,6 +499,7 @@ uint32_t ntripServerBps(uint8_t serverId)
   return endpoints[serverId - 1].bytesPerSecond;
 }
 
+/** @brief Implements ntripServerError. */
 String ntripServerError(uint8_t serverId)
 {
   if (serverId < 1 || serverId > NTRIP_SERVER_COUNT)

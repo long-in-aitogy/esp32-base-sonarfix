@@ -18,10 +18,12 @@ struct UbxBaseStatus
     double longitude = 0;
     double height = 0;
 
+/** @brief Implements u32. */
     static uint32_t u32(const uint8_t *p)
     {
         return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
     }
+/** @brief Implements i32. */
     static int32_t i32(const uint8_t *p)
     {
         const uint32_t bits = u32(p);
@@ -29,8 +31,10 @@ struct UbxBaseStatus
         std::memcpy(&value, &bits, sizeof(value));
         return value;
     }
+/** @brief Implements hp. */
     static int hp(uint8_t value) { return value < 128 ? value : int(value) - 256; }
 
+/** @brief Implements ecef. */
     bool ecef(double x, double y, double z)
     {
         constexpr double a = 6378137.0;
@@ -66,6 +70,7 @@ struct UbxBaseStatus
         return std::isfinite(height);
     }
 
+/** @brief Implements tmode. */
     bool tmode(const uint8_t *p, size_t length)
     {
         if (!p || length != 40 || p[0] != 0 || p[2] > 2)
@@ -94,6 +99,7 @@ struct UbxBaseStatus
         return hasPosition;
     }
 
+/** @brief Implements svin. */
     bool svin(const uint8_t *p, size_t length)
     {
         if (!p || length != 40 || p[0] != 0 || p[36] > 1 || p[37] > 1)

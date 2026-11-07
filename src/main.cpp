@@ -59,6 +59,7 @@ __attribute__((noreturn)) void healthCheckTask([[maybe_unused]] void *parameter)
 __attribute__((noreturn)) void taskMQTT([[maybe_unused]] void *parameter);
 __attribute__((noreturn)) void taskSerialCommand([[maybe_unused]] void *parameter);
 
+/** @brief Implements setup. */
 void setup()
 {
     static RtcmState rtcmState;
@@ -330,6 +331,7 @@ __attribute__((noreturn)) void taskSerialCommand([[maybe_unused]] void *paramete
     }
 }
 
+/** @brief Implements loop. */
 void loop()
 {
     if (isGsmConnection() && tcpStreamMutex && xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)))
@@ -381,6 +383,7 @@ void loop()
 }
 
 // Called with the shared modem mutex held once worker tasks are running.
+/** @brief Implements tryWifiFallback. */
 static bool tryWifiFallback(bool protocolsRunning)
 {
     Serial.println("[NETWORK] SIM khong truy cap duoc dich vu; thu Wi-Fi du phong da luu.");
@@ -401,6 +404,7 @@ static bool tryWifiFallback(bool protocolsRunning)
 }
 
 // Both switching directions close old sockets before selecting new clients.
+/** @brief Implements activateNetwork. */
 static void activateNetwork(ConnectionType type, bool protocolsRunning)
 {
     if (protocolsRunning)
@@ -419,6 +423,7 @@ static void activateNetwork(ConnectionType type, bool protocolsRunning)
 }
 
 // Only Wi-Fi entered through SIM fallback is eligible for automatic return.
+/** @brief Implements checkSimRecovery. */
 static void checkSimRecovery()
 {
     if (!wifiFallbackActive || !isWifiConnection())
@@ -445,6 +450,7 @@ static void checkSimRecovery()
     WiFi.disconnect();
 }
 
+/** @brief Implements checkSimInternetFallback. */
 static void checkSimInternetFallback()
 {
     static uint32_t unavailableSinceMs = 0;
@@ -472,6 +478,7 @@ static void checkSimInternetFallback()
         unavailableSinceMs = 0;
 }
 
+/** @brief Implements settleModemBeforeNtrip. */
 static void settleModemBeforeNtrip()
 {
     Serial.println("[SETUP][NTRIP] Cho modem on dinh truoc khi bat tay NTRIP...");
@@ -487,6 +494,7 @@ static void settleModemBeforeNtrip()
     Serial.println("[SETUP][NTRIP] Modem da on dinh, bat dau ket noi NTRIP.");
 }
 
+/** @brief Implements initPrefs. */
 void initPrefs()
 {
     prefs.clear();
@@ -515,6 +523,7 @@ void initPrefs()
     prefs.putString("TPC_HEALTH", TOPIC_PUB_HEALTH);
 }
 
+/** @brief Implements serviceMqtt. */
 static void serviceMqtt(const bool reconnect)
 {
     if (mqtt.connected())

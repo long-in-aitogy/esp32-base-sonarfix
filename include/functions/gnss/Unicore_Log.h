@@ -11,6 +11,7 @@ bool validUnicoreLogChecksum(const char *line, size_t length);
 
 // Route output logs to COM1..3, or omit COM for the current command port (0).
 // Leave binary packets and other ASCII commands unchanged.
+/** @brief Implements routeUnicoreOutput. */
 inline size_t routeUnicoreOutput(uint8_t *data, size_t length, uint8_t port)
 {
     if (!data || port > 3)

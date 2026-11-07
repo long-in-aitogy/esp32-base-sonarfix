@@ -20,6 +20,7 @@ struct UnicoreReply
     size_t used = 0;
     State state = State::Pending;
 
+/** @brief Implements UnicoreReply. */
     UnicoreReply(const uint8_t *command, size_t length)
     {
         if (!command)
@@ -54,6 +55,7 @@ struct UnicoreReply
         key[n] = 0;
     }
 
+/** @brief Implements equal. */
     static bool equal(const char *text, size_t length, const char *expected)
     {
         if (length != strnlen(expected, length))
@@ -65,6 +67,7 @@ struct UnicoreReply
         return true;
     }
 
+/** @brief Implements hex. */
     static int hex(char value)
     {
         if (value >= '0' && value <= '9')
@@ -73,6 +76,7 @@ struct UnicoreReply
         return value >= 'a' && value <= 'f' ? value - 'a' + 10 : -1;
     }
 
+/** @brief Implements parse. */
     bool parse()
     {
         if (!key[0] || strnlen(line.data(), line.size()) < 9 || !equal(line.data(), 9, "$command,"))
@@ -121,6 +125,7 @@ struct UnicoreReply
         return true;
     }
 
+/** @brief Implements feed. */
     bool feed(uint8_t byte)
     {
         if (byte == '$')

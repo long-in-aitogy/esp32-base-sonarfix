@@ -13,6 +13,7 @@ extern Preferences prefs;
 
 namespace cmd_helper {
 
+/** @brief Implements printGnssResponse. */
     void printGnssResponse(const uint8_t *data, size_t length)
     {
         auto printable = length > 0;
@@ -46,6 +47,7 @@ namespace cmd_helper {
         Serial.println();
     }
 
+/** @brief Implements readGnssResponse. */
     void readGnssResponse()
     {
         constexpr uint32_t RESPONSE_TIMEOUT_MS = 500;
@@ -83,6 +85,7 @@ namespace cmd_helper {
         const char *preferenceKey;
     };
 
+/** @brief Implements hasExactArgumentCount. */
     inline bool hasExactArgumentCount(const std::vector<String> &cmdWords, size_t expectedCount,
                             const char *commandName)
     {
@@ -95,6 +98,7 @@ namespace cmd_helper {
         return false;
     }
 
+/** @brief Implements saveStringPreference. */
     inline cmd_action_t saveStringPreference(const char *key, const String &value)
     {
         prefs.begin("myPrefs", false);
@@ -103,6 +107,7 @@ namespace cmd_helper {
         return cmd_action_t::CMD_ACTION_NONE;
     }
 
+/** @brief Implements saveUShortPreference. */
     inline cmd_action_t saveUShortPreference(const char *key, uint16_t value)
     {
         prefs.begin("myPrefs", false);
@@ -111,6 +116,7 @@ namespace cmd_helper {
         return cmd_action_t::CMD_ACTION_NONE;
     }
 
+/** @brief Implements saveIntPreference. */
     inline cmd_action_t saveIntPreference(const char *key, int value)
     {
         prefs.begin("myPrefs", false);
@@ -130,6 +136,7 @@ namespace cmd_helper {
         return nullptr;
     }
 
+/** @brief Implements sendGnssCommands. */
     inline void sendGnssCommands(const GnssCmdBuilder::CommandList &commands)
     {
         const GnssCmdBuilder::Command commandBytes = GnssCmdBuilder::commandListToBytes(commands);
@@ -173,6 +180,7 @@ std::vector<String> splitCommand(const String &command) {
     return cmdWords;
 }
 
+/** @brief Implements handleGnssBaseCommand. */
 cmd_action_t handleGnssBaseCommand(const std::vector<String> &cmdWords) {
     GnssCmdBuilder::GnssOptions options;
     options.ports = {"UART1"};
@@ -262,6 +270,7 @@ cmd_action_t handleGnssBaseCommand(const std::vector<String> &cmdWords) {
     }
 }
 
+/** @brief Implements handleGnssSetCommand. */
 cmd_action_t handleGnssSetCommand(const std::vector<String> &cmdWords) {
     if (!cmd_helper::hasExactArgumentCount(cmdWords, 3, "GNSS SET")) {
         return cmd_action_t::CMD_ACTION_NONE;
@@ -285,6 +294,7 @@ cmd_action_t handleGnssSetCommand(const std::vector<String> &cmdWords) {
     return cmd_action_t::CMD_ACTION_ESP_RESTART;
 }
 
+/** @brief Implements handleEspConnectionSet. */
 cmd_action_t handleEspConnectionSet(const std::vector<String> &cmdWords) {
     if (!cmd_helper::hasExactArgumentCount(cmdWords, 3, "ESP SET")
         || cmdWords[0] != "SET" || cmdWords[1] != "CONNECTION") {
@@ -303,6 +313,7 @@ cmd_action_t handleEspConnectionSet(const std::vector<String> &cmdWords) {
     return cmd_action_t::CMD_ACTION_NONE;
 }
 
+/** @brief Implements handleEspValueSet. */
 cmd_action_t handleEspValueSet(const std::vector<String> &cmdWords) {
     if (!cmd_helper::hasExactArgumentCount(cmdWords, 4, "ESP SET")
         || cmdWords[0] != "SET") {
@@ -329,6 +340,7 @@ cmd_action_t handleEspValueSet(const std::vector<String> &cmdWords) {
     return cmd_helper::saveUShortPreference("BACKEND_PORT", static_cast<uint16_t>(port));
 }
 
+/** @brief Implements handleEspCommand. */
 cmd_action_t handleEspCommand(const std::vector<String> &cmdWords) {
     if (cmdWords.empty()) {
         Serial.println("[MQTT COMMAND DOWNLINK] Error: Lenh ESP khong day du.");
@@ -355,6 +367,7 @@ cmd_action_t handleEspCommand(const std::vector<String> &cmdWords) {
     return cmd_action_t::CMD_ACTION_NONE;
 }
 
+/** @brief Implements handleMqttCommand. */
 cmd_action_t handleMqttCommand(const std::vector<String> &cmdWords) {
     if (cmd_helper::hasExactArgumentCount(cmdWords, 3, "MQTT" ) && cmdWords[0] == "SET") {
         static constexpr std::array<cmd_helper::PreferenceMapping, 5> stringSettings{{
@@ -374,6 +387,7 @@ cmd_action_t handleMqttCommand(const std::vector<String> &cmdWords) {
     return cmd_action_t::CMD_ACTION_NONE;
 }
 
+/** @brief Implements handleNtripCommand. */
 cmd_action_t handleNtripCommand(const std::vector<String> &cmdWords) {
     if (cmd_helper::hasExactArgumentCount(cmdWords, 3, "NTRIP") && cmdWords[0] == "SET") {
         static constexpr std::array<cmd_helper::PreferenceMapping, 3> stringSettings{{
@@ -392,6 +406,7 @@ cmd_action_t handleNtripCommand(const std::vector<String> &cmdWords) {
     return cmd_action_t::CMD_ACTION_NONE;
 }
 
+/** @brief Implements handleGnssCommand. */
 cmd_action_t handleGnssCommand(std::vector<String> &cmdWords) {
     if (cmdWords.size() < 3) {
         Serial.println("[MQTT COMMAND DOWNLINK] Error: Incomplete GNSS command.");
@@ -419,6 +434,7 @@ cmd_action_t handleGnssCommand(std::vector<String> &cmdWords) {
     return cmd_action_t::CMD_ACTION_NONE;
 }
 
+/** @brief Implements handleConfigCommand. */
 cmd_action_t handleConfigCommand(const std::vector<String> &cmdWords) {
     if (cmdWords.size() < 3 || cmdWords[2] != "RESET") return cmd_action_t::CMD_ACTION_NONE;
     Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau reset ve cau hinh mac dinh");
@@ -428,6 +444,7 @@ cmd_action_t handleConfigCommand(const std::vector<String> &cmdWords) {
     return cmd_action_t::CMD_ACTION_ESP_RESTART;
 }
 
+/** @brief Implements handleCommand. */
 cmd_action_t handleCommand(std::vector<String> &cmdWords) {
     if (cmdWords.size() < 2 || cmdWords[0] != "ATG") {
         Serial.println("[MQTT COMMAND DOWNLINK] Error: Empty or invalid command format. Command must start with 'ATG'.");

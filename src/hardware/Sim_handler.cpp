@@ -9,6 +9,7 @@ TinyGsm modem(debugger);
 TinyGsm modem(SerialAT);
 #endif
 
+/** @brief Implements startSIM. */
 bool startSIM()
 {
 
@@ -52,6 +53,7 @@ bool startSIM()
     delay(3000);
     return true;
 }
+/** @brief Implements connectGSM. */
 bool connectGSM(uint8_t maxAttempts)
 {
     uint8_t retries = 0;

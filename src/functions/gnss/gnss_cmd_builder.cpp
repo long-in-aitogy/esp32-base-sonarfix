@@ -10,11 +10,13 @@
 namespace GnssCmdBuilder
 {
 
+/** @brief Implements isValidPort. */
     inline bool isValidPort(const String &port)
     {
         return port == "UART1" || port == "UART2" || port == "USB";
     }
 
+/** @brief Implements normalizeGnssOptions. */
     GnssOptions normalizeGnssOptions(GnssOptions options)
     {
         std::vector<String> ports;
@@ -33,6 +35,7 @@ namespace GnssCmdBuilder
         return options;
     }
 
+/** @brief Implements sensorTypeFromString. */
     GnssSensorType sensorTypeFromString(const String &sensorType)
     {
         auto normalized = sensorType;
@@ -47,6 +50,7 @@ namespace GnssCmdBuilder
         return GnssSensorType::Invalid;
     }
 
+/** @brief Implements commandListToBytes. */
     Command commandListToBytes(const CommandList &commands)
     {
         auto totalSize = 0;
@@ -61,6 +65,7 @@ namespace GnssCmdBuilder
         return bytes;
     }
 
+/** @brief Implements buildBaseSurveyInCommand. */
     CommandList buildBaseSurveyInCommand(uint32_t duration, float accuracy,
                                          GnssSensorType sensorType, const GnssOptions &options)
     {
@@ -71,6 +76,7 @@ namespace GnssCmdBuilder
         return {};
     }
 
+/** @brief Implements buildBaseFixedLlaCommand. */
     CommandList buildBaseFixedLlaCommand(double lat, double lon, double alt, float accuracy,
                                          GnssSensorType sensorType, const GnssOptions &options)
     {
@@ -81,6 +87,7 @@ namespace GnssCmdBuilder
         return {};
     }
 
+/** @brief Implements buildBaseRtcmOutputCommand. */
     CommandList buildBaseRtcmOutputCommand(const String &message, const String &port, bool enabled,
                                            GnssSensorType sensorType)
     {
@@ -91,6 +98,7 @@ namespace GnssCmdBuilder
         return {};
     }
 
+/** @brief Implements buildBaseAllRtcmOutputCommand. */
     CommandList buildBaseAllRtcmOutputCommand(const String &port, bool enabled,
                                               GnssSensorType sensorType)
     {
@@ -101,6 +109,7 @@ namespace GnssCmdBuilder
         return {};
     }
 
+/** @brief Implements buildRoverCommand. */
     CommandList buildRoverCommand(GnssSensorType type)
     {
         if (type == GnssSensorType::Ublox)
@@ -109,11 +118,13 @@ namespace GnssCmdBuilder
             return UnicoreCommands::buildRoverCommand();
         return {};
     }
+/** @brief Implements buildUbloxOutputConfigCommand. */
     Command buildUbloxOutputConfigCommand(const GnssOptions &options)
     {
         return UbloxCommands::buildOutputConfigCommand(options);
     }
 #if PROGRAM_DEBUG
+/** @brief Implements debugCommand. */
     String debugCommand(const Command &command)
     {
         String result;

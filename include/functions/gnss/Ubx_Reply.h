@@ -11,6 +11,7 @@ struct UbxReply
     size_t expected = 0;
     size_t length = 0;
 
+/** @brief Implements feed. */
     bool feed(uint8_t byte)
     {
         if (used == 0)
