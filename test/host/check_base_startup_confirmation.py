@@ -1,4 +1,4 @@
-"""Exercise delayed Fixed LLA confirmation using the actual firmware validation."""
+"""Exercise Fixed LLA confirmation and Auto Base progress recovery at boot."""
 from pathlib import Path
 import subprocess
 import tempfile
@@ -7,6 +7,8 @@ from host_coverage import compile_cpp, run_cpp, cpp_output, mapped
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Startup.cpp').read_text()
 helpers = source[source.index('double configNumber('):source.index('\n}\n\nbool BackendAgent::initializeBaseAtBoot')]
+storage = (root / 'src/functions/backend/Backend_Agent_Storage.cpp').read_text()
+restore_progress = storage[storage.index('String restoreWorkflowProgress('):storage.index('} // namespace')]
 reconcile = source[source.index('void BackendAgent::reconcileBaseStartupReadback('):]
 verification = (root / 'src/functions/backend/Backend_Agent_Gnss.cpp').read_text()
 verification = verification[verification.index('bool BackendAgent::verifyUnicoreConfig('):verification.index('bool BackendAgent::verifyGnssConfig(')]
@@ -49,6 +51,19 @@ struct BackendAgent {
 '''
 checks = r'''
 int main() {
+    for (const char *saved : {"{}", "{broken", R"({"phase":"queued"})",
+            R"({"phase":"wait_fix","last_raw_gga":"old"})", R"({"phase":"averaging"})",
+            R"({"phase":"resolving_location"})", R"({"phase":"stopping"})",
+            R"({"phase":"reference_check_wait_fix"})"}) {
+        assert(restoreWorkflowProgress(saved) == "{}");
+    }
+    for (const char *saved : {
+            R"({"phase":"ready_for_review","fixed_samples_only":true,"averaged_coord":{"lat":"21.0849898877"}})",
+            R"({"phase":"completed"})", R"({"phase":"stopped"})", R"({"phase":"failed"})",
+            R"({"phase":"reference_check_completed"})", R"({"phase":"reference_check_failed"})"}) {
+        assert(restoreWorkflowProgress(saved) == saved);
+    }
+
     BackendAgent agent;
     agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","altitude_reference":"ELLIPSOID","coords":{"lat":21.0849898877,"lon":105.7866563964,"alt":-7.9933}})";
     DynamicJsonDocument doc(2048);
@@ -132,10 +147,11 @@ reconcile = mapped(root / 'src/functions/backend/Backend_Agent_Startup.cpp', rec
 verification = mapped(root / 'src/functions/backend/Backend_Agent_Gnss.cpp', verification)
 with tempfile.TemporaryDirectory(prefix='base-confirmation-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + harness + helpers + reconcile + verification + checks)
+    (path / 'check.cpp').write_text(shim + harness + helpers + restore_progress + reconcile + verification + checks)
     compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     '-I' + str(root / 'include'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     run_cpp([str(path / 'check')], check=True)
 print('PASS: delayed Fixed LLA confirmation clears startup error; MODE coordinates confirm Unicore without BESTNAV; malformed modes, wrong coordinates and unrelated errors remain blocked')
+print('PASS: reboot drops interrupted Auto Base progress and preserves saved results')
