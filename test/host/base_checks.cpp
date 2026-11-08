@@ -334,6 +334,17 @@ int main(int argc, char **argv) {
     assert(valsets == 2 && outputKeys == 93);
     assert(galileoMsm4 && galileoMsm7 && beidouMsm7Disabled);
 
+    // Routing must leave incomplete headers/payloads and malformed VALSET entries untouched.
+    routeUbloxOutput(nullptr, 0);
+    for (Command malformed : {
+            Command{0xB5, 0x62, 6, 0x8A, 5, 0, 0},
+            Command{0xB5, 0x62, 6, 0x8A, 0xFF, 0xFF, 0, 0},
+            Command{0xB5, 0x62, 6, 0x8A, 5, 0, 0, 7, 0, 0, 1, 0, 0}}) {
+        const Command original = malformed;
+        routeUbloxOutput(malformed.data(), malformed.size());
+        assert(malformed == original);
+    }
+
     // Route hexadecimal packets from stdin and emit the resulting bytes for comparison.
     if (argc > 1) {
         const bool ublox = std::string(argv[1]) == "Ublox";

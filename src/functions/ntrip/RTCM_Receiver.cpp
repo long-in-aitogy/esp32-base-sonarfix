@@ -242,6 +242,66 @@ void resetRtcmParser() {
     rtcmExpectedLength = 0;
 }
 
+bool processRtcmByte(uint8_t value, String &rtcmOutput)
+{
+    if (rtcmLength == 1 && (value & 0xFCU) != 0)
+    {
+        resetRtcmParser();
+        return false;
+    }
+    if (rtcmLength >= sizeof(rtcmFrame))
+    {
+        resetRtcmParser();
+        return true;
+    }
+
+    rtcmFrame[rtcmLength++] = value;
+    if (rtcmLength == 3)
+    {
+        const uint16_t payloadLength =
+            (static_cast<uint16_t>(rtcmFrame[1]) & 0x03U) * 256U + rtcmFrame[2];
+        rtcmExpectedLength = static_cast<size_t>(payloadLength) + 6U;
+        if (rtcmExpectedLength > sizeof(rtcmFrame))
+        {
+            resetRtcmParser();
+            return true;
+        }
+    }
+    if (rtcmExpectedLength == 0 || rtcmLength != rtcmExpectedLength)
+        return true;
+
+    // Forward the complete RTCM frame without validating its CRC or decoding its type.
+    rtcmOutput.concat(reinterpret_cast<const char *>(rtcmFrame), rtcmLength);
+    backendAgent.enqueueRtcm(rtcmFrame, rtcmLength);
+    noteRtcmBytes(rtcmLength);
+    portENTER_CRITICAL(&telemetryMux);
+    ++telemetry.rtcmFrames;
+    telemetry.hasData = true;
+    telemetry.lastDataMs = millis();
+    portEXIT_CRITICAL(&telemetryMux);
+    resetRtcmParser();
+    return true;
+}
+
+bool processUbxHeaderByte(uint8_t value)
+{
+    if (ubxHeaderLength == 1 && value != 0x62)
+    {
+        ubxHeaderLength = 0;
+        return false;
+    }
+
+    ubxHeader[ubxHeaderLength++] = value;
+    if (ubxHeaderLength != sizeof(ubxHeader))
+        return true;
+
+    const auto payloadLength = size_t(ubxHeader[4]) | (size_t(ubxHeader[5]) << 8);
+    ubxHeaderLength = 0;
+    if (payloadLength <= 8192)
+        ubxBytesRemaining = payloadLength + 2;
+    return true;
+}
+
 void consumeByte(uint8_t value, String &rtcmOutput) {
     // UBX payload is binary and may contain '$', LF or 0xD3. Skip the whole
     // frame before looking for NMEA/RTCM, including across UART read chunks.
@@ -249,51 +309,8 @@ void consumeByte(uint8_t value, String &rtcmOutput) {
         --ubxBytesRemaining;
         return;
     }
-    if (ubxHeaderLength > 0) {
-        if (ubxHeaderLength == 1 && value != 0x62) {
-            ubxHeaderLength = 0;
-            // Reconsider this byte as a possible NMEA/RTCM/UBX start.
-        } else {
-            ubxHeader[ubxHeaderLength++] = value;
-            if (ubxHeaderLength == sizeof(ubxHeader)) {
-                const size_t payloadLength = size_t(ubxHeader[4]) | (size_t(ubxHeader[5]) << 8);
-                ubxHeaderLength = 0;
-                if (payloadLength <= 8192) ubxBytesRemaining = payloadLength + 2;
-            }
-            return;
-        }
-    }
-    if (rtcmLength > 0) {
-        if (rtcmLength == 1 && (value & 0xFCU) != 0) {
-            resetRtcmParser();
-            consumeByte(value, rtcmOutput);
-            return;
-        }
-        if (rtcmLength >= sizeof(rtcmFrame)) {
-            resetRtcmParser();
-        } else {
-            rtcmFrame[rtcmLength++] = value;
-            if (rtcmLength == 3) {
-                const uint16_t payloadLength =
-                    (static_cast<uint16_t>(rtcmFrame[1]) & 0x03U) * 256U + rtcmFrame[2];
-                rtcmExpectedLength = static_cast<size_t>(payloadLength) + 6U;
-                if (rtcmExpectedLength > sizeof(rtcmFrame)) resetRtcmParser();
-            }
-            if (rtcmExpectedLength > 0 && rtcmLength == rtcmExpectedLength) {
-                // Forward the complete RTCM frame without validating its CRC or decoding its type.
-                rtcmOutput.concat(reinterpret_cast<const char *>(rtcmFrame), rtcmLength);
-                backendAgent.enqueueRtcm(rtcmFrame, rtcmLength);
-                noteRtcmBytes(rtcmLength);
-                portENTER_CRITICAL(&telemetryMux);
-                ++telemetry.rtcmFrames;
-                telemetry.hasData = true;
-                telemetry.lastDataMs = millis();
-                portEXIT_CRITICAL(&telemetryMux);
-                resetRtcmParser();
-            }
-        }
-        return;
-    }
+    if (ubxHeaderLength > 0 && processUbxHeaderByte(value)) return;
+    if (rtcmLength > 0 && processRtcmByte(value, rtcmOutput)) return;
 
     if (nmeaBuffer.length() > 0) {
         if (value == '\n') {

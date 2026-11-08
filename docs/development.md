@@ -228,3 +228,30 @@ Existing reconnect, GGA and workflow restore harnesses follow the new source
 owners; coverage still maps unchanged production fragments to real source lines.
 CI builds and links firmware before inventorying coverage, then waits for the
 Sonar Quality Gate instead of treating successful scan submission as a gate pass.
+
+### Follow-up review of remaining cleanup
+
+A second comparison against the same sonarfix tip removes formatting/comment-only
+differences before reviewing incoming code. It also adopts the status early returns,
+explicit Survey-In state selection, shared loop for the two stream-status objects,
+and one transport connectivity snapshot per status report. All existing verification,
+NVS, GNSS quality units and workflow fields remain in the report. The native status
+harness compares all 144 cases against the previous firmware and retains 44 stream
+command checks under ASan/UBSan.
+
+The remaining parser cleanup separates RTCM accumulation and UBX header handling
+from mixed-stream dispatch. It preserves raw RTCM forwarding, malformed-byte
+reconsideration and the current ellipsoidal-height calculation. The u-blox routing
+cleanup separates key remapping and packet processing without replacing the local
+message-key table or the 64-entry VALSET packet limit. A deterministic comparison
+of 2,000 generated VALSET/CFG-MSG packets matches the previous routed bytes exactly.
+Durable regression cases cover truncated/malformed routing input, zero/maximum
+RTCM payloads, malformed UBX/RTCM header recovery and oversized UBX lengths.
+
+Do not copy the upstream u-blox table wholesale: it omits 1127 and changes the
+1094/1097 keys that the independent local vectors check. Do not revert the split
+VALSET builder to a single oversized packet. Other excluded changes are cosmetic
+array/byte/enum conversions, restored duplicate bootstrap/codec/storage/network
+implementations, older deployment defaults, and removals of local readback,
+WebSocket validation, datum conversion, startup and workflow protections. These
+are intentional differences, not unresolved merge conflicts.

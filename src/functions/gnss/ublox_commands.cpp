@@ -245,39 +245,80 @@ using namespace GnssCmdBuilder;
         return command;
     }
 
+    inline uint32_t remapOutputKey(uint32_t key, const PortKeys &ports)
+    {
+        return key == ports.usb || key == ports.uart2 ? ports.uart1 : key;
+    }
+
+    inline uint32_t remapValsetKey(uint32_t key)
+    {
+        for (const auto &message : NMEA_KEYS)
+            key = remapOutputKey(key, message.keys);
+        for (const auto &ports : NAV_KEYS)
+            key = remapOutputKey(key, ports);
+        for (const auto &message : RTCM_KEYS)
+            key = remapOutputKey(key, message.keys);
+        for (const uint8_t protocol : {1, 2, 4})
+        {
+            key = remapOutputKey(
+                key, {0x10740000U | protocol, 0x10760000U | protocol,
+                      0x10780000U | protocol});
+        }
+        return key;
+    }
+
+    inline bool remapValsetEntries(uint8_t *packet, size_t payloadLength)
+    {
+        if ((payloadLength - 4) % 5 != 0)
+            return false;
+        for (size_t i = 10; i + 5 <= payloadLength + 6; i += 5)
+        {
+            uint32_t key = 0;
+            for (uint8_t b = 0; b < 4; ++b)
+                key |= static_cast<uint32_t>(packet[i + b]) << (8 * b);
+            key = remapValsetKey(key);
+            for (uint8_t b = 0; b < 4; ++b)
+                packet[i + b] = static_cast<uint8_t>(key >> (8 * b));
+        }
+        return true;
+    }
+
+    bool processUbloxPacket(uint8_t *packet, size_t remaining)
+    {
+        const size_t payloadLength = packet[4] | (static_cast<size_t>(packet[5]) << 8);
+        if (payloadLength + 8 > remaining)
+            return false;
+        if (packet[2] == 0x06 && packet[3] == 0x8A && payloadLength >= 4)
+        {
+            if (!remapValsetEntries(packet, payloadLength))
+                return false;
+        }
+        else if (packet[2] == 0x06 && packet[3] == 0x01 && payloadLength == 8)
+        {
+            packet[9] = std::max(packet[9], std::max(packet[10], packet[11]));
+            packet[10] = 0;
+            packet[11] = 0;
+        }
+        uint8_t a = 0;
+        uint8_t b = 0;
+        for (size_t i = 2; i < payloadLength + 6; ++i)
+        {
+            a += packet[i];
+            b += a;
+        }
+        packet[payloadLength + 6] = a;
+        packet[payloadLength + 7] = b;
+        return true;
+    }
+
     void routeUbloxOutput(uint8_t *data, size_t length)
     {
         size_t offset = 0;
-        while (offset + 8 <= length && data[offset] == 0xB5 && data[offset + 1] == 0x62) {
-            uint8_t *packet = data + offset;
-            const size_t payloadLength = packet[4] | (static_cast<size_t>(packet[5]) << 8);
-            if (payloadLength + 8 > length - offset) return;
-            if (packet[2] == 0x06 && packet[3] == 0x8A && payloadLength >= 4) {
-                // Handle VALSET entries containing a four-byte key and one-byte value.
-                const auto remap = [](uint32_t key, const PortKeys &ports) {
-                    return key == ports.usb || key == ports.uart2 ? ports.uart1 : key;
-                };
-                if ((payloadLength - 4) % 5 != 0) return;
-                for (size_t i = 10; i + 5 <= payloadLength + 6; i += 5) {
-                    uint32_t key = 0;
-                    for (uint8_t b = 0; b < 4; ++b) key |= static_cast<uint32_t>(packet[i + b]) << (8 * b);
-                    for (const auto &message : NMEA_KEYS) key = remap(key, message.keys);
-                    for (const auto &ports : NAV_KEYS) key = remap(key, ports);
-                    for (const auto &message : RTCM_KEYS) key = remap(key, message.keys);
-                    for (uint8_t protocol : {1, 2, 4}) {
-                        key = remap(key, {0x10740000U | protocol, 0x10760000U | protocol, 0x10780000U | protocol});
-                    }
-                    for (uint8_t b = 0; b < 4; ++b) packet[i + b] = static_cast<uint8_t>(key >> (8 * b));
-                }
-            } else if (packet[2] == 0x06 && packet[3] == 0x01 && payloadLength == 8) {
-                // CFG-MSG UART1 rate inherits any requested USB/UART2 rate.
-                packet[9] = std::max(packet[9], std::max(packet[10], packet[11]));
-                packet[10] = packet[11] = 0;
-            }
-            uint8_t a = 0, b = 0;
-            for (size_t i = 2; i < payloadLength + 6; ++i) { a += packet[i]; b += a; }
-            packet[payloadLength + 6] = a;
-            packet[payloadLength + 7] = b;
+        while (offset + 8 <= length && data[offset] == 0xB5 && data[offset + 1] == 0x62)
+        {
+            if (!processUbloxPacket(data + offset, length - offset))
+                return;
+            const size_t payloadLength = data[offset + 4] | (static_cast<size_t>(data[offset + 5]) << 8);
             offset += payloadLength + 8;
         }
     }

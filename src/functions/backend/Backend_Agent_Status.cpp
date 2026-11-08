@@ -28,20 +28,19 @@ String BackendAgent::buildLwtPayload() const {
     return output;
 }
 
-String BackendAgent::statusForPayload(bool anyStream, bool onDemand) const {
-    String status = agentState_;
-    if (stationLock_.all) {
-        status = "locked";
-    } else if (status != "configuring" && status != "rebooting"
-        && status != "rebooting_for_reset" && !status.startsWith("auto_setup")
-        && !status.startsWith("reference_check")) {
-        if (!licenseValid_) status = "awaiting_license";
-        else if (!provisioned_) status = "unprovisioned";
-        else if (onDemand && !anyStream) status = "sleep";
-        else status = "online";
-    }
-
-    return status;
+String BackendAgent::statusForPayload(bool anyStream, bool onDemand) const
+{
+    if (stationLock_.all)
+        return "locked";
+    if (const auto stableState = agentState_ == "configuring" || agentState_ == "rebooting" || agentState_ == "rebooting_for_reset" || agentState_.startsWith("auto_setup") || agentState_.startsWith("reference_check"); stableState)
+        return agentState_;
+    if (!licenseValid_)
+        return "awaiting_license";
+    if (!provisioned_)
+        return "unprovisioned";
+    if (onDemand && !anyStream)
+        return "sleep";
+    return "online";
 }
 
 void BackendAgent::appendStatusFields(JsonDocument &doc, const String &status,
@@ -140,11 +139,13 @@ void BackendAgent::appendStartupInfo(JsonObject system) const {
 
 JsonObject BackendAgent::appendSurveyInfo(JsonObject system, uint32_t nowMs) const {
     JsonObject survey = system.createNestedObject("survey_in_status");
-    survey["state"] = surveyInMonitoring_
-        ? (receiverBaseReadbackMs_ > 0 && nowMs - receiverBaseReadbackMs_ <= 45000UL
-           && surveyInReadbackHasPosition_
-            ? (surveyInReadbackReady_ ? "base_ready" : "waiting_base") : "awaiting_readback")
-        : "not_monitoring";
+    const bool readbackFresh = receiverBaseReadbackMs_ > 0
+        && nowMs - receiverBaseReadbackMs_ <= 45000UL && surveyInReadbackHasPosition_;
+    const char *surveyState = "waiting_base";
+    if (!surveyInMonitoring_) surveyState = "not_monitoring";
+    else if (!readbackFresh) surveyState = "awaiting_readback";
+    else if (surveyInReadbackReady_) surveyState = "base_ready";
+    survey["state"] = surveyState;
     if (surveyInMonitoring_) {
         if (surveyInStartedMs_ > 0)
             survey["elapsed_since_ack_seconds"] = static_cast<uint32_t>(nowMs - surveyInStartedMs_) / 1000UL;
@@ -323,67 +324,52 @@ void BackendAgent::appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapsh
 }
 
 void BackendAgent::appendNtripStatus(JsonDocument &doc, const JsonObjectConst &service,
-                                     bool server1Active, bool server2Active) const {
-    JsonObject ntripStats = doc.createNestedObject("ntrip_stats");
-    ntripStats["rtcm_input_bps"] = getRtcmInputBps();
-    ntripStats["server1_bps"] = ntripServerBps(1);
-    ntripStats["server2_bps"] = ntripServerBps(2);
-    ntripStats["server1_connected"] = ntripServerConnected(1);
-    ntripStats["server2_connected"] = ntripServerConnected(2);
+                                     bool server1Active, bool server2Active) const
+{
+    JsonObject stats = doc.createNestedObject("ntrip_stats");
+    stats["rtcm_input_bps"] = getRtcmInputBps();
+    stats["server1_bps"] = ntripServerBps(1);
+    stats["server2_bps"] = ntripServerBps(2);
+    stats["server1_connected"] = ntripServerConnected(1);
+    stats["server2_connected"] = ntripServerConnected(2);
     doc["bps"] = ntripServerBps(1) + ntripServerBps(2);
-
-    JsonObject ntripStatus = doc.createNestedObject("ntrip_status");
-    JsonObject server1 = ntripStatus.createNestedObject("server1");
+    JsonObject status = doc.createNestedObject("ntrip_status");
+    JsonObject server1 = status.createNestedObject("server1");
     server1["connected"] = ntripServerConnected(1);
     server1["error"] = ntripServerError(1);
     server1["bps"] = ntripServerBps(1);
     server1["active"] = server1Active;
-    JsonObject server2 = ntripStatus.createNestedObject("server2");
+    JsonObject server2 = status.createNestedObject("server2");
     server2["connected"] = ntripServerConnected(2);
     server2["error"] = ntripServerError(2);
     server2["bps"] = ntripServerBps(2);
     server2["active"] = server2Active;
-    ntripStatus["rtcm_input_bps"] = getRtcmInputBps();
+    status["rtcm_input_bps"] = getRtcmInputBps();
     doc["ntrip_connected"] = ntripServerConnected(1) || ntripServerConnected(2);
-
-    JsonObject streamState = doc.createNestedObject("ntrip_stream_state");
-    streamState["selected_mountpoint"] = jsonString(service, "active_mountpoint");
-    JsonObject stream1 = streamState.createNestedObject("server1");
-    const bool server1OnDemand = jsonBool(service, "server1_stream_on_demand",
-                                          jsonBool(service, "stream_on_demand", false));
-    const bool server1Enabled = jsonBool(service, "server1_enabled", false);
-    const bool server1Configured = licenseValid_ && provisioned_
-        && BackendAgent::effectiveStreamActive(service, 1, false);
-    stream1["enabled"] = server1Enabled;
-    stream1["on_demand"] = server1OnDemand;
-    stream1["active"] = server1Active;
-    stream1["can_push"] = server1Active;
-    stream1["configured_can_push"] = server1Configured;
-    stream1["effective_can_push"] = server1Active;
-    stream1["locked"] = isServerLocked(1);
-    stream1["fail_open_forced"] = server1Active && controlPlaneFailOpen_ && !server1Configured;
-    stream1["sleep"] = server1Enabled && server1OnDemand && !server1Active;
-    stream1["connected"] = ntripServerConnected(1);
-    stream1["bps"] = ntripServerBps(1);
-    stream1["mountpoint"] = jsonString(service, "mountpoint1");
-    JsonObject stream2 = streamState.createNestedObject("server2");
-    const bool server2OnDemand = jsonBool(service, "server2_stream_on_demand",
-                                          jsonBool(service, "stream_on_demand", false));
-    const bool server2Enabled = jsonBool(service, "server2_enabled", false);
-    const bool server2Configured = licenseValid_ && provisioned_
-        && BackendAgent::effectiveStreamActive(service, 2, false);
-    stream2["enabled"] = server2Enabled;
-    stream2["on_demand"] = server2OnDemand;
-    stream2["active"] = server2Active;
-    stream2["can_push"] = server2Active;
-    stream2["configured_can_push"] = server2Configured;
-    stream2["effective_can_push"] = server2Active;
-    stream2["locked"] = isServerLocked(2);
-    stream2["fail_open_forced"] = server2Active && controlPlaneFailOpen_ && !server2Configured;
-    stream2["sleep"] = server2Enabled && server2OnDemand && !server2Active;
-    stream2["connected"] = ntripServerConnected(2);
-    stream2["bps"] = ntripServerBps(2);
-    stream2["mountpoint"] = jsonString(service, "mountpoint2");
+    JsonObject streams = doc.createNestedObject("ntrip_stream_state");
+    streams["selected_mountpoint"] = jsonString(service, "active_mountpoint");
+    for (uint8_t id = 1; id <= 2; ++id)
+    {
+        const auto prefix = String("server") + String(id);
+        const auto active = id == 1 ? server1Active : server2Active;
+        const auto onDemand = jsonBool(service, prefix + "_stream_on_demand",
+                                       jsonBool(service, "stream_on_demand", false));
+        const auto enabled = jsonBool(service, prefix + "_enabled", false);
+        const auto configured = licenseValid_ && provisioned_ && effectiveStreamActive(service, id, false);
+        JsonObject stream = streams.createNestedObject(prefix);
+        stream["enabled"] = enabled;
+        stream["on_demand"] = onDemand;
+        stream["active"] = active;
+        stream["can_push"] = active;
+        stream["configured_can_push"] = configured;
+        stream["effective_can_push"] = active;
+        stream["locked"] = isServerLocked(id);
+        stream["fail_open_forced"] = active && controlPlaneFailOpen_ && !configured;
+        stream["sleep"] = enabled && onDemand && !active;
+        stream["connected"] = ntripServerConnected(id);
+        stream["bps"] = ntripServerBps(id);
+        stream["mountpoint"] = jsonString(service, String("mountpoint") + String(id));
+    }
 }
 
 void BackendAgent::appendTransportStatus(JsonDocument &doc, const GnssTelemetrySnapshot &gnss,
@@ -394,10 +380,15 @@ void BackendAgent::appendTransportStatus(JsonDocument &doc, const GnssTelemetryS
     antenna["state"] = gnssOk ? "OK" : "FAULT";
     if (!gnssOk) antenna["message"] = "Không nhận được dữ liệu GNSS trong 15 giây";
 
+    const bool mqttConnectedNow = mqttConnected();
+    const bool websocketConnectedNow = websocketConnected();
     JsonObject transport = doc.createNestedObject("transport_status");
-    transport["mqtt_connected"] = mqttConnected();
-    transport["websocket_connected"] = websocketConnected();
-    transport["active_channel"] = websocketConnected() ? "websocket" : (mqttConnected() ? "mqtt" : "none");
+    transport["mqtt_connected"] = mqttConnectedNow;
+    transport["websocket_connected"] = websocketConnectedNow;
+    const char *activeChannel = "none";
+    if (websocketConnectedNow) activeChannel = "websocket";
+    else if (mqttConnectedNow) activeChannel = "mqtt";
+    transport["active_channel"] = activeChannel;
     transport["mqtt_broker"] = readPreference("MQTT_SERVER", MQTT_SERVER);
     transport["websocket_host"] = readPreference("BACKEND_HOST", BACKEND_HOST);
     transport["control_plane_fail_open"] = controlPlaneFailOpen_;

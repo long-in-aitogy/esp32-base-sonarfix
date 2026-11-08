@@ -65,6 +65,20 @@ int main() {
     assert(sentences == 31); // Invalid RTCM reserved bits cannot swallow GGA.
     feed("$truncated"); feed(ubx); feed(gga);
     assert(sentences == 32); // Binary traffic ends a malformed NMEA line.
+    feed(std::string("\xB5", 1)); feed(gga);
+    assert(sentences == 33); // A bad UBX second byte must be reconsidered as '$'.
+    feed(std::string("\xD3", 1)); feed(ubx); feed(gga);
+    assert(sentences == 34); // A bad RTCM second byte may start a complete UBX frame.
+    const std::string emptyRtcm("\xD3\0\0\0\0\0", 6);
+    feed(emptyRtcm);
+    assert(backendAgent.frames.back() == emptyRtcm);
+    std::string maximumRtcm("\xD3\x03\xFF", 3);
+    maximumRtcm.append(1023, '$'); maximumRtcm.append(3, '\0');
+    feed(maximumRtcm);
+    assert(backendAgent.frames.back() == maximumRtcm && maximumRtcm.size() == 1029);
+    feed(std::string("\xB5\x62\x01\x07\x01\x20", 6)); feed(gga);
+    assert(sentences == 35); // Reject oversized UBX length without swallowing the next GGA.
+
 }
 '''
 parser = mapped(root / 'src/functions/ntrip/RTCM_Receiver.cpp', 'void resetRtcmParser()' + parser)
@@ -74,4 +88,4 @@ with tempfile.TemporaryDirectory(prefix="gnss-stream-") as directory:
     compile_cpp(["c++", "-std=c++17", "-fsanitize=address,undefined",
                     str(path / "check.cpp"), "-o", str(path / "check")], check=True)
     run_cpp([str(path / "check")], check=True)
-print("PASS: 30 interleaved GGA/UBX/RTCM cycles, binary payload markers, malformed input recovery")
+print("PASS: 30 interleaved GGA/UBX/RTCM cycles, 0/1023-byte RTCM payloads, binary markers and malformed/oversize recovery")
