@@ -16,8 +16,8 @@ source = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_text(
 functions = source.split('namespace {', 1)[1].split('\n}\n\nvoid BackendAgent::setWorkflowProgress', 1)[0]
 agent = (root / 'src/functions/backend/Backend_Agent.cpp').read_text()
 handler = 'void BackendAgent::handleControlAck(' + agent.split('void BackendAgent::handleControlAck(', 1)[1].split('\nvoid BackendAgent::onMqttMessage', 1)[0]
-ntrip = (root / 'src/functions/ntrip/NTRIP_Handler_IP.cpp').read_text()
-handshake = 'bool waitForNtripResponse(' + ntrip.split('bool waitForNtripResponse(', 1)[1].split('\nvoid sendRoverGgaIfAvailable', 1)[0]
+ntrip = (root / 'src/functions/ntrip/ntrip_common.cpp').read_text()
+handshake = 'bool waitForNtripResponse(' + ntrip.split('bool waitForNtripResponse(', 1)[1].split('} // namespace ntrip_common', 1)[0]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
 shim = shim.replace('    void trim() {', '''    int indexOf(const char *value) const { const auto p = find(value); return p == npos ? -1 : int(p); }
     void trim() {''')

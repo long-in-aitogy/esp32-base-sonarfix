@@ -5,8 +5,8 @@ import tempfile
 from host_coverage import compile_cpp, run_cpp, cpp_output, mapped
 
 root = Path(__file__).resolve().parents[2]
-source = (root / "src/functions/ntrip/NTRIP_Handler_IP.cpp").read_text()
-sender = source.split("void sendRoverGgaIfAvailable(", 1)[1].split("\nbool connectEndpoint(", 1)[0]
+source = (root / "src/functions/ntrip/ntrip_rover.cpp").read_text()
+sender = source.split("void sendRoverGgaIfAvailable(", 1)[1].split("} // namespace", 1)[0]
 harness = r'''
 #include <cassert>
 #include <cstdint>
@@ -59,7 +59,7 @@ int main() {
     assert(client.writes == 2 && Serial.logs.back() != "sent");
 }
 '''
-sender = mapped(root / 'src/functions/ntrip/NTRIP_Handler_IP.cpp', 'void sendRoverGgaIfAvailable(' + sender)
+sender = mapped(root / 'src/functions/ntrip/ntrip_rover.cpp', 'void sendRoverGgaIfAvailable(' + sender)
 with tempfile.TemporaryDirectory(prefix="esp32-gga-") as directory:
     path = Path(directory)
     (path / "check.cpp").write_text(harness + sender + checks)

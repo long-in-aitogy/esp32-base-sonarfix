@@ -21,10 +21,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Inventory all firmware executable lines
+      - name: Build firmware and inventory executable lines
         run: |
           python3 -m venv /tmp/firmware-coverage
           /tmp/firmware-coverage/bin/python -m pip install platformio
+          /tmp/firmware-coverage/bin/pio run -e tdm240x_dev_general
           /tmp/firmware-coverage/bin/pio run -e tdm240x_dev_general -t compiledb
           python3 test/host/firmware_coverage_inventory.py
 
@@ -58,3 +59,4 @@ jobs:
             -Dsonar.host.url=https://sonarcloud.io
             -Dsonar.organization=tundzai001
             -Dsonar.projectKey=tundzai001_esp32-base
+            -Dsonar.qualitygate.wait=true

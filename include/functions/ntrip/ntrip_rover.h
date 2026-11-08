@@ -1,27 +1,7 @@
-#ifndef NTRIP_HANDLER_IP_H
-#define NTRIP_HANDLER_IP_H
+#pragma once
 
-// ============ GẮN CÁC THƯ VIỆN CẦN THIẾT ==============
-
-#include <Arduino.h>
+#include "functions/ntrip/ntrip_common.h"
 #include "functions/backend/Vn2000_Datum.h"
-#include "Top_Lvl_Config.h"
-#include "hardware/Connection_type.h"
-
-extern SemaphoreHandle_t rtcmBufferMutex;
-extern SemaphoreHandle_t tcpStreamMutex;
-
-// =============== KHAI BÁO HÀM =================
-
-int setupNTRIP();
-int loopNTRIP(String& rtcmData);
-int connectNTRIP();
-bool isNtripConnected();
-void stopNtrip();
-bool ntripServerConnected(uint8_t serverId);
-uint32_t ntripServerBps(uint8_t serverId);
-String ntripServerError(uint8_t serverId);
-Client& activeNtripClient();
 
 // Temporary rover-side NTRIP session used by the auto-base/reference
 // workflows. RTCM received here is injected into the GNSS module unchanged;
@@ -37,5 +17,3 @@ uint32_t ntripRoverPacketsReceived();
 const char *ntripRoverLastError();
 // Caller owns tcpStreamMutex, like start/loop/stopNtripRover.
 Vn2000Datum ntripRoverDatum();
-
-#endif

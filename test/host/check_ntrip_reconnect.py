@@ -5,7 +5,7 @@ import tempfile
 from host_coverage import compile_cpp, run_cpp, cpp_output, mapped
 
 root = Path(__file__).resolve().parents[2]
-source = (root / 'src/functions/ntrip/NTRIP_Handler_IP.cpp').read_text()
+source = (root / 'src/functions/ntrip/ntrip_base.cpp').read_text()
 loop = 'static bool sendEndpointRtcm(' + source.split('static bool sendEndpointRtcm(', 1)[1].split('\nvoid stopNtrip()', 1)[0]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
 shim = shim.replace('    void trim() {', '''    String(unsigned long value, int) { char text[24]; snprintf(text, sizeof(text), "%lx", value); assign(text); }
@@ -70,7 +70,7 @@ int main() {
     assert(loopNTRIP(payload) == 504);
 }
 '''
-loop = mapped(root / 'src/functions/ntrip/NTRIP_Handler_IP.cpp', loop)
+loop = mapped(root / 'src/functions/ntrip/ntrip_base.cpp', loop)
 with tempfile.TemporaryDirectory(prefix='esp-ntrip-reconnect-') as directory:
     path = Path(directory)
     log_check = 'void checkLogs() { bool ntripStatusLogged = false, ntripWasConnected = false; for (int loopStatus : {1, 5, 1, 504, 504, 1, 5}) {\n' + logging + '\n} assert(Serial.events == 3); }\n'
