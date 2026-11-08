@@ -48,8 +48,9 @@ void setStreamServerState(JsonObject service, uint8_t id, bool active,
         return;
     }
     if (!active) {
-        const String configured = jsonString(service, String("mountpoint") + String(id));
-        const String current = jsonString(service, "active_mountpoint");
+        const String configured = normalizedStreamValue(
+            jsonString(service, String("mountpoint") + String(id)), true);
+        const String current = normalizedStreamValue(jsonString(service, "active_mountpoint"), true);
         if (mountpoint.isEmpty() || mountpoint.equalsIgnoreCase(configured)
             || current.equalsIgnoreCase(configured)) {
             service.remove("active_mountpoint");
@@ -68,9 +69,8 @@ bool serverMatchesAddress(JsonObjectConst service, uint8_t id, const String &add
 
 bool serverMatchesMountpoint(JsonObjectConst service, uint8_t id,
                              const String &mountpoint) {
-    String configured = jsonString(service, String("mountpoint") + String(id));
-    while (configured.startsWith("/")) configured.remove(0, 1);
-    configured.toLowerCase();
+    const String configured = normalizedStreamValue(
+        jsonString(service, String("mountpoint") + String(id)), true);
     return !configured.isEmpty() && configured == mountpoint;
 }
 
@@ -105,6 +105,7 @@ bool applyTargetedStreamState(JsonObject service, int serverId, bool active,
 }
 
 void applyGlobalStreamState(JsonObject service, bool active, const String &mountpoint) {
+    for (uint8_t id = 1; id <= 2; ++id) setStreamServerState(service, id, active, mountpoint);
     service["stream_active"] = active;
     if (mountpoint.length() > 0 && active) service["active_mountpoint"] = mountpoint;
     if (!active) service.remove("active_mountpoint");
@@ -164,8 +165,21 @@ void BackendAgent::applyServiceStreamCommand(JsonObject payload) {
     address = normalizedStreamValue(address, false);
     const int serverId = streamServerId(payload);
 
-    if (!applyTargetedStreamState(service, serverId, active, address, mountpoint))
+    const bool previousActive[] = {
+        effectiveStreamActive(service, 1, false), effectiveStreamActive(service, 2, false)};
+    if (applyTargetedStreamState(service, serverId, active, address, mountpoint)) {
+        // Preserve an untargeted on-demand stream before updating the global summary.
+        for (uint8_t id = 1; id <= 2; ++id) {
+            const String prefix = String("server") + String(id);
+            const String key = prefix + "_stream_active";
+            const bool onDemand = jsonBool(service, prefix + "_stream_on_demand",
+                                             jsonBool(service, "stream_on_demand", false));
+            if (onDemand && jsonBool(service, prefix + "_enabled", false)
+                && service[key].isNull()) service[key] = previousActive[id - 1];
+        }
+    } else {
         applyGlobalStreamState(service, active, mountpoint);
+    }
     service["stream_active"] = BackendAgent::effectiveStreamActive(service, 1, false)
         || BackendAgent::effectiveStreamActive(service, 2, false);
     serviceConfig_.clear();

@@ -23,6 +23,7 @@ shim = shim.replace('    void trim() {', '''    String(const char *text) : std::
     void trim() {''')
 snapshot = (root / 'include/functions/ntrip/RTCM_Receiver.h').read_text().split('struct GnssTelemetrySnapshot {', 1)[1].split('\n};', 1)[0]
 common = r'''
+#include <cassert>
 #include <cstdlib>
 #include <cmath>
 #include <iostream>
@@ -114,6 +115,38 @@ int main() {
                 agent.applyServiceStreamCommand(payload.as<JsonObject>());
                 std::cout << agent.serviceConfig_ << '\n';
             }
+
+    for (unsigned targetId : {1U, 2U}) {
+        for (const char *configuredMountpoint : {"Alpha", "/Alpha", " ///AlPhA "}) {
+            for (bool explicitNull : {false, true})
+            for (bool active : {false, true}) {
+                BackendAgent agent;
+                DynamicJsonDocument service(4096), payload(1024), result(4096);
+                service["server1_enabled"] = true; service["server2_enabled"] = true;
+                service["stream_on_demand"] = true;
+                service["stream_active"] = !active;
+                if (explicitNull) { service["server1_stream_active"] = nullptr; service["server2_stream_active"] = nullptr; }
+                service[String("mountpoint") + String(targetId)] = configuredMountpoint;
+                service[String("mountpoint") + String(3 - targetId)] = "Beta";
+                service["active_mountpoint"] = "alpha";
+                agent.serviceConfig_.clear(); serializeJson(service, agent.serviceConfig_);
+                payload["active"] = active; payload["mountpoint"] = " /ALPHA ";
+                agent.applyServiceStreamCommand(payload.as<JsonObject>());
+                deserializeJson(result, agent.serviceConfig_);
+                assert(result[String("server") + String(targetId) + "_stream_active"].is<bool>());
+                assert(BackendAgent::effectiveStreamActive(result.as<JsonObjectConst>(), targetId, false) == active);
+                assert(BackendAgent::effectiveStreamActive(result.as<JsonObjectConst>(), 3 - targetId, false) == !active);
+                if (!active) assert(!result.containsKey("active_mountpoint"));
+                for (bool globalActive : {true, false}) {
+                    payload.clear(); payload["active"] = globalActive;
+                    agent.applyServiceStreamCommand(payload.as<JsonObject>());
+                    result.clear(); deserializeJson(result, agent.serviceConfig_);
+                    for (unsigned id : {1U, 2U})
+                        assert(BackendAgent::effectiveStreamActive(result.as<JsonObjectConst>(), id, false) == globalActive);
+                }
+            }
+        }
+    }
 }
 '''
 
@@ -161,12 +194,15 @@ for index, row in enumerate(actual[144:]):
     target = targets[choice]
     for server in (1, 2):
         key = f'server{server}_stream_active'
-        targeted = target == server or (choice == 10 and not active)
-        if targeted and (demand or active):
-            assert row[key] is active
+        targeted = target is None or target == server
+        if demand:
+            assert row[key] is (active if targeted else False)
+        elif targeted and active:
+            assert row[key] is True
         else:
             assert key not in row
+
 if len(sys.argv) > 1:
     # Compare status only: old stream code had dangling JSON keys (ASan failure).
     assert actual[:144] == run(Path(sys.argv[1]), reference=True), 'Status changed across refactor'
-print('PASS: 144 real status cases and 44 stream commands; verification/NVS/Auto Base fields retained' + ('; status identical to before refactor' if len(sys.argv) > 1 else ''))
+print('PASS: 144 real status cases, 44 stream commands and 72 scoped/global transitions; verification/NVS/Auto Base fields retained' + ('; status identical to before refactor' if len(sys.argv) > 1 else ''))

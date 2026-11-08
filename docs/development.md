@@ -255,3 +255,9 @@ array/byte/enum conversions, restored duplicate bootstrap/codec/storage/network
 implementations, older deployment defaults, and removals of local readback,
 WebSocket validation, datum conversion, startup and workflow protections. These
 are intentional differences, not unresolved merge conflicts.
+
+
+The [remaining sonarfix review](sonarfix-remaining-review.md) records the current
+upstream tip, excluded changes, feature-preservation checks and the reproduced
+legacy per-server stream-state failure. This is the disposition ledger for
+remaining upstream differences; it does not claim a complete ancestry merge.
