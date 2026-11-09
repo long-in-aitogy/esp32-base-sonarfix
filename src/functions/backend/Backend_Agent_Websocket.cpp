@@ -10,6 +10,11 @@
 
 namespace
 {
+    uint8_t maskByte(uint8_t value, uint8_t mask)
+    {
+        return std::to_integer<uint8_t>(std::byte{value} ^ std::byte{mask});
+    }
+
     String websocketNonce()
     {
         static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -172,7 +177,7 @@ bool BackendAgentWebsocket::sendText(const String &text)
         const auto chunkLength = min(maskedChunk.size(), length - offset);
         for (size_t i = 0; i < chunkLength; ++i)
         {
-            maskedChunk[i] = static_cast<uint8_t>(text[offset + i]) ^ maskBytes[(offset + i) & 3];
+            maskedChunk[i] = maskByte(static_cast<uint8_t>(text[offset + i]), maskBytes[(offset + i) % maskBytes.size()]);
         }
         if (client_->write(maskedChunk.data(), chunkLength) != chunkLength)
         {
@@ -235,9 +240,9 @@ void BackendAgentWebsocket::connectNow()
 bool BackendAgentWebsocket::readFrame(uint8_t &opcode, String &payload)
 {
     const uint8_t first = rx_[0];
-    const uint8_t second = rx_[1];
-    const auto masked = (second & 0x80) != 0;
-    uint64_t payloadLength = second & 0x7F;
+    const std::byte second{rx_[1]};
+    const bool masked = (second & std::byte{0x80}) != std::byte{0};
+    uint64_t payloadLength = std::to_integer<uint8_t>(second & std::byte{0x7F});
     auto headerLength = 2;
 
     if (payloadLength == 126)
@@ -277,7 +282,7 @@ bool BackendAgentWebsocket::readFrame(uint8_t &opcode, String &payload)
     {
         uint8_t byte = rx_[headerLength + i];
         if (masked)
-            byte ^= mask[i & 3];
+            byte = maskByte(byte, mask[i % mask.size()]);
         payload += static_cast<char>(byte);
     }
     rx_.erase(rx_.begin(), rx_.begin() + headerLength + payloadLength);
@@ -334,7 +339,7 @@ void BackendAgentWebsocket::sendControl(uint8_t opcode, const uint8_t *payload, 
     {
         for (size_t i = 0; i < length; ++i)
         {
-            const uint8_t byte = payload[i] ^ maskBytes[i & 3];
+            const uint8_t byte = maskByte(payload[i], maskBytes[i % maskBytes.size()]);
             client_->write(&byte, 1);
         }
     }

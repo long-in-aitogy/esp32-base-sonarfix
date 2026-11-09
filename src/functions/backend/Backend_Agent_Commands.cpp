@@ -219,9 +219,9 @@ bool BackendAgent::applyLockCommand(JsonObjectConst payload, String &error)
         return false;
     }
 
-    int serverIds[2] = {};
-    auto count = 0;
-    uint8_t seen = 0;
+    std::array<int, 2> serverIds{};
+    size_t count = 0;
+    std::array<bool, 2> seen{};
     for (JsonVariantConst id : ids)
     {
         if (!id.is<int>() || id.as<int>() < 1 || id.as<int>() > 2)
@@ -230,14 +230,13 @@ bool BackendAgent::applyLockCommand(JsonObjectConst payload, String &error)
             return false;
         }
         const auto serverId = id.as<int>();
-        const auto bit = static_cast<uint8_t>(1U << (serverId - 1));
-        if ((seen & bit) == 0 && count < 2)
+        if (!seen[serverId - 1])
         {
             serverIds[count++] = serverId;
-            seen = static_cast<uint8_t>(seen | bit);
+            seen[serverId - 1] = true;
         }
     }
-    if (!stationLock_.setScoped(serverIds, count))
+    if (!stationLock_.setScoped(serverIds.data(), count))
     {
         error = "payload.locked_servers must contain only server IDs 1 or 2";
         return false;
