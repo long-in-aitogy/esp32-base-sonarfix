@@ -75,6 +75,7 @@ void BackendAgent::requestWorkflowStop()
         workflowCancelRequested_ = true;
 }
 
+// FreeRTOS TaskFunction_t requires void*. startWorkflow passes this as the context.
 void BackendAgent::workflowTaskThunk(void *parameter)
 {
     auto *agent = static_cast<BackendAgent *>(parameter);

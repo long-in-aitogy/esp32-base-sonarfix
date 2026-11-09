@@ -3,9 +3,11 @@
 #include "functions/gnss/Unicore_Readback.h"
 #include "functions/gnss/Ublox_Readback.h"
 #include <array>
+#include <cinttypes>
 #include <cstdio>
+#include <cstring>
 
-    using namespace BackendAgentInternal;
+using namespace BackendAgentInternal;
 
 void BackendAgent::saveSurveyResult(JsonObjectConst bestPosition, const String &mode)
 {
@@ -125,11 +127,12 @@ bool BackendAgent::refreshUnicoreReadback(String &error)
     readbackDoc["chip"] = "Unicorecomm";
     readbackDoc["revision"] = ++receiverBaseReadbackRevision_;
     readbackDoc["mode_raw"] = mode;
-    readbackDoc["mode_kind"] = success ? UnicoreReadback::modeKind(mode) : "unknown";
+    const char *modeKind = success ? UnicoreReadback::modeKind(mode) : "unknown";
+    readbackDoc["mode_kind"] = modeKind;
     readbackDoc["query"] = "MODE";
     if (success)
     {
-        if (String(UnicoreReadback::modeKind(mode)) == "survey_in")
+        if (std::strcmp(modeKind, "survey_in") == 0)
         {
             if (!surveyInMonitoring_)
             {
@@ -137,8 +140,8 @@ bool BackendAgent::refreshUnicoreReadback(String &error)
                 surveyInStartedMs_ = 0;
                 surveyInTargetSeconds_ = 0;
             }
-            auto target = 0;
-            if (std::sscanf(mode.c_str(), "MODE BASE TIME %lu", &target) == 1)
+            uint32_t target = 0;
+            if (std::sscanf(mode.c_str(), "MODE BASE TIME %" SCNu32, &target) == 1)
                 surveyInTargetSeconds_ = target;
         }
         else
