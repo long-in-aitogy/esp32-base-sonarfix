@@ -7,7 +7,7 @@ using BackendAgentInternal::encodeBase64;
 using namespace ntrip_common;
 
 namespace {
-static Vn2000Session roverDatumSession;
+Vn2000Session roverDatumSession;
 uint32_t roverBytesReceived = 0;
 uint32_t roverPacketsReceived = 0;
 uint32_t roverBytesWritten = 0, roverLastDiagnosticMs = 0;
