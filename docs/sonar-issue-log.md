@@ -2,25 +2,25 @@
 
 Project [`tundzai001_esp32-base-sonarfix`](https://sonarcloud.io/project/overview?id=tundzai001_esp32-base-sonarfix), nhánh `develop`. Trạng thái issue thuộc project SonarQube và được ghi lại ở đây để người dùng Git có thể đối chiếu. Các vị trí là ảnh chụp tại thời điểm ghi nhận.
 
-## 2026-11-09 · Mở lại 10 ngoại lệ
+## 2026-11-09 · Chấp nhận 10 ngoại lệ
 
-Cả 10 issue từng được chuyển sang **Accepted** và đã được mở lại theo yêu cầu rà soát. Lý do chấp nhận trước đó:
+Cả 10 issue đã được mở lại để rà soát và sau đó chuyển về **Accepted**. Lý do chấp nhận:
 
 - `cpp:S5008`: chữ ký callback `TaskFunction_t` của FreeRTOS yêu cầu `void*`.
 - `cpp:S1874`: firmware dùng ArduinoJson 6; `DynamicJsonDocument` đặt dung lượng vùng nhớ động. Rà soát khi nâng ArduinoJson.
 
 | Issue | Quy tắc | Vị trí | Trạng thái |
 | --- | --- | --- | --- |
-| [AaHAB4W0wAMFQ7NSc-jO](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4W0wAMFQ7NSc-jO) | `cpp:S1874` | `src/functions/backend/Backend_Agent_Gnss.cpp:16` | Open |
-| [AaHAB4W0wAMFQ7NSc-jP](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4W0wAMFQ7NSc-jP) | `cpp:S1874` | `src/functions/backend/Backend_Agent_Gnss.cpp:31` | Open |
-| [AaHAB4W0wAMFQ7NSc-jT](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4W0wAMFQ7NSc-jT) | `cpp:S1874` | `src/functions/backend/Backend_Agent_Gnss.cpp:125` | Open |
-| [AaHAB4XmwAMFQ7NSc-lp](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4XmwAMFQ7NSc-lp) | `cpp:S1874` | `src/functions/ntrip/ntrip_common.cpp:360` | Open |
-| [AaHAB4XmwAMFQ7NSc-lq](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4XmwAMFQ7NSc-lq) | `cpp:S1874` | `src/functions/ntrip/ntrip_common.cpp:378` | Open |
-| [AaHAB4XUwAMFQ7NSc-kz](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4XUwAMFQ7NSc-kz) | `cpp:S5008` | `src/functions/backend/Backend_Agent_Workflows.cpp:79` | Open |
-| [AaHAB4X7wAMFQ7NSc-mE](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4X7wAMFQ7NSc-mE) | `cpp:S5008` | `src/main.cpp:221` | Open |
-| [AaHAIQumlEIACM2ZqKxA](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAIQumlEIACM2ZqKxA) | `cpp:S5008` | `src/main.cpp:296` | Open |
-| [AaHAB4X7wAMFQ7NSc-mG](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4X7wAMFQ7NSc-mG) | `cpp:S5008` | `src/main.cpp:310` | Open |
-| [AaHAB4X7wAMFQ7NSc-mH](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4X7wAMFQ7NSc-mH) | `cpp:S5008` | `src/main.cpp:327` | Open |
+| [AaHAB4W0wAMFQ7NSc-jO](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4W0wAMFQ7NSc-jO) | `cpp:S1874` | `src/functions/backend/Backend_Agent_Gnss.cpp:16` | Accepted |
+| [AaHAB4W0wAMFQ7NSc-jP](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4W0wAMFQ7NSc-jP) | `cpp:S1874` | `src/functions/backend/Backend_Agent_Gnss.cpp:31` | Accepted |
+| [AaHAB4W0wAMFQ7NSc-jT](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4W0wAMFQ7NSc-jT) | `cpp:S1874` | `src/functions/backend/Backend_Agent_Gnss.cpp:125` | Accepted |
+| [AaHAB4XmwAMFQ7NSc-lp](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4XmwAMFQ7NSc-lp) | `cpp:S1874` | `src/functions/ntrip/ntrip_common.cpp:360` | Accepted |
+| [AaHAB4XmwAMFQ7NSc-lq](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4XmwAMFQ7NSc-lq) | `cpp:S1874` | `src/functions/ntrip/ntrip_common.cpp:378` | Accepted |
+| [AaHAB4XUwAMFQ7NSc-kz](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4XUwAMFQ7NSc-kz) | `cpp:S5008` | `src/functions/backend/Backend_Agent_Workflows.cpp:79` | Accepted |
+| [AaHAB4X7wAMFQ7NSc-mE](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4X7wAMFQ7NSc-mE) | `cpp:S5008` | `src/main.cpp:221` | Accepted |
+| [AaHAIQumlEIACM2ZqKxA](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAIQumlEIACM2ZqKxA) | `cpp:S5008` | `src/main.cpp:296` | Accepted |
+| [AaHAB4X7wAMFQ7NSc-mG](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4X7wAMFQ7NSc-mG) | `cpp:S5008` | `src/main.cpp:310` | Accepted |
+| [AaHAB4X7wAMFQ7NSc-mH](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4X7wAMFQ7NSc-mH) | `cpp:S5008` | `src/main.cpp:327` | Accepted |
 
 ## 2026-11-09 · Đối chiếu quyết định của tác giả
 
