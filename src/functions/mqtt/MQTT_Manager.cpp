@@ -12,22 +12,26 @@
 #include "hardware/Wifi_handler.h"
 #include "hardware/Sim_handler.h"
 
-namespace {
+namespace
+{
   WiFiClient wifiMqttClient;
 }
 
 extern TinyGsm modem;
-namespace {
-  class MqttGsmClient : public TinyGsmClient {
-   public:
+namespace
+{
+  class MqttGsmClient : public TinyGsmClient
+  {
+  public:
     using TinyGsmClient::TinyGsmClient;
     using TinyGsmClient::write;
 
-    size_t write(const uint8_t* data, size_t size) override {
-      const size_t sent = writeMqttChunks(data, size, [this](const uint8_t* part, size_t count) {
-        return TinyGsmClient::write(part, count);
-      });
-      if (sent != size) {
+    size_t write(const uint8_t *data, size_t size) override
+    {
+      const auto sent = writeMqttChunks(data, size, [this](const uint8_t *part, size_t count)
+                                        { return TinyGsmClient::write(part, count); });
+      if (sent != size)
+      {
         Serial.printf("[MQTT][ERROR] Modem short write: %u/%u bytes; reconnect required\n",
                       static_cast<unsigned>(sent), static_cast<unsigned>(size));
         // The broker may have received a packet prefix. Discard this TCP stream
@@ -52,9 +56,10 @@ namespace {
   uint32_t lastMqttConnectAttemptMs = 0;
 }
 
-Client& activeMqttClient() {
-  return isWifiConnection() ? static_cast<Client&>(wifiMqttClient)
-                            : static_cast<Client&>(gsmMqttClient);
+Client &activeMqttClient()
+{
+  return isWifiConnection() ? static_cast<Client &>(wifiMqttClient)
+                            : static_cast<Client &>(gsmMqttClient);
 }
 
 // ================= ĐỊNH NGHĨA HÀM =================
@@ -75,42 +80,50 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   for (unsigned int i = 0; i < length; ++i) command += static_cast<char>(payload[i]);
 
   std::vector<String> words = splitCommand(command);
-  if (handleCommand(words) == CMD_ACTION_ESP_RESTART) {
+  if (handleCommand(words) == cmd_action_t::CMD_ACTION_ESP_RESTART) {
     Serial.println("[MQTT DOWNLINK] Yeu cau ESP32 khoi dong lai.");
     shutdownTcpTransportBeforeRestart();
     ESP.restart();
   }
 }
 
-bool probeMqttTransport(bool useGsm) {
+/** @brief Implements probeMqttTransport. */
+bool probeMqttTransport(bool useGsm)
+{
   prefs.begin("myPrefs", true);
-  String host = prefs.getString("MQTT_SERVER", String(MQTT_SERVER));
-  if (host.equalsIgnoreCase("aitogy.asia")) host = MQTT_SERVER;
+  auto host = prefs.getString("MQTT_SERVER", String(MQTT_SERVER));
+  if (host.equalsIgnoreCase("aitogy.asia"))
+    host = MQTT_SERVER;
   const uint16_t port = prefs.getUShort("MQTT_PORT", MQTT_PORT);
-  const String user = prefs.getString("MQTT_USER", String(MQTT_USER));
-  const String password = prefs.getString("MQTT_PASS", String(MQTT_PASS));
+  const auto user = prefs.getString("MQTT_USER", String(MQTT_USER));
+  const auto password = prefs.getString("MQTT_PASS", String(MQTT_PASS));
   prefs.end();
 
-  Client& transport = useGsm ? static_cast<Client&>(gsmProbeClient)
-                             : static_cast<Client&>(wifiProbeClient);
+  Client &transport = useGsm ? static_cast<Client &>(gsmProbeClient)
+                             : static_cast<Client &>(wifiProbeClient);
   PubSubClient probe(transport);
   probe.setServer(host.c_str(), port);
   probe.setSocketTimeout(3);
-  if (!probe.setBufferSize(1024)) return false;
+  if (!probe.setBufferSize(1024))
+    return false;
   // TinyGSM connect timeout is seconds; WiFiClient uses milliseconds.
-  const bool tcpReady = useGsm ? gsmProbeClient.connect(host.c_str(), port, 5)
+  const auto tcpReady = useGsm ? gsmProbeClient.connect(host.c_str(), port, 5)
                                : wifiProbeClient.connect(host.c_str(), port, 3000);
   // No LWT, publish or subscribe: this probe cannot change station status.
-  const String clientId = "net-probe-" + backendAgent.serial();
-  const bool reachable = tcpReady && probe.connect(clientId.c_str(), user.c_str(), password.c_str());
-  if (reachable) probe.disconnect();
+  const auto clientId = "net-probe-" + backendAgent.serial();
+  const auto reachable = tcpReady && probe.connect(clientId.c_str(), user.c_str(), password.c_str());
+  if (reachable)
+    probe.disconnect();
   transport.stop();
   return reachable;
 }
 
-int setupMQTT() {
+/** @brief Implements setupMQTT. */
+int setupMQTT()
+{
   mqtt.setClient(activeMqttClient());
-  if (!mqtt.setBufferSize(16384)) {
+  if (!mqtt.setBufferSize(16384))
+  {
     Serial.println("[MQTT][ERROR] Cannot allocate 16384-byte MQTT buffer");
     return -1;
   }
@@ -168,40 +181,48 @@ int connectMQTT() {
   return -1;
 }
 
-int publishHealth(const String& payload) {
-  if (payload.isEmpty()) return -1;
+/** @brief Implements publishHealth. */
+int publishHealth(const String &payload)
+{
+  if (payload.isEmpty())
+    return -1;
 
   // Publish to the configured health topic under the shared transport mutex.
 
-  if (tcpStreamMutex != nullptr && xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS))) {
+  if (tcpStreamMutex != nullptr && xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)))
+  {
     // TinyGsmClient::connected() can consume modem UART responses too.
-    if (!mqtt.connected()) {
+    if (!mqtt.connected())
+    {
       xSemaphoreGive(tcpStreamMutex);
       return -1;
     }
     prefs.begin("myPrefs", false);
-    String topicPubHealth = prefs.getString("TPC_HEALTH", String(TOPIC_PUB_HEALTH));
+    auto topicPubHealth = prefs.getString("TPC_HEALTH", String(TOPIC_PUB_HEALTH));
     prefs.end();
-    bool ok = mqtt.publish(topicPubHealth.c_str(), payload.c_str());
+    auto ok = mqtt.publish(topicPubHealth.c_str(), payload.c_str());
     xSemaphoreGive(tcpStreamMutex);
-    if (ok) {
-      #if PROGRAM_DEBUG
+    if (ok)
+    {
+#if PROGRAM_DEBUG
       Serial.print("[MQTT] Da gui thong tin suc khoe len topic: ");
       Serial.println(topicPubHealth);
-      #endif
+#endif
       return 0;
     }
-    #if PROGRAM_DEBUG
+#if PROGRAM_DEBUG
     Serial.println("[MQTT] publishHealth that bai, kich thuoc payload: " + String(payload.length()));
-    #endif
+#endif
     return -1;
   }
-  #if PROGRAM_DEBUG
+#if PROGRAM_DEBUG
   Serial.println("[MQTT] publishHealth: khong lay duoc tcpStreamMutex");
-  #endif
+#endif
   return -1;
 }
 
-bool isMqttConnected() {
+/** @brief Implements isMqttConnected. */
+bool isMqttConnected()
+{
   return mqtt.connected();
 }

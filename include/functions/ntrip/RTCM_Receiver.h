@@ -13,12 +13,8 @@ struct RtcmMessageCounts {
 	std::array<uint32_t, RTCM_SUPPORTED_MESSAGE_TYPE_COUNT> values = {};
 };
 
-// Snapshot of NMEA-derived position/quality and UART/frame counters.
-// RTCM frames are counted and forwarded without CRC or message-type decoding.
-struct GnssTelemetrySnapshot {
-	bool hasData = false;
-	uint32_t lastDataMs = 0;
-	uint32_t lastGgaMs = 0;
+struct GnssTrafficCounters
+{
 	uint64_t bytesRead = 0;
 	uint32_t rtcmFrames = 0;
 	uint32_t nmeaSentences = 0;
@@ -26,11 +22,21 @@ struct GnssTelemetrySnapshot {
 	uint32_t gsaCount = 0;
 	uint32_t gsvCount = 0;
 	uint32_t gstCount = 0;
-    uint32_t snrSamples = 0;
-    uint32_t latestGsvSamples = 0;
-    uint32_t lastGsvMs = 0;
-    uint32_t lastGstMs = 0;
-    double latitude = 0.0;
+};
+
+// Snapshot of NMEA-derived position/quality and UART/frame counters.
+// RTCM frames are counted and forwarded without CRC or message-type decoding.
+struct GnssTelemetrySnapshot
+{
+	bool hasData = false;
+	uint32_t lastDataMs = 0;
+	uint32_t lastGgaMs = 0;
+	GnssTrafficCounters traffic;
+	uint32_t snrSamples = 0;
+	uint32_t latestGsvSamples = 0;
+	uint32_t lastGsvMs = 0;
+	uint32_t lastGstMs = 0;
+	double latitude = 0.0;
 	double longitude = 0.0;
 	double altitude = 0.0;
 	float hdop = 0.0F;

@@ -17,9 +17,9 @@ extern SemaphoreHandle_t tcpStreamMutex;
 bool probeMqttTransport(bool useGsm);
 int setupMQTT();
 int connectMQTT();
-void mqttCallback(char* topic, byte* payload, unsigned int length);
-int publishHealth(const String& payload);
+void mqttCallback(char *topic, byte *payload, unsigned int length);
+int publishHealth(const String &payload);
 bool isMqttConnected();
-Client& activeMqttClient();
+Client &activeMqttClient();
 
 #endif
