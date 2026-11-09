@@ -29,7 +29,7 @@ void parseNmeaSentence(const String &line) {
 int telemetryMux = 0;
 #define portENTER_CRITICAL(x) ((void)0)
 #define portEXIT_CRITICAL(x) ((void)0)
-struct { unsigned rtcmFrames = 0; bool hasData = false; unsigned lastDataMs = 0; } telemetry;
+struct { struct { unsigned rtcmFrames = 0; } traffic; bool hasData = false; unsigned lastDataMs = 0; } telemetry;
 unsigned millis() { return 1; }
 void noteRtcmBytes(size_t) {}
 struct {

@@ -599,11 +599,7 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
     const auto rawLatitude = rawCoordinates["lat"] | NAN;
     const auto rawLongitude = rawCoordinates["lon"] | NAN;
     const auto rawAltitude = rawCoordinates["alt"] | NAN;
-    double localLatitude = rawLatitude;
-    double localLongitude = rawLongitude;
-    double localAltitude = rawAltitude;
-    double northing = 0.0;
-    double easting = 0.0;
+    ProjectedPosition result{rawLatitude, rawLongitude, rawAltitude};
     if (province.isEmpty())
     {
         error = "missing payload.province_code";
@@ -614,13 +610,13 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
         error = "invalid province_code";
         return false;
     }
-    if (const auto validCoordinates = baseParsed && std::isfinite(rawLatitude) && std::isfinite(rawLongitude) && std::isfinite(rawAltitude) && transformToVn2000(rawLatitude, rawLongitude, rawAltitude, centralMeridianDeg, scale, localLatitude, localLongitude, localAltitude, northing, easting);
+    if (const auto validCoordinates = baseParsed && std::isfinite(rawLatitude) && std::isfinite(rawLongitude) && std::isfinite(rawAltitude) && transformToVn2000(rawLatitude, rawLongitude, rawAltitude, centralMeridianDeg, scale, result);
         !validCoordinates)
     {
         error = "base coordinates are missing or cannot be transformed";
         return false;
     }
-    if (!applyBaseCoordinates(localLatitude, localLongitude, localAltitude))
+    if (!applyBaseCoordinates(result.latitude, result.longitude, result.altitude))
     {
         error = "cannot apply transformed coordinates to GNSS";
         return false;
@@ -628,17 +624,17 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
     JsonObject coordinates = base["coords"].as<JsonObject>();
     if (coordinates.isNull())
         coordinates = base["coords"].to<JsonObject>();
-    coordinates["lat"] = localLatitude;
-    coordinates["lon"] = localLongitude;
-    coordinates["alt"] = localAltitude;
+    coordinates["lat"] = result.latitude;
+    coordinates["lon"] = result.longitude;
+    coordinates["alt"] = result.altitude;
     base["itrf_vn2000_transform_applied"] = true;
     base["central_meridian_deg"] = centralMeridianDeg;
     base["k0"] = scale;
     base["province_code"] = province;
     base["province_name"] = provinceName;
     base["projection_source"] = "manual_province_override";
-    base["vn2000_northing"] = northing;
-    base["vn2000_easting"] = easting;
+    base["vn2000_northing"] = result.northing;
+    base["vn2000_easting"] = result.easting;
     baseConfig_.clear();
     serializeJson(baseDoc, baseConfig_);
     saveStatePreferences();

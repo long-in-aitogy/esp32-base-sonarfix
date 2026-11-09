@@ -633,23 +633,18 @@ bool BackendAgent::completeAutoBaseSetup(
     }
 
     auto transformed = false;
-    auto finalLatitude = rawLatitude;
-    auto finalLongitude = rawLongitude;
-    auto finalAltitude = rawAltitude;
-    double northing = 0.0;
-    double easting = 0.0;
+    ProjectedPosition result{rawLatitude, rawLongitude, rawAltitude};
     if (payload["enable_itrf_vn2000_transform"] | true)
     {
         transformed = transformToVn2000(rawLatitude, rawLongitude, rawAltitude,
-                                        centralMeridianDeg, scale, finalLatitude,
-                                        finalLongitude, finalAltitude, northing, easting);
+                                        centralMeridianDeg, scale, result);
     }
 
     setAgentState("auto_setup_base");
     DynamicJsonDocument baseProgress(2048);
-    baseProgress["averaged_coord"]["lat"] = finalLatitude;
-    baseProgress["averaged_coord"]["lon"] = finalLongitude;
-    baseProgress["averaged_coord"]["alt"] = finalAltitude;
+    baseProgress["averaged_coord"]["lat"] = result.latitude;
+    baseProgress["averaged_coord"]["lon"] = result.longitude;
+    baseProgress["averaged_coord"]["alt"] = result.altitude;
     baseProgress["sample_count"] = latitudes.size();
     baseProgress["transform_applied"] = transformed;
     const auto requestedProvince = payload["province_code"] | String();
@@ -668,7 +663,7 @@ bool BackendAgent::completeAutoBaseSetup(
         failureReason = "cannot acquire transport lock to stop CORS rover session";
         return false;
     }
-    if (!applyBaseCoordinates(finalLatitude, finalLongitude, finalAltitude))
+    if (!applyBaseCoordinates(result.latitude, result.longitude, result.altitude))
     {
         failureReason = "cannot configure GNSS base mode";
         return false;
@@ -676,9 +671,9 @@ bool BackendAgent::completeAutoBaseSetup(
 
     DynamicJsonDocument baseConfig(CONFIG_DOCUMENT_SIZE);
     JsonObject coordinates = baseConfig.createNestedObject("coords");
-    coordinates["lat"] = finalLatitude;
-    coordinates["lon"] = finalLongitude;
-    coordinates["alt"] = finalAltitude;
+    coordinates["lat"] = result.latitude;
+    coordinates["lon"] = result.longitude;
+    coordinates["alt"] = result.altitude;
     baseConfig["altitude_reference"] = "ELLIPSOID";
     baseConfig["base_setup_method"] = "AUTO_CORS";
     baseConfig["auto_configured"] = true;
@@ -689,8 +684,8 @@ bool BackendAgent::completeAutoBaseSetup(
     baseConfig["projection_source"] = projectionSource;
     baseConfig["province_code"] = provinceCode;
     baseConfig["province_name"] = provinceName;
-    baseConfig["vn2000_northing"] = northing;
-    baseConfig["vn2000_easting"] = easting;
+    baseConfig["vn2000_northing"] = result.northing;
+    baseConfig["vn2000_easting"] = result.easting;
     JsonObject raw = baseConfig.createNestedObject("auto_base_raw_itrf_llh");
     raw["lat"] = rawLatitude;
     raw["lon"] = rawLongitude;
@@ -701,12 +696,12 @@ bool BackendAgent::completeAutoBaseSetup(
     const auto transportRestored = restartConfiguredNtrip();
     setAgentState(normalAgentState());
     resultJson = buildAutoBaseResult(
-        finalLatitude, finalLongitude, finalAltitude, rawLatitude, rawLongitude, rawAltitude,
+        result.latitude, result.longitude, result.altitude, rawLatitude, rawLongitude, rawAltitude,
         transformed, transportRestored, latitudes.size(), projectionSource,
         provinceCode, provinceName, centralMeridianDeg, scale);
     Serial.printf("[AUTO BASE] KET QUA: THANH CONG; samples=%u; lat=%.10f; lon=%.10f; alt=%.4f\n",
-                  static_cast<unsigned>(latitudes.size()), finalLatitude, finalLongitude,
-                  finalAltitude);
+                  static_cast<unsigned>(latitudes.size()), result.latitude, result.longitude,
+                  result.altitude);
     return true;
 }
 

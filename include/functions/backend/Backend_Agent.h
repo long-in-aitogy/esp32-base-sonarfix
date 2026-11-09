@@ -220,10 +220,17 @@ private:
                                const StartupPosition &expected, String &error);
     void saveSurveyResult(JsonObjectConst bestPosition, const String &mode);
     void pollGnssStatus();
+    struct ProjectedPosition {
+        double latitude;
+        double longitude;
+        double altitude;
+        double northing = 0.0;
+        double easting = 0.0;
+    };
     bool transformToVn2000(double latitude, double longitude, double altitude,
-                           double centralMeridianDeg, double scale,
-                           double &localLatitude, double &localLongitude,
-                           double &localAltitude, double &northing, double &easting);
+                           double centralMeridianDeg, double scale, ProjectedPosition &result);
+    static bool transformItrfToVn2000(double latitude, double longitude, double altitude,
+                                     double centralMeridianDeg, double scale, ProjectedPosition &result);
     bool getProvinceProjection(const String &code, double &centralMeridianDeg,
                                double &scale, String &name) const;
     void markStatusDirty() { statusDirty_ = true; }

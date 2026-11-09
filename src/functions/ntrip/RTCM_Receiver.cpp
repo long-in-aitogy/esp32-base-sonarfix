@@ -32,7 +32,7 @@ namespace
     void noteInputBytes(size_t count)
     {
         portENTER_CRITICAL(&telemetryMux);
-        telemetry.bytesRead += count;
+        telemetry.traffic.bytesRead += count;
         telemetry.hasData = true;
         telemetry.lastDataMs = millis();
         portEXIT_CRITICAL(&telemetryMux);
@@ -231,15 +231,15 @@ namespace
         portENTER_CRITICAL(&telemetryMux);
         telemetry.hasData = true;
         telemetry.lastDataMs = millis();
-        ++telemetry.nmeaSentences;
+        ++telemetry.traffic.nmeaSentences;
         if (strcmp(type, "GGA") == 0)
-            ++telemetry.ggaCount;
+            ++telemetry.traffic.ggaCount;
         else if (strcmp(type, "GSA") == 0)
-            ++telemetry.gsaCount;
+            ++telemetry.traffic.gsaCount;
         else if (strcmp(type, "GSV") == 0)
-            ++telemetry.gsvCount;
+            ++telemetry.traffic.gsvCount;
         else if (strcmp(type, "GST") == 0)
-            ++telemetry.gstCount;
+            ++telemetry.traffic.gstCount;
 
         if (gga.hasFixQuality)
             setFixStatus(telemetry.fixStatus, gga.fixQuality);
@@ -329,7 +329,7 @@ namespace
         backendAgent.enqueueRtcm(rtcmFrame.data(), rtcmLength);
         noteRtcmBytes(rtcmLength);
         portENTER_CRITICAL(&telemetryMux);
-        ++telemetry.rtcmFrames;
+        ++telemetry.traffic.rtcmFrames;
         telemetry.hasData = true;
         telemetry.lastDataMs = millis();
         portEXIT_CRITICAL(&telemetryMux);
@@ -480,9 +480,9 @@ String receiveRtcmFromGnss()
                       static_cast<unsigned long>(receivedBytes));
         const auto snapshot = getGnssTelemetrySnapshot();
         Serial.printf("[GNSS UART] GGA total=%lu; last_age_ms=%lu; RX bytes=%llu\n",
-                      static_cast<unsigned long>(snapshot.ggaCount),
+                      static_cast<unsigned long>(snapshot.traffic.ggaCount),
                       static_cast<unsigned long>(snapshot.lastGgaMs == 0 ? UINT32_MAX : millis() - snapshot.lastGgaMs),
-                      static_cast<unsigned long long>(snapshot.bytesRead));
+                      static_cast<unsigned long long>(snapshot.traffic.bytesRead));
         receivedBytes = 0;
         lastLogMs = millis();
     }
