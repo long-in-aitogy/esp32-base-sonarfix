@@ -60,42 +60,71 @@ inline bool parseLogCount(const char *line, long &count, std::vector<Log> &logs)
     return true;
 }
 
-inline bool parseLogRecord(const char *line, long count, std::vector<Log> &logs) {
-    if (logs.size() >= static_cast<size_t>(count)) return false;
+struct ParsedLogTokens {
     char tokens[6][24] = {};
-    const int fields = std::sscanf(line, "%23s %23s %23s %23s %23s %23s",
-                                   tokens[0], tokens[1], tokens[2], tokens[3], tokens[4], tokens[5]);
-    for (auto &token : tokens)
+    int fields = 0;
+    int start = 0;
+};
+
+inline ParsedLogTokens tokenizeLogRecord(const char *line) {
+    ParsedLogTokens parsed;
+    parsed.fields = std::sscanf(line, "%23s %23s %23s %23s %23s %23s",
+                                parsed.tokens[0], parsed.tokens[1], parsed.tokens[2],
+                                parsed.tokens[3], parsed.tokens[4], parsed.tokens[5]);
+    for (auto &token : parsed.tokens)
         for (char &c : token) if (c >= 'a' && c <= 'z') c -= 'a' - 'A';
-    const int start = std::strcmp(tokens[0], "LOG") == 0 ? 1 : 0;
+    parsed.start = std::strcmp(parsed.tokens[0], "LOG") == 0 ? 1 : 0;
+    return parsed;
+}
+
+inline bool validLogIdentity(const ParsedLogTokens &parsed) {
+    const int fields = parsed.fields;
+    const int start = parsed.start;
     if (fields - start < 3 || fields - start > 4) return false;
-    const bool portFirst = std::strncmp(tokens[start], "COM", 3) == 0;
-    const char *port = tokens[start + (portFirst ? 0 : 1)];
-    const char *name = tokens[start + (portFirst ? 1 : 0)];
-    if (strnlen(port, sizeof(tokens[0])) != 4 || std::strncmp(port, "COM", 3)
-        || port[3] < '1' || port[3] > '3' || strnlen(name, sizeof(tokens[0])) < 2
+    const bool portFirst = std::strncmp(parsed.tokens[start], "COM", 3) == 0;
+    const char *port = parsed.tokens[start + (portFirst ? 0 : 1)];
+    const char *name = parsed.tokens[start + (portFirst ? 1 : 0)];
+    if (strnlen(port, sizeof(parsed.tokens[0])) != 4 || std::strncmp(port, "COM", 3)
+        || port[3] < '1' || port[3] > '3' || strnlen(name, sizeof(parsed.tokens[0])) < 2
         || name[0] < 'A' || name[0] > 'Z') return false;
     for (const char *c = name; *c; ++c)
         if (!(*c >= 'A' && *c <= 'Z') && !(*c >= '0' && *c <= '9')) return false;
+    return true;
+}
 
+inline bool parseLogSchedule(const ParsedLogTokens &parsed, Log &log) {
+    const int fields = parsed.fields;
+    const int start = parsed.start;
+    const char *trigger = parsed.tokens[start + 2];
+    if (!std::strcmp(trigger, "ONCE")) return fields - start == 3;
+
+    const bool ontime = !std::strcmp(trigger, "ONTIME");
+    if (fields - start != (ontime ? 4 : 3)) return false;
+    char *tail = nullptr;
+    const char *period = parsed.tokens[start + (ontime ? 3 : 2)];
+    log.period = std::strtod(period, &tail);
+    return tail && tail != period && !*tail && std::isfinite(log.period) && log.period > 0;
+}
+
+inline bool isDuplicateLog(const Log &log, const std::vector<Log> &logs) {
+    for (const Log &existing : logs)
+        if (existing.port == log.port && !std::strcmp(existing.name, log.name)) return true;
+    return false;
+}
+
+inline bool parseLogRecord(const char *line, long count, std::vector<Log> &logs) {
+    if (logs.size() >= static_cast<size_t>(count)) return false;
+    const ParsedLogTokens parsed = tokenizeLogRecord(line);
+    if (!validLogIdentity(parsed)) return false;
+
+    const bool portFirst = std::strncmp(parsed.tokens[parsed.start], "COM", 3) == 0;
+    const char *port = parsed.tokens[parsed.start + (portFirst ? 0 : 1)];
+    const char *name = parsed.tokens[parsed.start + (portFirst ? 1 : 0)];
     Log log;
-    static_assert(sizeof(log.name) == sizeof(tokens[0]));
+    static_assert(sizeof(log.name) == sizeof(parsed.tokens[0]));
     std::memcpy(log.name, name, sizeof(log.name));
     log.port = port[3] - '0';
-    const char *trigger = tokens[start + 2];
-    if (!std::strcmp(trigger, "ONCE")) {
-        if (fields - start != 3) return false;
-    } else {
-        const bool ontime = !std::strcmp(trigger, "ONTIME");
-        if (fields - start != (ontime ? 4 : 3)) return false;
-        char *tail = nullptr;
-        const char *period = tokens[start + (ontime ? 3 : 2)];
-        log.period = std::strtod(period, &tail);
-        if (!tail || tail == period || *tail || !std::isfinite(log.period) || log.period <= 0)
-            return false;
-    }
-    for (const Log &existing : logs)
-        if (existing.port == log.port && !std::strcmp(existing.name, log.name)) return false;
+    if (!parseLogSchedule(parsed, log) || isDuplicateLog(log, logs)) return false;
     logs.push_back(log);
     return true;
 }
