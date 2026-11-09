@@ -117,8 +117,8 @@ void parseGstFields(char *const *fields, size_t fieldCount, bool &updateGst, flo
     if (fieldCount > 7) {
         gstSemiMajor = static_cast<float>(atof(fields[3]));
         gstSemiMinor = static_cast<float>(atof(fields[4]));
-        const float latitudeSigma = static_cast<float>(atof(fields[6]));
-        const float longitudeSigma = static_cast<float>(atof(fields[7]));
+        const auto latitudeSigma = static_cast<float>(atof(fields[6]));
+        const auto longitudeSigma = static_cast<float>(atof(fields[7]));
         gstHacc = sqrtf(latitudeSigma * latitudeSigma + longitudeSigma * longitudeSigma);
         updateGst = gstHacc > 0.0F;
     }
@@ -366,7 +366,7 @@ String receiveRtcmFromGnss() {
     }
 
     while (Serial1.available() > 0) {
-        const size_t bytesAvailable = static_cast<size_t>(Serial1.available());
+        const auto bytesAvailable = static_cast<size_t>(Serial1.available());
         const size_t bytesToRead = min(bytesAvailable, sizeof(buffer));
         if (bytesToRead == 0) break;
 

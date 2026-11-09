@@ -111,7 +111,7 @@ void BackendAgent::requestWorkflowStop() {
 }
 
 void BackendAgent::workflowTaskThunk(void *parameter) {
-    BackendAgent *agent = static_cast<BackendAgent *>(parameter);
+    auto *agent = static_cast<BackendAgent *>(parameter);
     if (agent) {
         agent->runWorkflow();
         agent->workflowPayload_ = String();
@@ -370,14 +370,14 @@ bool BackendAgent::collectAutoBaseSamples(int configuredSamples, std::vector<dou
 bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
     String host = payload["ip"] | String();
     host.trim();
-    const uint16_t port = static_cast<uint16_t>(payload["port"] | 0);
+    const auto port = static_cast<uint16_t>(payload["port"] | 0);
     const String username = payload["user"] | String();
     const String password = payload["password"] | String();
     const String mountpoint = payload["mountpoint"] | String();
-    const uint8_t ntripVersion = static_cast<uint8_t>(payload["ntrip_version"] | 1);
+    const auto ntripVersion = static_cast<uint8_t>(payload["ntrip_version"] | 1);
     const uint32_t timeoutSeconds = constrain(
         static_cast<uint32_t>(payload["timeout"] | 3600UL), 30UL, 86400UL);
-    const uint8_t fixedStreakRequired = static_cast<uint8_t>(constrain(
+    const auto fixedStreakRequired = static_cast<uint8_t>(constrain(
         static_cast<int>(payload["fixed_streak_seconds"] | 5), 1, 60));
 
     DynamicJsonDocument previousBase(CONFIG_DOCUMENT_SIZE);
@@ -646,13 +646,13 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload) {
     const double restoreLongitude = storedCoordinates["lon"] | NAN;
     const double restoreAltitude = storedCoordinates["alt"] | NAN;
     const String host = payload["ip"] | String();
-    const uint16_t port = static_cast<uint16_t>(payload["port"] | 0);
+    const auto port = static_cast<uint16_t>(payload["port"] | 0);
     const String username = payload["user"] | String();
     const String password = payload["password"] | String();
     const String mountpoint = payload["mountpoint"] | String();
     const uint32_t timeoutSeconds = constrain(
         static_cast<uint32_t>(payload["timeout"] | 300UL), 30UL, 86400UL);
-    const uint16_t requestedSamples = static_cast<uint16_t>(constrain(
+    const auto requestedSamples = static_cast<uint16_t>(constrain(
         static_cast<int>(payload["samples"] | 60), 5, 120));
 
     auto cleanup = [&]() {
