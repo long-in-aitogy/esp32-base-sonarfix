@@ -17,7 +17,7 @@ String pendingRtcmData;
 std::array<uint8_t, MAX_RTCM_FRAME_LENGTH> rtcmFrame = {};
 size_t rtcmLength = 0;
 size_t rtcmExpectedLength = 0;
-uint8_t ubxHeader[6] = {};
+std::array<uint8_t, 6> ubxHeader = {};
 size_t ubxHeaderLength = 0;
 size_t ubxBytesRemaining = 0;
 
@@ -124,6 +124,52 @@ void parseGstFields(char *const *fields, size_t fieldCount, bool &updateGst, flo
     }
 }
 
+bool tokenizeNmeaSentence(const String &sentence, std::array<char, MAX_NMEA_LENGTH> &line,
+                          std::array<char *, 32> &fields, size_t &copyLength,
+                          size_t &fieldCount) {
+    copyLength = min(sentence.length(), line.size() - 1);
+    memcpy(line.data(), sentence.c_str(), copyLength);
+    line[copyLength] = '\0';
+
+    char *cursor = line.data() + 1;
+    while (fieldCount < fields.size()) {
+        fields[fieldCount++] = cursor;
+        char *comma = strchr(cursor, ',');
+        if (!comma) break;
+        *comma = '\0';
+        cursor = comma + 1;
+    }
+    return fieldCount > 0;
+}
+
+void parseNmeaType(const char *type, char *const *fields, size_t fieldCount,
+                   bool &updateFix, int &fixQuality, bool &updatePosition,
+                   double &latitude, double &longitude, double &altitude, float &hdop,
+                   uint8_t &satellites, bool &updateSnr, float &snrSum,
+                   uint32_t &snrCount, bool &updateGst, float &gstSemiMajor,
+                   float &gstSemiMinor, float &gstHacc) {
+    if (strcmp(type, "GGA") == 0) {
+        parseGgaFields(fields, fieldCount, updateFix, fixQuality, updatePosition,
+                       latitude, longitude, altitude, hdop, satellites);
+    } else if (strcmp(type, "GSV") == 0) {
+        parseGsvFields(fields, fieldCount, updateSnr, snrSum, snrCount);
+    } else if (strcmp(type, "GST") == 0) {
+        parseGstFields(fields, fieldCount, updateGst, gstSemiMajor, gstSemiMinor, gstHacc);
+    }
+}
+
+void countNmeaSentence(const char *type) {
+    if (strcmp(type, "GGA") == 0) ++telemetry.ggaCount;
+    else if (strcmp(type, "GSA") == 0) ++telemetry.gsaCount;
+    else if (strcmp(type, "GSV") == 0) ++telemetry.gsvCount;
+    else if (strcmp(type, "GST") == 0) ++telemetry.gstCount;
+}
+
+bool isSupportedNmeaType(const char *type) {
+    return strcmp(type, "GGA") == 0 || strcmp(type, "GSA") == 0
+        || strcmp(type, "GSV") == 0 || strcmp(type, "GST") == 0;
+}
+
 void parseNmeaSentence(const String &rawSentence) {
     String sentence = rawSentence;
     sentence.trim();
@@ -132,22 +178,11 @@ void parseNmeaSentence(const String &rawSentence) {
         backendAgent.setDetectedChipIfUnknown("Ublox");
     }
 
-    char line[MAX_NMEA_LENGTH] = {};
-    const size_t copyLength = min(sentence.length(), sizeof(line) - 1);
-    memcpy(line, sentence.c_str(), copyLength);
-    line[copyLength] = '\0';
-
-    char *fields[32] = {};
+    std::array<char, MAX_NMEA_LENGTH> line = {};
+    std::array<char *, 32> fields = {};
+    size_t copyLength = 0;
     size_t fieldCount = 0;
-    char *cursor = line + 1;
-    while (fieldCount < (sizeof(fields) / sizeof(fields[0]))) {
-        fields[fieldCount++] = cursor;
-        char *comma = strchr(cursor, ',');
-        if (!comma) break;
-        *comma = '\0';
-        cursor = comma + 1;
-    }
-    if (fieldCount == 0) return;
+    if (!tokenizeNmeaSentence(sentence, line, fields, copyLength, fieldCount)) return;
 
     const size_t typeLength = strnlen(fields[0], copyLength);
     if (typeLength < 3) return;
@@ -169,27 +204,15 @@ void parseNmeaSentence(const String &rawSentence) {
     float gstSemiMinor = 0.0F;
     float gstHacc = 0.0F;
 
-    if (strcmp(type, "GGA") == 0) {
-        parseGgaFields(fields, fieldCount, updateFix, fixQuality, updatePosition, latitude, longitude, altitude, hdop, satellites);
-    } else if (strcmp(type, "GSA") == 0) {
-        // GSA field 2 is only the 2D/3D solution dimension, not the RTK
-        // quality reported by GGA. Keep the last GGA fix state authoritative
-        // so a following GSA sentence cannot turn RTK_FIXED into a generic
-        // 2D/3D status.
-    } else if (strcmp(type, "GSV") == 0) {
-        parseGsvFields(fields, fieldCount, updateSnr, snrSum, snrCount);
-    } else if (strcmp(type, "GST") == 0) {
-        parseGstFields(fields, fieldCount, updateGst, gstSemiMajor, gstSemiMinor, gstHacc);
-    }
+    parseNmeaType(type, fields.data(), fieldCount, updateFix, fixQuality, updatePosition,
+                  latitude, longitude, altitude, hdop, satellites, updateSnr, snrSum,
+                  snrCount, updateGst, gstSemiMajor, gstSemiMinor, gstHacc);
 
     portENTER_CRITICAL(&telemetryMux);
     telemetry.hasData = true;
     telemetry.lastDataMs = millis();
     ++telemetry.nmeaSentences;
-    if (strcmp(type, "GGA") == 0) ++telemetry.ggaCount;
-    else if (strcmp(type, "GSA") == 0) ++telemetry.gsaCount;
-    else if (strcmp(type, "GSV") == 0) ++telemetry.gsvCount;
-    else if (strcmp(type, "GST") == 0) ++telemetry.gstCount;
+    countNmeaSentence(type);
 
     if (updateFix) setFixStatus(telemetry.fixStatus, fixQuality);
     if (strcmp(type, "GGA") == 0) {
@@ -224,10 +247,7 @@ void parseNmeaSentence(const String &rawSentence) {
     portEXIT_CRITICAL(&telemetryMux);
 
     // Publish only GGA/GSA/GSV/GST receiver health sentences to the backend.
-    const bool backendSentence = strcmp(type, "GGA") == 0
-        || strcmp(type, "GSA") == 0
-        || strcmp(type, "GSV") == 0
-        || strcmp(type, "GST") == 0;
+    const bool backendSentence = isSupportedNmeaType(type);
     if (backendSentence) {
         String outbound = rawSentence;
         outbound.trim();
@@ -311,7 +331,7 @@ void consumeByte(uint8_t value, String &rtcmOutput) {
     if (ubxHeaderLength > 0 && processUbxHeaderByte(value)) return;
     if (rtcmLength > 0 && processRtcmByte(value, rtcmOutput)) return;
 
-    if (nmeaBuffer.length() > 0) {
+    if (!nmeaBuffer.isEmpty()) {
         if (value == '\n') {
             nmeaBuffer += static_cast<char>(value);
             parseNmeaSentence(nmeaBuffer);

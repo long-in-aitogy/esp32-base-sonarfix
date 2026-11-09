@@ -31,81 +31,131 @@ inline uint8_t comparisonPort(uint8_t configured, const std::vector<Log> &logs) 
     return port;
 }
 
-inline bool parseLogs(const char *text, size_t length, std::vector<Log> &logs) {
-    logs.clear();
+inline bool prepareLogLine(const char *&cursor, const char *end, bool hasChecksum) {
+    if (!hasChecksum) {
+        while (cursor < end && (*cursor == '\r' || *cursor == '\n'
+                                || *cursor == ' ' || *cursor == '\t')) ++cursor;
+        if (cursor < end && *cursor != '<') return false;
+    }
+    while (cursor < end && (*cursor == '\r' || *cursor == '\n'
+                            || *cursor == ' ' || *cursor == '<')) ++cursor;
+    return true;
+}
+
+inline bool readLogLine(const char *&cursor, const char *end, char (&line)[160]) {
+    const char *lineEnd = cursor;
+    while (lineEnd < end && *lineEnd != '\r' && *lineEnd != '\n') ++lineEnd;
+    if (lineEnd - cursor > 159) return false;
+    std::memcpy(line, cursor, lineEnd - cursor);
+    cursor = lineEnd;
+    return true;
+}
+
+inline bool parseLogCount(const char *line, long &count, std::vector<Log> &logs) {
+    char *tail = nullptr;
+    count = std::strtol(line, &tail, 10);
+    while (tail && *tail == ' ') ++tail;
+    if (!tail || tail == line || *tail || count < 0 || count > 64) return false;
+    logs.reserve(count);
+    return true;
+}
+
+inline bool parseLogRecord(const char *line, long count, std::vector<Log> &logs) {
+    if (logs.size() >= static_cast<size_t>(count)) return false;
+    char tokens[6][24] = {};
+    const int fields = std::sscanf(line, "%23s %23s %23s %23s %23s %23s",
+                                   tokens[0], tokens[1], tokens[2], tokens[3], tokens[4], tokens[5]);
+    for (auto &token : tokens)
+        for (char &c : token) if (c >= 'a' && c <= 'z') c -= 'a' - 'A';
+    const int start = std::strcmp(tokens[0], "LOG") == 0 ? 1 : 0;
+    if (fields - start < 3 || fields - start > 4) return false;
+    const bool portFirst = std::strncmp(tokens[start], "COM", 3) == 0;
+    const char *port = tokens[start + (portFirst ? 0 : 1)];
+    const char *name = tokens[start + (portFirst ? 1 : 0)];
+    if (strnlen(port, sizeof(tokens[0])) != 4 || std::strncmp(port, "COM", 3)
+        || port[3] < '1' || port[3] > '3' || strnlen(name, sizeof(tokens[0])) < 2
+        || name[0] < 'A' || name[0] > 'Z') return false;
+    for (const char *c = name; *c; ++c)
+        if (!(*c >= 'A' && *c <= 'Z') && !(*c >= '0' && *c <= '9')) return false;
+
+    Log log;
+    static_assert(sizeof(log.name) == sizeof(tokens[0]));
+    std::memcpy(log.name, name, sizeof(log.name));
+    log.port = port[3] - '0';
+    const char *trigger = tokens[start + 2];
+    if (!std::strcmp(trigger, "ONCE")) {
+        if (fields - start != 3) return false;
+    } else {
+        const bool ontime = !std::strcmp(trigger, "ONTIME");
+        if (fields - start != (ontime ? 4 : 3)) return false;
+        char *tail = nullptr;
+        const char *period = tokens[start + (ontime ? 3 : 2)];
+        log.period = std::strtod(period, &tail);
+        if (!tail || tail == period || *tail || !std::isfinite(log.period) || log.period <= 0)
+            return false;
+    }
+    for (const Log &existing : logs)
+        if (existing.port == log.port && !std::strcmp(existing.name, log.name)) return false;
+    logs.push_back(log);
+    return true;
+}
+
+inline bool parseLogLines(const char *&cursor, const char *end, bool hasChecksum,
+                          std::vector<Log> &logs, long &count) {
+    while (cursor < end) {
+        if (!prepareLogLine(cursor, end, hasChecksum)) return false;
+        if (cursor == end) break;
+        char line[160] = {};
+        if (!readLogLine(cursor, end, line)) return false;
+        if (count < 0) {
+            if (!parseLogCount(line, count, logs)) return false;
+            continue;
+        }
+        if (!parseLogRecord(line, count, logs)) return false;
+    }
+    return count >= 0 && logs.size() == static_cast<size_t>(count);
+}
+
+inline bool validLogCharacter(unsigned char value) {
+    return value >= 32 && value < 127;
+}
+
+inline bool validateUnchecksummedLog(const char *text, size_t length, const char *end,
+                                     std::string_view input) {
+    if (input.substr(length - 2) != "\n\n" && input.substr(length - 4) != "\r\n\r\n")
+        return false;
+    for (const char *cursor = text; cursor < end; ++cursor) {
+        const auto value = static_cast<unsigned char>(*cursor);
+        if (!validLogCharacter(value) && value != '\r' && value != '\n' && value != '\t')
+            return false;
+    }
+    return true;
+}
+
+inline bool prepareLogPayload(const char *text, size_t length, const char *&cursor,
+                              const char *&end, bool &hasChecksum) {
     if (!text || length < 12 || length > 4096) return false;
     const std::string_view input(text, length);
     if (input.find('\0') != input.npos || input.substr(0, 12) != "#UNILOGLIST,") return false;
-    const size_t separator = input.find(';'), checksum = input.rfind('*');
+    const size_t separator = input.find(';');
+    const size_t checksum = input.rfind('*');
     if (separator == input.npos) return false;
-    const char *cursor = text + separator;
-    const bool hasChecksum = checksum != input.npos;
-    const char *end = text + (hasChecksum ? checksum : length);
-    if (hasChecksum) {
-        if (!validUnicoreLogChecksum(text, length)) return false;
-    } else {
-        if (input.substr(length - 2) != "\n\n" && input.substr(length - 4) != "\r\n\r\n") return false;
-        for (const char *c = text; c < end; ++c)
-            if ((static_cast<unsigned char>(*c) < 32 && *c != '\r' && *c != '\n' && *c != '\t')
-                || static_cast<unsigned char>(*c) >= 127) return false;
-    }
-    if (cursor >= end) return false;
-    ++cursor;
+
+    cursor = text + separator + 1;
+    hasChecksum = checksum != input.npos;
+    end = text + (hasChecksum ? checksum : length);
+    if (hasChecksum) return validUnicoreLogChecksum(text, length);
+    return validateUnchecksummedLog(text, length, end, input);
+}
+
+inline bool parseLogs(const char *text, size_t length, std::vector<Log> &logs) {
+    logs.clear();
+    const char *cursor = nullptr;
+    const char *end = nullptr;
+    bool hasChecksum = false;
+    if (!prepareLogPayload(text, length, cursor, end, hasChecksum) || cursor >= end)
+        return false;
     long count = -1;
-    while (cursor < end) {
-        if (!hasChecksum) {
-            while (cursor < end && (*cursor == '\r' || *cursor == '\n' || *cursor == ' ' || *cursor == '\t')) ++cursor;
-            if (cursor < end && *cursor != '<') return false;
-        }
-        while (cursor < end && (*cursor == '\r' || *cursor == '\n' || *cursor == ' ' || *cursor == '<')) ++cursor;
-        if (cursor == end) break;
-        const char *lineEnd = cursor;
-        while (lineEnd < end && *lineEnd != '\r' && *lineEnd != '\n') ++lineEnd;
-        if (lineEnd - cursor > 159) return false;
-        char line[160] = {};
-        std::memcpy(line, cursor, lineEnd - cursor);
-        cursor = lineEnd;
-        if (count < 0) {
-            char *tail = nullptr;
-            count = std::strtol(line, &tail, 10);
-            while (tail && *tail == ' ') ++tail;
-            if (!tail || tail == line || *tail || count < 0 || count > 64) return false;
-            logs.reserve(count);
-            continue;
-        }
-        if (logs.size() >= static_cast<size_t>(count)) return false;
-        char tokens[6][24] = {};
-        const int fields = std::sscanf(line, "%23s %23s %23s %23s %23s %23s",
-                                       tokens[0], tokens[1], tokens[2], tokens[3], tokens[4], tokens[5]);
-        for (auto &token : tokens)
-            for (char &c : token) if (c >= 'a' && c <= 'z') c -= 'a' - 'A';
-        const int start = std::strcmp(tokens[0], "LOG") == 0 ? 1 : 0;
-        if (fields - start < 3 || fields - start > 4) return false;
-        const bool portFirst = std::strncmp(tokens[start], "COM", 3) == 0;
-        const char *port = tokens[start + (portFirst ? 0 : 1)];
-        const char *name = tokens[start + (portFirst ? 1 : 0)];
-        if (strnlen(port, sizeof(tokens[0])) != 4 || std::strncmp(port, "COM", 3) || port[3] < '1' || port[3] > '3'
-            || strnlen(name, sizeof(tokens[0])) < 2 || name[0] < 'A' || name[0] > 'Z') return false;
-        for (const char *c = name; *c; ++c) if (!(*c >= 'A' && *c <= 'Z') && !(*c >= '0' && *c <= '9')) return false;
-        Log log;
-        static_assert(sizeof(log.name) == sizeof(tokens[0]));
-        std::memcpy(log.name, name, sizeof(log.name));
-        log.port = port[3] - '0';
-        const char *trigger = tokens[start + 2];
-        if (!std::strcmp(trigger, "ONCE")) {
-            if (fields - start != 3) return false;
-        } else {
-            const bool ontime = !std::strcmp(trigger, "ONTIME");
-            if (fields - start != (ontime ? 4 : 3)) return false;
-            char *tail = nullptr;
-            log.period = std::strtod(tokens[start + (ontime ? 3 : 2)], &tail);
-            if (!tail || tail == tokens[start + (ontime ? 3 : 2)] || *tail
-                || !std::isfinite(log.period) || log.period <= 0) return false;
-        }
-        for (const Log &existing : logs)
-            if (existing.port == log.port && !std::strcmp(existing.name, log.name)) return false;
-        logs.push_back(log);
-    }
-    return count >= 0 && logs.size() == static_cast<size_t>(count);
+    return parseLogLines(cursor, end, hasChecksum, logs, count);
 }
 } // namespace UnicoreConfigVerification
