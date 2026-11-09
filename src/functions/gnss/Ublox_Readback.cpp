@@ -8,11 +8,41 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
+#include <array>
 
 extern SemaphoreHandle_t rtcmBufferMutex;
 extern SemaphoreHandle_t gnssSerialMutex;
 
 namespace {
+
+bool acquireQueryLocks(String &error) {
+    if (!rtcmBufferMutex || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE) {
+        error = "GNSS command port is busy";
+        return false;
+    }
+    if (gnssSerialMutex && xSemaphoreTake(gnssSerialMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE)
+        return true;
+    xSemaphoreGive(rtcmBufferMutex);
+    error = "GNSS reader is busy";
+    return false;
+}
+
+template <size_t Capacity>
+bool receiveQueryReply(uint8_t cls, uint8_t id, UbxReplyBuffer<Capacity> &reply,
+                       bool written, uint32_t &receivedBytes) {
+    const uint32_t started = millis();
+    bool matched = false;
+    while (written && millis() - started < 3000UL && !matched) {
+        while (Serial1.available() && !matched) {
+            const auto value = static_cast<uint8_t>(Serial1.read());
+            bufferGnssQueryByte(value);
+            ++receivedBytes;
+            matched = reply.feed(value) && reply.frame[2] == cls && reply.frame[3] == id;
+        }
+        if (!matched) vTaskDelay(pdMS_TO_TICKS(5));
+    }
+    return matched;
+}
 
 template <size_t Capacity>
 bool query(uint8_t cls, uint8_t id, UbxReplyBuffer<Capacity> &reply, String &error,
@@ -21,46 +51,29 @@ bool query(uint8_t cls, uint8_t id, UbxReplyBuffer<Capacity> &reply, String &err
         error = "u-blox query exceeds readback limit";
         return false;
     }
-    if (!rtcmBufferMutex || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE) {
-        error = "GNSS command port is busy";
-        return false;
-    }
-    if (!gnssSerialMutex || xSemaphoreTake(gnssSerialMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE) {
-        xSemaphoreGive(rtcmBufferMutex);
-        error = "GNSS reader is busy";
-        return false;
-    }
+    if (!acquireQueryLocks(error)) return false;
     while (Serial1.available()) bufferGnssQueryByte(static_cast<uint8_t>(Serial1.read()));
-    uint8_t poll[12 + UbxConfigVerification::MAX_KEYS * 4] = {0xB5,0x62,cls,id,uint8_t(length),0};
-    if (length) std::memcpy(poll + 6, payload, length);
-    uint8_t a = 0, b = 0;
+    std::array<uint8_t, 12 + UbxConfigVerification::MAX_KEYS * 4> poll = {0xB5,0x62,cls,id,uint8_t(length),0};
+    if (length) std::memcpy(poll.data() + 6, payload, length);
+    uint8_t a = 0;
+    uint8_t b = 0;
     for (size_t i = 2; i < length + 6; ++i) { a += poll[i]; b += a; }
     poll[length + 6] = a; poll[length + 7] = b;
     Serial.printf("[GNSS][READBACK][TX] UBX %02X/%02X; baud=%lu\n", cls, id,
                   static_cast<unsigned long>(Serial1.baudRate()));
-    const bool written = Serial1.write(poll, length + 8) == length + 8;
+    const bool written = Serial1.write(poll.data(), length + 8) == length + 8;
     Serial1.flush();
-    const uint32_t started = millis();
-    bool matched = false;
     uint32_t receivedBytes = 0;
-    while (written && millis() - started < 3000UL && !matched) {
-        while (Serial1.available()) {
-            const uint8_t value = static_cast<uint8_t>(Serial1.read());
-            bufferGnssQueryByte(value);
-            ++receivedBytes;
-            if (reply.feed(value) && reply.frame[2] == cls && reply.frame[3] == id) {
-                matched = true;
-                break;
-            }
-        }
-        if (!matched) vTaskDelay(pdMS_TO_TICKS(5));
-    }
+    const uint32_t started = millis();
+    const bool matched = receiveQueryReply(cls, id, reply, written, receivedBytes);
     xSemaphoreGive(gnssSerialMutex);
     xSemaphoreGive(rtcmBufferMutex);
-    const char *result = !written ? "WRITE_FAILED" : matched ? "OK" : "TIMEOUT";
+    const char *result;
+    if(!written) result = "WRITE_FAILED";
+    else result = matched ? "OK" : "TIMEOUT";
     Serial.printf("[GNSS][READBACK][RX] UBX %02X/%02X; bytes=%lu; elapsed_ms=%lu; reply=%s\n",
                   cls, id, static_cast<unsigned long>(receivedBytes),
-                  static_cast<unsigned long>(millis() - started), result);
+                  millis() - started, result);
 #if PROGRAM_DEBUG
     if (matched) {
         Serial.printf("[GNSS][READBACK][RAW] UBX %02X/%02X payload=", cls, id);
@@ -90,7 +103,7 @@ bool UbloxReadback::readVersion(String &payloadBase64, String &error) {
         }
     }
     payloadBase64 = BackendAgentInternal::encodeBase64(p, length);
-    return payloadBase64.length() > 0;
+    return !payloadBase64.isEmpty();
 }
 
 bool UbloxReadback::readSatellites(String &payloadBase64, String &error) {
@@ -102,7 +115,7 @@ bool UbloxReadback::readSatellites(String &payloadBase64, String &error) {
         return false;
     }
     payloadBase64 = BackendAgentInternal::encodeBase64(reply.frame + 6, reply.length - 8);
-    return payloadBase64.length() > 0;
+    return !payloadBase64.isEmpty();
 }
 
 bool UbloxReadback::readDop(UbxDop &status, String &error) {
@@ -171,10 +184,12 @@ bool UbloxReadback::readOutputValues(const uint8_t *expected, size_t length,
         error = "Invalid output verification keys";
         return false;
     }
-    uint8_t payload[4 + UbxConfigVerification::MAX_KEYS * 4] = {}; // v0, RAM, position 0
-    for (size_t i = 0; i < length / 5; ++i) std::memcpy(payload + 4 + i * 4, expected + i * 5, 4);
+    std::array<uint8_t, 4 + UbxConfigVerification::MAX_KEYS * 4> payload = {}; // v0, RAM, position 0
+    for (size_t i = 0; i < length / 5; ++i) {
+        std::memcpy(payload.data() + 4 + i * 4, expected + i * 5, 4);
+    }
     UbxReply reply;
-    if (!query(0x06, 0x8B, reply, error, payload, 4 + length / 5 * 4)) return false;
+    if (!query(0x06, 0x8B, reply, error, payload.data(), 4 + length / 5 * 4)) return false;
     if (!UbxConfigVerification::outputValues(expected, length, reply.frame + 6, reply.length - 8, values)) {
         error = "Incomplete or invalid CFG-VALGET response";
         return false;
