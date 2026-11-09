@@ -276,13 +276,13 @@ bool BackendAgent::waitForAutoBaseFix(uint32_t timeoutSeconds, uint8_t fixedStre
         if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
             nextSecondMs = now + 1000UL;
             const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
+            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus.data());
             fixedStreak = usable ? static_cast<uint8_t>(fixedStreak + 1) : 0;
             fixed = fixedStreak >= fixedStreakRequired;
             DynamicJsonDocument details(1024);
             details["timeout"] = timeoutSeconds;
             details["elapsed"] = (now - waitStartedMs) / 1000UL;
-            details["fix_status"] = snapshot.fixStatus;
+            details["fix_status"] = snapshot.fixStatus.data();
             details["fixed_streak"] = fixedStreak;
             details["fixed_streak_required"] = fixedStreakRequired;
             String serialized;
@@ -326,7 +326,7 @@ bool BackendAgent::collectAutoBaseSamples(int configuredSamples, std::vector<dou
         if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
             nextSecondMs = now + 1000UL;
             const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
+            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus.data());
             if (usable && snapshot.lastGgaMs != lastSampleGgaMs
                 && std::isfinite(snapshot.latitude) && std::isfinite(snapshot.longitude)
                 && std::isfinite(snapshot.altitude)
@@ -342,7 +342,7 @@ bool BackendAgent::collectAutoBaseSamples(int configuredSamples, std::vector<dou
             details["samples_target"] = samplesNeeded;
             details["averaging_seconds"] = averagingSeconds;
             details["elapsed"] = (now - averageStartedMs) / 1000UL;
-            details["fix_status"] = snapshot.fixStatus;
+            details["fix_status"] = snapshot.fixStatus.data();
             if (configuredSamples != samplesNeeded) {
                 details["requested_samples_overridden"] = configuredSamples;
             }
@@ -727,9 +727,9 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload) {
         if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
             nextSecondMs = now + 1000UL;
             const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-            fixed = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
+            fixed = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus.data());
             DynamicJsonDocument details(512);
-            details["fix_status"] = snapshot.fixStatus;
+            details["fix_status"] = snapshot.fixStatus.data();
             details["elapsed"] = (now - waitStartedMs) / 1000UL;
             String serialized;
             serializeJson(details, serialized);
@@ -768,7 +768,7 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload) {
         if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
             nextSecondMs = now + 1000UL;
             const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
+            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus.data());
             if (usable && std::isfinite(snapshot.latitude) && std::isfinite(snapshot.longitude)
                 && std::isfinite(snapshot.altitude) && snapshot.latitude >= -90.0
                 && snapshot.latitude <= 90.0 && snapshot.longitude >= -180.0
@@ -780,7 +780,7 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload) {
             DynamicJsonDocument details(768);
             details["samples_collected"] = latitudes.size();
             details["samples_target"] = requestedSamples;
-            details["fix_status"] = snapshot.fixStatus;
+            details["fix_status"] = snapshot.fixStatus.data();
             String serialized;
             serializeJson(details, serialized);
             setWorkflowProgress("reference_check_averaging", 3, 4, serialized);

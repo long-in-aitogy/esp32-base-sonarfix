@@ -65,9 +65,8 @@ double nmeaCoordinate(const char *raw, const char *hemisphere) {
     return coordinate;
 }
 
-void setFixStatus(char *target, size_t capacity, int quality) {
-    if (!target || capacity == 0) return;
-
+template <size_t Capacity>
+void setFixStatus(std::array<char, Capacity> &target, int quality) {
     const char *status = "UNKNOWN";
     switch (quality) {
         case 0: status = "NO_FIX"; break;
@@ -78,8 +77,8 @@ void setFixStatus(char *target, size_t capacity, int quality) {
         case 7: status = "BASE_FIXED"; break;
         default: status = "NO_FIX"; break;
     }
-    snprintf(target, capacity, "%s", status);
-    target[capacity - 1] = '\0';
+    snprintf(target.data(), target.size(), "%s", status);
+    target.back() = '\0';
 }
 
 void parseGgaFields(char *const *fields, size_t fieldCount, bool &updateFix, int &fixQuality, bool &updatePosition, double &latitude, double &longitude, double &altitude, float &hdop, uint8_t &satellites) {
@@ -192,10 +191,10 @@ void parseNmeaSentence(const String &rawSentence) {
     else if (strcmp(type, "GSV") == 0) ++telemetry.gsvCount;
     else if (strcmp(type, "GST") == 0) ++telemetry.gstCount;
 
-    if (updateFix) setFixStatus(telemetry.fixStatus, sizeof(telemetry.fixStatus), fixQuality);
+    if (updateFix) setFixStatus(telemetry.fixStatus, fixQuality);
     if (strcmp(type, "GGA") == 0) {
-        snprintf(telemetry.lastGga, sizeof(telemetry.lastGga), "%s", sentence.c_str());
-        telemetry.lastGga[sizeof(telemetry.lastGga) - 1] = '\0';
+        snprintf(telemetry.lastGga.data(), telemetry.lastGga.size(), "%s", sentence.c_str());
+        telemetry.lastGga.back() = '\0';
         telemetry.lastGgaMs = millis();
         if (!updatePosition) telemetry.latitude = telemetry.longitude = telemetry.altitude = NAN;
     }
@@ -410,7 +409,7 @@ GnssTelemetrySnapshot getGnssTelemetrySnapshot() {
     copy = telemetry;
     portEXIT_CRITICAL(&telemetryMux);
     if (copy.lastGgaMs == 0 || millis() - copy.lastGgaMs > 15000UL) {
-        setFixStatus(copy.fixStatus, sizeof(copy.fixStatus), 0);
+        setFixStatus(copy.fixStatus, 0);
     }
     return copy;
 }
