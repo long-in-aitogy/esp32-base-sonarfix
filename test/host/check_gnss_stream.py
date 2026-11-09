@@ -15,6 +15,7 @@ harness = r'''
 #include <string>
 #include <vector>
 struct String : std::string {
+    bool isEmpty() const { return empty(); }
     using std::string::string;
     void concat(const char *data, size_t length) { append(data, length); }
 };

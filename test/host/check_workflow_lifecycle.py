@@ -184,6 +184,7 @@ with tempfile.TemporaryDirectory(prefix='workflow-lifecycle-') as directory:
                  '-I'+str(root/'.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'), str(path/'check.cpp'),
                  str(root/'src/functions/backend/Backend_Agent_Projection.cpp'),
                  str(root/'src/functions/gnss/gnss_cmd_builder.cpp'),str(root/'src/functions/gnss/ublox_commands.cpp'),
-                 str(root/'src/functions/gnss/unicore_commands.cpp'),'-o',str(path/'check')],check=True)
+                 str(root/'src/functions/gnss/unicore_commands.cpp'),
+                 str(root/'src/functions/gnss/Unicore_Log.cpp'),'-o',str(path/'check')],check=True)
     run_cpp([str(path/'check')],check=True)
 print('PASS: complete Auto Base/reference lifecycle, real 60-sample averaging, review report, location fallback, cleanup, cancellation and disconnects')

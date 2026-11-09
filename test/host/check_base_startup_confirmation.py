@@ -163,7 +163,7 @@ with tempfile.TemporaryDirectory(prefix='base-confirmation-') as directory:
     compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     '-I' + str(root / 'include'),
-                    str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
+                    str(path / 'check.cpp'), str(root / 'src/functions/gnss/Unicore_Log.cpp'), '-o', str(path / 'check')], check=True)
     run_cpp([str(path / 'check')], check=True)
 print('PASS: delayed Fixed LLA confirmation clears startup error; MODE coordinates confirm Unicore without BESTNAV; malformed modes, wrong coordinates and unrelated errors remain blocked')
 print('PASS: reboot drops interrupted Auto Base progress and preserves saved results')
