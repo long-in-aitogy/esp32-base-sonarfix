@@ -78,15 +78,17 @@ def main():
     cov = tool("llvm-cov", "LLVM_COV")
     suites = {
         "base": ["base_checks.cpp", "src/functions/gnss/gnss_cmd_builder.cpp",
-                 "src/functions/gnss/ublox_commands.cpp", "src/functions/gnss/unicore_commands.cpp"],
+                 "src/functions/gnss/ublox_commands.cpp", "src/functions/gnss/unicore_commands.cpp",
+                 "src/functions/gnss/Unicore_Log.cpp"],
         "codec": ["codec_checks.cpp", "src/functions/backend/Backend_Agent_Codec.cpp"],
-        "config": ["config_verification_checks.cpp"],
+        "config": ["config_verification_checks.cpp", "src/functions/gnss/Unicore_Log.cpp"],
         "mqtt": ["mqtt_write_checks.cpp"],
         "wifi": ["wifi_profiles_checks.cpp"],
         "sample": ["sample_checks.cpp"],
         "protocol": ["protocol_checks.cpp"],
         "readback": ["readback_checks.cpp", "src/functions/gnss/Ublox_Readback.cpp",
-                     "src/functions/gnss/Unicore_Readback.cpp", "src/functions/backend/Backend_Agent_Codec.cpp"],
+                     "src/functions/gnss/Unicore_Readback.cpp", "src/functions/gnss/Unicore_Log.cpp",
+                     "src/functions/backend/Backend_Agent_Codec.cpp"],
     }
     with tempfile.TemporaryDirectory(prefix="esp32-coverage-") as directory:
         build = Path(directory)
