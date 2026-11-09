@@ -9,7 +9,9 @@
 #include "functions/gnss/Unicore_Log.h"
 #include "functions/gnss/unicore_commands.h"
 #include "functions/gnss/Ubx_Base_Status.h"
+#include <array>
 #include <cassert>
+#include <cstddef>
 #include <iostream>
 #include <string>
 
@@ -17,7 +19,7 @@ using namespace GnssCmdBuilder;
 
 void checkPackets(const Command &bytes)
 {
-    auto offset = 0;
+    size_t offset = 0;
     while (offset < bytes.size())
     {
         assert(bytes.size() - offset >= 8);

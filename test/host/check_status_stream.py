@@ -21,7 +21,9 @@ shim = shim.replace('    void trim() {', '''    String(const char *text) : std::
     void toLowerCase() { std::transform(begin(), end(), begin(), [](unsigned char c) { return std::tolower(c); }); }
     bool equalsIgnoreCase(String value) const { String own = *this; own.toLowerCase(); value.toLowerCase(); return own == value; }
     void trim() {''')
-snapshot = (root / 'include/functions/ntrip/RTCM_Receiver.h').read_text().split('struct GnssTelemetrySnapshot {', 1)[1].split('\n};', 1)[0]
+gnss_header = (root / 'include/functions/ntrip/RTCM_Receiver.h').read_text()
+traffic = re.search(r'struct GnssTrafficCounters\s*\{.*?\n\};', gnss_header, re.S).group()
+snapshot = re.search(r'struct GnssTelemetrySnapshot\s*\{.*?\n\};', gnss_header, re.S).group()
 common = r'''
 #include <cassert>
 #include <array>
@@ -161,7 +163,7 @@ def run(source_root, reference=False):
     stream = 'void BackendAgent::applyServiceStreamCommand' + commands.split('void BackendAgent::applyServiceStreamCommand', 1)[1].split('\nbool BackendAgent::executeRawCommands', 1)[0]
     agent = (root / 'src/functions/backend/Backend_Agent.cpp').read_text()
     active = 'bool BackendAgent::effectiveStreamActive' + agent.split('bool BackendAgent::effectiveStreamActive', 1)[1].split('\nbool BackendAgent::mqttConnected', 1)[0]
-    telemetry = 'struct GnssTelemetrySnapshot {' + snapshot + '\n};\nGnssTelemetrySnapshot getGnssTelemetrySnapshot() { GnssTelemetrySnapshot s; s.hasData = true; s.lastDataMs = s.lastGgaMs = 9000; s.satellites = 20; return s; }\n'
+    telemetry = traffic + snapshot + '\nGnssTelemetrySnapshot getGnssTelemetrySnapshot() { GnssTelemetrySnapshot s; s.hasData = true; s.lastDataMs = s.lastGgaMs = 9000; s.satellites = 20; return s; }\n'
     status = mapped(next((source_root / 'src/functions').rglob('Backend_Agent_Status.cpp')), status, stripped_includes=True)
     active = mapped(root / 'src/functions/backend/Backend_Agent.cpp', active)
     helpers = mapped(next((source_root / 'src/functions').rglob('Backend_Agent_Commands.cpp')), helpers) if helpers else helpers

@@ -12,8 +12,8 @@ shim = shim.replace('    void trim() {', '''    String(unsigned long value, int)
     void trim() {''')
 main = (root / 'src/main.cpp').read_text()
 logging = main.split('            #if PROGRAM_DEBUG\n', 1)[1].split('            #endif', 1)[0]
-shim = shim.replace('struct HostSerial {', 'struct HostSerial { unsigned events = 0;')
-shim = shim.replace('void printf(const char *, Args...) {}', 'void printf(const char *, Args...) { ++events; }')
+shim = shim.replace('struct HostSerial\n{', 'struct HostSerial\n{\n    mutable unsigned events = 0;')
+shim = shim.replace('// Host checks discard firmware diagnostics.', '++events;')
 harness = r'''
 #include <cassert>
 constexpr int NTRIP_MODE = 1, HEX = 16;
