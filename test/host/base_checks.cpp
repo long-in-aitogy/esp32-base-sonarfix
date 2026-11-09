@@ -127,7 +127,7 @@ void checkUnicoreModes(const CommandList &survey, const CommandList &fixed)
 }
 }
 
-int main(int argc, char **argv)
+void checkUbloxBaseStatus()
 {
     uint8_t svin[40] = {};
     const auto put32 = [](uint8_t *p, uint32_t value)
@@ -174,6 +174,10 @@ int main(int argc, char **argv)
     assert(std::abs(baseStatus.height - 2.9194) < 1e-10);
     assert(!baseStatus.ecef(0, 0, 0));
     assert(baseStatus.ecef(6378137, 0, 0) && std::abs(baseStatus.height) < 1e-8);
+}
+
+void checkUnicoreReplies()
+{
     const std::string modeLog = "#MODE,81,GPS,FINE,2230,547967000,0,0,18,518;MODE ROVER SURVEY,*1B";
     assert(validUnicoreLogChecksum(modeLog.data(), modeLog.size()));
     const std::string crcLog = "#BASEINFOA,56,GPS,FINE,2190,376748000,0,0,18,153;00000000,-2160493.199,4383620.763,4084734.120,\"0000\",0*2edbd87a";
@@ -243,6 +247,10 @@ int main(int argc, char **argv)
         assert(!rejected.key[0]);
     }
     assert(!UnicoreReply(nullptr, 0).key[0]);
+}
+
+void checkBackendAndOutputRouting()
+{
     assert(buildRoverCommand(GnssSensorType::Invalid).empty());
     assert(sensorTypeFromString("Unicorecomm") == GnssSensorType::Unicore);
     const auto tokenValid = [](std::string_view token)
@@ -306,6 +314,10 @@ int main(int argc, char **argv)
         routeUnicoreOutput(reinterpret_cast<uint8_t *>(shortened.data()), length, 2);
         routeUnicoreOutput(reinterpret_cast<uint8_t *>(shortened.data()), length, 0);
     }
+}
+
+void checkReceiverCommands()
+{
     GnssOptions usb, uart;
     const auto ephemeris = UnicoreCommands::buildEphemerisOutputCommands("com2");
     assert(ephemeris.size() == 5);
@@ -364,6 +376,14 @@ int main(int argc, char **argv)
         checkPackets(output);
         assert(output == buildUbloxOutputConfigCommand(uart));
     }
+}
+
+int main(int argc, char **argv)
+{
+    checkUbloxBaseStatus();
+    checkUnicoreReplies();
+    checkBackendAndOutputRouting();
+    checkReceiverCommands();
 
     // Route hexadecimal packets from stdin and emit the resulting bytes for comparison.
     if (argc > 1)
