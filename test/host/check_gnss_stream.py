@@ -8,6 +8,7 @@ root = Path(__file__).resolve().parents[2]
 source = Path(sys.argv[1]).read_text() if len(sys.argv) > 1 else (root / "src/functions/ntrip/RTCM_Receiver.cpp").read_text()
 parser = source.split("void resetRtcmParser()", 1)[1].split("\n} // namespace", 1)[0]
 harness = r'''
+#include <array>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -19,7 +20,8 @@ struct String : std::string {
 };
 constexpr size_t MAX_NMEA_LENGTH = 512;
 String nmeaBuffer;
-uint8_t rtcmFrame[1029] = {}, ubxHeader[6] = {};
+std::array<uint8_t, 1029> rtcmFrame{};
+std::array<uint8_t, 6> ubxHeader{};
 size_t rtcmLength = 0, rtcmExpectedLength = 0, ubxHeaderLength = 0, ubxBytesRemaining = 0;
 unsigned sentences = 0;
 void parseNmeaSentence(const String &line) {
