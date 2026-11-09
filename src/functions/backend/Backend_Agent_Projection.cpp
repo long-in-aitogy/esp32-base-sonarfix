@@ -1,4 +1,5 @@
 #include "functions/backend/Backend_Agent.h"
+#include <array>
 #include <cmath>
 
     // Transform receiver coordinates to VN2000; RTCM payloads are not inspected.
@@ -17,7 +18,7 @@
         double scale;
     };
 
-    constexpr ProvinceProjection VN2000_PROVINCES[] = {
+    constexpr std::array<ProvinceProjection, 34> VN2000_PROVINCES = {{
         {"AG_KG", "An Giang + Kien Giang", 104.75, 0.9999},
         {"BN_BG", "Bac Ninh + Bac Giang", 107.0, 0.9999},
         {"CM_BL", "Ca Mau + Bac Lieu", 104.5, 0.9999},
@@ -52,7 +53,7 @@
         {"HUE", "Hue", 107.0, 0.9999},
         {"TQUANG_HGIANG", "Tuyen Quang + Ha Giang", 106.0, 0.9999},
         {"VLONG_BTRE_TVINH", "Vinh Long + Ben Tre + Tra Vinh", 105.5, 0.9999},
-    };
+    }};
 
     struct EcefCoordinate
     {

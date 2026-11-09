@@ -86,8 +86,7 @@ bool BackendAgent::buildStartupCommands(JsonObject base,
     options.outputMode = String(output["output_mode"] | "rtcm_only") == "rtcm_only"
                              ? OutputMode::RtcmOnly
                              : OutputMode::DiagnosticsRtcm;
-    const String level = output["msm_level"] | "both";
-    if (level == "7")
+    if (const String level = output["msm_level"] | "both"; level == "7")
         options.msmLevel = MsmLevel::Msm7;
     else if (level == "4")
         options.msmLevel = MsmLevel::Msm4;
@@ -160,8 +159,8 @@ bool BackendAgent::verifyStartupReadback(GnssCmdBuilder::GnssSensorType detected
     DynamicJsonDocument readback(2048);
     deserializeJson(readback, receiverBaseReadback_.c_str());
 
-    if (const String expected = restoreFixed ? "base" : "survey_in";
-        String(readback["mode_kind"] | "") != expected)
+    if (const String expectedMode = restoreFixed ? "base" : "survey_in";
+        String(readback["mode_kind"] | "") != expectedMode)
     {
         error = "Receiver mode does not match startup configuration";
         return false;

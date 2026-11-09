@@ -201,7 +201,7 @@ private:
     bool refreshUbloxReadback(String &error);
     void updateUbloxSurveyState(const UbxBaseStatus &status);
     void logUbloxReadback(const UbxBaseStatus &status);
-    void appendUbloxPosition(DynamicJsonDocument &doc, const UbxBaseStatus &status,
+    void appendUbloxPosition(JsonDocument &doc, const UbxBaseStatus &status,
                              const String &mode);
     bool refreshUnicoreReadback(String &error);
     bool prepareStartupConfig(DynamicJsonDocument &config, JsonObject &base,

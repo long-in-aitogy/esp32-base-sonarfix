@@ -204,7 +204,7 @@ void BackendAgent::applyServiceStreamCommand(JsonObject payload)
 
 bool BackendAgent::applyLockCommand(JsonObjectConst payload, String &error)
 {
-    if (!payload.containsKey("locked_servers"))
+    if (payload["locked_servers"].isUnbound())
     {
         requestWorkflowStop();
         stationLock_.all = true;
@@ -495,12 +495,12 @@ bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload,
         lastReceiverPollMs_ = 0;
         setAgentState(normalAgentState());
     }
-    if (!originalConfig.isNull() && originalConfig.containsKey("params"))
+    if (!originalConfig.isNull() && !originalConfig["params"].isUnbound())
     {
         DynamicJsonDocument baseDoc(CONFIG_DOCUMENT_SIZE);
         baseDoc.set(originalConfig["params"]);
         JsonObject base = baseDoc.as<JsonObject>();
-        if (originalConfig.containsKey("mode"))
+        if (!originalConfig["mode"].isUnbound())
             base["mode"] = originalConfig["mode"];
         baseConfig_.clear();
         serializeJson(baseDoc, baseConfig_);
@@ -688,7 +688,7 @@ bool BackendAgent::executeBasicCommand(const String &command, JsonObject payload
 bool BackendAgent::executeStreamCommand(JsonObject payload, String &error,
                                         String &detail)
 {
-    if (!payload.containsKey("active"))
+    if (payload["active"].isUnbound())
     {
         error = "missing payload.active";
         return false;

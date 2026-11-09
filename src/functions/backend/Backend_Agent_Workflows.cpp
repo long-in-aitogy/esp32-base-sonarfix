@@ -737,15 +737,10 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
             details["cleanup_error"] = "could not restore configured NTRIP transport";
         String serialized;
         serializeJson(details, serialized);
-        const char *stage = cancelled ? "stopped" : "failed";
-        const char *result = cancelled ? "DA DUNG" : "THAT BAI";
-        if (success)
-        {
-            stage = "completed";
-            result = "THANH CONG";
-        }
-        setWorkflowProgress(stage, success ? 4 : 2, 4, serialized);
-        Serial.printf("[AUTO BASE] KET QUA: %s; %s\n", result, reason.c_str());
+        const char *unfinishedStage = cancelled ? "stopped" : "failed";
+        const char *unfinishedResult = cancelled ? "DA DUNG" : "THAT BAI";
+        setWorkflowProgress(success ? "completed" : unfinishedStage, success ? 4 : 2, 4, serialized);
+        Serial.printf("[AUTO BASE] KET QUA: %s; %s\n", success ? "THANH CONG" : unfinishedResult, reason.c_str());
         saveStatePreferences();
     };
 

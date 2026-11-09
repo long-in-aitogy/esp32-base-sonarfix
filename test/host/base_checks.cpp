@@ -1,3 +1,4 @@
+#include <string_view>
 #include <array>
 #include "functions/backend/Station_Lock.h"
 #include "functions/gnss/Unicore_Log.h"
@@ -153,7 +154,7 @@ int main(int argc, char **argv)
     assert(!UnicoreReply(nullptr, 0).key[0]);
     assert(buildRoverCommand(GnssSensorType::Invalid).empty());
     assert(sensorTypeFromString("Unicorecomm") == GnssSensorType::Unicore);
-    const auto tokenValid = [](const std::string &token)
+    const auto tokenValid = [](std::string_view token)
     {
         return isDeviceBearerToken(token.data(), token.size());
     };

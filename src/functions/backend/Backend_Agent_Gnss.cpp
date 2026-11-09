@@ -94,7 +94,7 @@ void BackendAgent::logUbloxReadback(const UbxBaseStatus &status)
                   status.hasPosition ? "valid" : "unavailable");
 }
 
-void BackendAgent::appendUbloxPosition(DynamicJsonDocument &doc,
+void BackendAgent::appendUbloxPosition(JsonDocument &doc,
                                        const UbxBaseStatus &status, const String &mode)
 {
     JsonObject position = doc["bestpos"].to<JsonObject>();
