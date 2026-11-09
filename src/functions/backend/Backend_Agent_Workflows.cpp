@@ -5,6 +5,7 @@
 #include "functions/ntrip/ntrip_rover.h"
 #include "functions/ntrip/RTCM_Receiver.h"
 #include "functions/backend/Base_Sample.h"
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <vector>
@@ -529,8 +530,7 @@ bool BackendAgent::resolveAutoBaseProjection(JsonObject payload, const double ra
     scale = 0.9999;
     provinceName = "Khong xac dinh (fallback theo kinh do)";
     provinceCode = "UNKNOWN";
-    const auto requestedProvince = payload["province_code"] | String();
-    if (!requestedProvince.isEmpty())
+    if (const auto requestedProvince = payload["province_code"] | String(); !requestedProvince.isEmpty())
     {
         if (!getProvinceProjection(requestedProvince, centralMeridianDeg, scale, provinceName))
         {
@@ -541,7 +541,7 @@ bool BackendAgent::resolveAutoBaseProjection(JsonObject payload, const double ra
     }
     else if (payload["l0_deg"].isNull())
     {
-        static constexpr double candidates[] = {
+        static constexpr std::array candidates = {
             103.0,
             104.0,
             104.5,
@@ -737,11 +737,15 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
             details["cleanup_error"] = "could not restore configured NTRIP transport";
         String serialized;
         serializeJson(details, serialized);
-        setWorkflowProgress(
-            success ? "completed" : (cancelled ? "stopped" : "failed"),
-            success ? 4 : 2, 4, serialized);
-        Serial.printf("[AUTO BASE] KET QUA: %s; %s\n",
-                      success ? "THANH CONG" : (cancelled ? "DA DUNG" : "THAT BAI"), reason.c_str());
+        const char *stage = cancelled ? "stopped" : "failed";
+        const char *result = cancelled ? "DA DUNG" : "THAT BAI";
+        if (success)
+        {
+            stage = "completed";
+            result = "THANH CONG";
+        }
+        setWorkflowProgress(stage, success ? 4 : 2, 4, serialized);
+        Serial.printf("[AUTO BASE] KET QUA: %s; %s\n", result, reason.c_str());
         saveStatePreferences();
     };
 
@@ -834,7 +838,7 @@ bool BackendAgent::prepareReferenceCheckConfig(
     return baseParsed && !reference.isNull() && std::isfinite(referenceLatitude) && std::isfinite(referenceLongitude) && std::isfinite(referenceAltitude) && referenceLatitude >= -90.0 && referenceLatitude <= 90.0 && referenceLongitude >= -180.0 && referenceLongitude <= 180.0 && std::isfinite(restoreLatitude) && std::isfinite(restoreLongitude) && std::isfinite(restoreAltitude) && !host.isEmpty() && !username.isEmpty() && !password.isEmpty() && !mountpoint.isEmpty() && port != 0 && port <= 65535;
 }
 
-inline bool BackendAgent::startReferenceRover(const String &host, const uint16_t port,
+bool BackendAgent::startReferenceRover(const String &host, const uint16_t port,
                                               const String &username, const String &password,
                                               const String &mountpoint)
 {
@@ -984,8 +988,7 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload)
 
     auto cleanup = [&]()
     {
-        const auto roverStopped = stopNtripRoverLocked();
-        if (!roverStopped)
+        if (!stopNtripRoverLocked())
             return false;
         auto baseRestored = true;
         if (std::isfinite(restoreLatitude) && std::isfinite(restoreLongitude) && std::isfinite(restoreAltitude))
@@ -1008,9 +1011,10 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload)
             details["cleanup_error"] = "could not safely restore base/NTRIP state";
         String serialized;
         serializeJson(details, serialized);
-        setWorkflowProgress(
-            completed ? "reference_check_completed" : (stopped ? "stopped" : "reference_check_failed"),
-            4, 4, serialized);
+        const char *stage = stopped ? "stopped" : "reference_check_failed";
+        if (completed)
+            stage = "reference_check_completed";
+        setWorkflowProgress(stage, 4, 4, serialized);
         saveStatePreferences();
     };
 

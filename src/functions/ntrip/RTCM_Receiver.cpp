@@ -106,24 +106,34 @@ namespace
         target[target.size() - 1] = '\0';
     }
 
-/** @brief Implements parseGgaFields. */
-    void parseGgaFields(char *const *fields, size_t fieldCount, bool &updateFix,
-                        int &fixQuality, bool &updatePosition, double &latitude,
-                        double &longitude, double &altitude, float &hdop,
-                        uint8_t &satellites)
+    struct GgaReading
     {
-        updateFix = fieldCount > 6;
-        fixQuality = updateFix ? atoi(fields[6]) : 0;
+        bool hasFixQuality = false;
+        int fixQuality = 0;
+        bool hasPosition = false;
+        double latitude = 0.0;
+        double longitude = 0.0;
+        double altitude = 0.0;
+        float hdop = 0.0F;
+        uint8_t satellites = 0;
+    };
+
+    GgaReading parseGgaFields(char *const *fields, size_t fieldCount)
+    {
+        GgaReading reading;
+        reading.hasFixQuality = fieldCount > 6;
+        if (reading.hasFixQuality)
+            reading.fixQuality = atoi(fields[6]);
         if (fieldCount <= 9 || !fields[2][0] || !fields[3][0] || !fields[4][0] || !fields[5][0])
-        {
-            return;
-        }
-        latitude = nmeaCoordinate(fields[2], fields[3]);
-        longitude = nmeaCoordinate(fields[4], fields[5]);
-        satellites = static_cast<uint8_t>(constrain(atoi(fields[7]), 0, 255));
-        hdop = static_cast<float>(atof(fields[8]));
-        altitude = atof(fields[9]);
-        updatePosition = true;
+            return reading;
+
+        reading.latitude = nmeaCoordinate(fields[2], fields[3]);
+        reading.longitude = nmeaCoordinate(fields[4], fields[5]);
+        reading.satellites = static_cast<uint8_t>(constrain(atoi(fields[7]), 0, 255));
+        reading.hdop = static_cast<float>(atof(fields[8]));
+        reading.altitude = atof(fields[9]);
+        reading.hasPosition = true;
+        return reading;
     }
 
 /** @brief Implements parseGsvFields. */
@@ -194,15 +204,8 @@ namespace
             return;
         const char *type = fields[0] + typeLength - 3;
 
-        auto updateFix = false;
-        auto fixQuality = 0;
-        auto updatePosition = false;
+        GgaReading gga;
         auto updateSnr = false;
-        auto latitude = 0.0;
-        auto longitude = 0.0;
-        auto altitude = 0.0;
-        auto hdop = 0.0F;
-        uint8_t satellites = 0;
         auto snrSum = 0.0F;
         uint32_t snrCount = 0;
         auto updateGst = false;
@@ -212,16 +215,9 @@ namespace
 
         if (strcmp(type, "GGA") == 0)
         {
-            parseGgaFields(fields.data(), fieldCount, updateFix, fixQuality, updatePosition,
-                           latitude, longitude, altitude, hdop, satellites);
+            gga = parseGgaFields(fields.data(), fieldCount);
         }
-        else if (strcmp(type, "GSA") == 0)
-        {
-            // GSA field 2 is only the 2D/3D solution dimension, not the RTK
-            // quality reported by GGA. Keep the last GGA fix state authoritative
-            // so a following GSA sentence cannot turn RTK_FIXED into a generic
-            // 2D/3D status.
-        }
+        // GSA reports solution dimension. Only GGA sets RTK fix quality.
         else if (strcmp(type, "GSV") == 0)
         {
             parseGsvFields(fields.data(), fieldCount, updateSnr, snrSum, snrCount);
@@ -245,21 +241,21 @@ namespace
         else if (strcmp(type, "GST") == 0)
             ++telemetry.gstCount;
 
-        if (updateFix)
-            setFixStatus(telemetry.fixStatus, fixQuality);
+        if (gga.hasFixQuality)
+            setFixStatus(telemetry.fixStatus, gga.fixQuality);
         if (strcmp(type, "GGA") == 0)
         {
             snprintf(telemetry.lastGga.data(), telemetry.lastGga.size(), "%s", sentence.c_str());
             telemetry.lastGga[telemetry.lastGga.size() - 1] = '\0';
             telemetry.lastGgaMs = millis();
         }
-        if (updatePosition)
+        if (gga.hasPosition)
         {
-            telemetry.latitude = latitude;
-            telemetry.longitude = longitude;
-            telemetry.altitude = altitude;
-            telemetry.hdop = hdop;
-            telemetry.satellites = satellites;
+            telemetry.latitude = gga.latitude;
+            telemetry.longitude = gga.longitude;
+            telemetry.altitude = gga.altitude;
+            telemetry.hdop = gga.hdop;
+            telemetry.satellites = gga.satellites;
         }
         if (updateSnr)
         {

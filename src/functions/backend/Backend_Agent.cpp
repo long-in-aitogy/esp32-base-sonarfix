@@ -203,9 +203,9 @@ namespace BackendAgentInternal
         static constexpr char hexDigits[] = "0123456789ABCDEF";
         String encoded;
         encoded.reserve(value.length() + 8);
-        for (size_t i = 0; i < value.length(); ++i)
+        for (const char character : value)
         {
-            const auto c = static_cast<uint8_t>(value[i]);
+            const auto c = static_cast<uint8_t>(character);
             if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~')
             {
                 encoded += static_cast<char>(c);
@@ -246,9 +246,9 @@ namespace BackendAgentInternal
 
         // Fallback fingerprint when SHA-256 support is absent or hashing fails.
         uint32_t hash = 2166136261UL;
-        for (size_t i = 0; i < token.length(); ++i)
+        for (const char character : token)
         {
-            hash ^= static_cast<uint8_t>(token[i]);
+            hash ^= static_cast<uint8_t>(character);
             hash *= 16777619UL;
         }
         char result[17] = {};
@@ -275,12 +275,12 @@ namespace BackendAgentInternal
 
     size_t decodeBase64(const String &encoded, uint8_t *output, size_t outputCapacity)
     {
-        auto value = 0;
-        auto bits = -8;
-        auto outputLength = 0;
-        for (size_t i = 0; i < encoded.length(); ++i)
+        uint32_t value = 0;
+        int bits = -8;
+        size_t outputLength = 0;
+        for (const char character : encoded)
         {
-            const auto c = encoded[i];
+            const auto c = character;
             if (c == '=')
             {
                 break;
@@ -294,7 +294,7 @@ namespace BackendAgentInternal
                 }
                 return 0;
             }
-            value = (value << 6) | decoded;
+            value = (value << 6) | static_cast<uint32_t>(decoded);
             bits += 6;
             if (bits >= 0)
             {
@@ -921,15 +921,7 @@ void BackendAgent::drainDataQueues()
     DataPacket rtcm;
     while (rtcmQueue_ && xQueueReceive(rtcmQueue_, &rtcm, 0) == pdTRUE)
     {
-        if (mqttConnected())
-        {
-            if (!mqtt.publish(rawDataTopic().c_str(), rtcm.data, rtcm.length))
-            {
-                xQueueSendToFront(rtcmQueue_, &rtcm, 0);
-                break;
-            }
-        }
-        else
+        if (!mqttConnected() || !mqtt.publish(rawDataTopic().c_str(), rtcm.data, rtcm.length))
         {
             xQueueSendToFront(rtcmQueue_, &rtcm, 0);
             break;
@@ -1048,7 +1040,7 @@ void BackendAgent::loop()
     publishStatus(false);
 }
 
-inline void BackendAgent::retryUnknownChipProbe()
+void BackendAgent::retryUnknownChipProbe()
 {
     // Retry an unidentified receiver every 8 seconds while no base workflow is running.
     if (sensorType_ != "UNKNOWN" && !sensorType_.isEmpty())

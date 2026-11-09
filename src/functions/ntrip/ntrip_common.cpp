@@ -261,16 +261,15 @@ String base64Encode(const String &plain)
 namespace ntrip_common
 {
     constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
-    std::array<NtripEndpoint, NTRIP_SERVER_COUNT> endpoints;
     WiFiClient wifiNtripClient1;
     WiFiClient wifiNtripClient2;
     TinyGsmClient gsmNtripClient1(modem, 0);
     TinyGsmClient gsmNtripClient2(modem, 2);
-    bool roverSessionActive = false;
-    bool roverSessionAuthenticated = false;
-    uint32_t roverLastGgaMs = 0;
-    uint32_t roverBytesReceived = 0;
-    uint32_t roverPacketsReceived = 0;
+    NtripEndpoint &endpointFor(uint8_t index)
+    {
+        static std::array<NtripEndpoint, NTRIP_SERVER_COUNT> endpoints;
+        return endpoints[index];
+    }
 
     Client &clientFor(uint8_t index)
     {
@@ -367,7 +366,7 @@ namespace ntrip_common
 
         for (uint8_t index = 0; index < NTRIP_SERVER_COUNT; ++index)
         {
-            loadEndpoint(endpoints[index], index, service, hasServiceConfig, legacy);
+            loadEndpoint(endpointFor(index), index, service, hasServiceConfig, legacy);
         }
     }
 
@@ -389,7 +388,7 @@ namespace ntrip_common
     void stopEndpoint(uint8_t index)
     {
         clientFor(index).stop();
-        clearEndpointState(endpoints[index]);
+        clearEndpointState(endpointFor(index));
     }
 
 /** @brief Implements waitForNtripResponse. */

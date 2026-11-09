@@ -132,7 +132,7 @@ private:
     void refreshWebsocket();
     void loopWebsocket();
     void drainDataQueues();
-    inline void retryUnknownChipProbe();
+    void retryUnknownChipProbe();
     void evaluateControlPlaneFailover();
     bool startWorkflow(const String &kind, const String &payload);
     void runWorkflow();
@@ -184,7 +184,7 @@ private:
                                      String &host, uint16_t &port, String &username,
                                      String &password, String &mountpoint,
                                      uint32_t &timeoutSeconds, uint16_t &requestedSamples);
-    inline bool startReferenceRover(const String &host, uint16_t port, const String &username,
+    bool startReferenceRover(const String &host, uint16_t port, const String &username,
                                     const String &password, const String &mountpoint);
     bool waitForReferenceFix(uint32_t timeoutSeconds, String &failureReason);
     bool collectReferenceSamples(uint16_t requestedSamples, std::vector<double> &latitudes,
@@ -207,13 +207,17 @@ private:
     bool prepareStartupConfig(DynamicJsonDocument &config, JsonObject &base,
                               bool &saved, String &method, String &error);
     bool readStartupReceiverMode(GnssCmdBuilder::GnssSensorType detected, String &error);
+    struct StartupPosition {
+        double latitude = 0.0;
+        double longitude = 0.0;
+        double altitude = 0.0;
+        bool ellipsoid = false;
+    };
     bool buildStartupCommands(JsonObject base, GnssCmdBuilder::GnssSensorType detected,
                               bool restoreFixed, GnssCmdBuilder::CommandList &commands,
-                              double &fixedLatitude, double &fixedLongitude,
-                              double &fixedAltitude, bool &ellipsoid, String &error);
+                              StartupPosition &position, String &error);
     bool verifyStartupReadback(GnssCmdBuilder::GnssSensorType detected, bool restoreFixed,
-                               double fixedLatitude, double fixedLongitude,
-                               double fixedAltitude, bool ellipsoid, String &error);
+                               const StartupPosition &expected, String &error);
     void saveSurveyResult(JsonObjectConst bestPosition, const String &mode);
     void pollGnssStatus();
     bool transformToVn2000(double latitude, double longitude, double altitude,

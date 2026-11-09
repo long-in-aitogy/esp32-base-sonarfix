@@ -1,3 +1,4 @@
+#include <array>
 #include "functions/backend/Station_Lock.h"
 #include "functions/gnss/Unicore_Log.h"
 #include "functions/backend/Base_Sample.h"
@@ -66,16 +67,16 @@ int main(int argc, char **argv)
     svin[24] = 100;
     assert(!baseStatus.svin(svin, 40));
     assert(!baseStatus.svin(svin, 39));
-    uint8_t tmode[40] = {};
+    std::array<uint8_t, 40> tmode{};
     tmode[2] = 2;
     tmode[3] = 1;
-    put32(tmode + 4, 210849876);
-    put32(tmode + 8, 1057867141);
-    put32(tmode + 12, 291);
+    put32(tmode.data() + 4, 210849876);
+    put32(tmode.data() + 8, 1057867141);
+    put32(tmode.data() + 12, 291);
     tmode[16] = 12;
     tmode[17] = 88;
     tmode[18] = 94;
-    assert(baseStatus.tmode(tmode, 40) && baseStatus.mode == 2 && baseStatus.hasPosition);
+    assert(baseStatus.tmode(tmode.data(), tmode.size()) && baseStatus.mode == 2 && baseStatus.hasPosition);
     assert(std::abs(baseStatus.latitude - 21.084987612) < 1e-11);
     assert(std::abs(baseStatus.longitude - 105.786714188) < 1e-11);
     assert(std::abs(baseStatus.height - 2.9194) < 1e-10);
@@ -116,7 +117,8 @@ int main(int argc, char **argv)
     {
         auto matched = 0;
         for (unsigned char c : text)
-            matched += reply.feed(c);
+            if (reply.feed(c))
+                ++matched;
         return matched;
     };
     auto um = umReply();
@@ -284,7 +286,8 @@ int main(int argc, char **argv)
                 assert(!reply.feed(noise));
             auto replies = 0;
             for (uint8_t byte : rover[1])
-                replies += reply.feed(byte);
+                if (reply.feed(byte))
+                    ++replies;
             assert(replies == 1 && reply.frame[8] == 0 && reply.length == 48);
             auto corrupt = rover[1];
             corrupt.back() ^= 1;
@@ -295,7 +298,8 @@ int main(int argc, char **argv)
                 assert(!reply.feed(byte));
             replies = 0;
             for (uint8_t byte : rover[1])
-                replies += reply.feed(byte);
+                if (reply.feed(byte))
+                    ++replies;
             assert(replies == 1);
             for (const auto &commands : {survey, fixed, rover})
                 for (const auto &packet : commands)

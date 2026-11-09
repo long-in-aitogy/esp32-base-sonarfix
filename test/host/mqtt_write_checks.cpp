@@ -11,7 +11,7 @@ int main()
         packet[i] = static_cast<uint8_t>(i);
     std::vector<uint8_t> received;
     auto calls = 0;
-    auto fullWrite = [&](const uint8_t *data, size_t count)
+    auto fullWrite = [&received, &calls](const uint8_t *data, size_t count)
     {
         assert(count <= 1024);
         received.insert(received.end(), data, data + count);
@@ -26,7 +26,7 @@ int main()
     assert(calls == 0);
     assert(writeMqttChunks(packet.data(), 20, fullWrite) == 20);
     calls = 0;
-    const auto shortWrite = [&](const uint8_t *, size_t count)
+    const auto shortWrite = [&calls](const uint8_t *, size_t count)
     {
         return ++calls == 2 ? size_t(17) : count;
     };

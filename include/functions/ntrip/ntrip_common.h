@@ -39,13 +39,7 @@ namespace ntrip_common
         String lastError;
     };
 
-    extern std::array<NtripEndpoint, NTRIP_SERVER_COUNT> endpoints;
-    extern bool roverSessionActive;
-    extern bool roverSessionAuthenticated;
-    extern uint32_t roverLastGgaMs;
-    extern uint32_t roverBytesReceived;
-    extern uint32_t roverPacketsReceived;
-
+    NtripEndpoint &endpointFor(uint8_t index);
     Client &clientFor(uint8_t index);
     void clearEndpointState(NtripEndpoint &endpoint);
     void loadEndpoints();

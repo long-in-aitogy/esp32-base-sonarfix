@@ -2,6 +2,7 @@
 #include "functions/backend/Backend_Agent_Internal.h"
 #include "functions/gnss/Ublox_Readback.h"
 #include "functions/gnss/Unicore_Readback.h"
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <cstdio>
@@ -75,8 +76,7 @@ bool BackendAgent::buildStartupCommands(JsonObject base,
                                         GnssCmdBuilder::GnssSensorType detected,
                                         bool restoreFixed,
                                         GnssCmdBuilder::CommandList &commands,
-                                        double &fixedLatitude, double &fixedLongitude,
-                                        double &fixedAltitude, bool &ellipsoid,
+                                        StartupPosition &position,
                                         String &error)
 {
     using namespace GnssCmdBuilder;
@@ -86,9 +86,13 @@ bool BackendAgent::buildStartupCommands(JsonObject base,
     options.outputMode = String(output["output_mode"] | "rtcm_only") == "rtcm_only"
                              ? OutputMode::RtcmOnly
                              : OutputMode::DiagnosticsRtcm;
-    const auto level = output["msm_level"].isNull() ? "both" : output["msm_level"].as<String>();
-    options.msmLevel = level == "7" ? MsmLevel::Msm7 : level == "4" ? MsmLevel::Msm4
-                                                                    : MsmLevel::Both;
+    const String level = output["msm_level"] | "both";
+    if (level == "7")
+        options.msmLevel = MsmLevel::Msm7;
+    else if (level == "4")
+        options.msmLevel = MsmLevel::Msm4;
+    else
+        options.msmLevel = MsmLevel::Both;
     const JsonObjectConst systems = output["constellations"].as<JsonObjectConst>();
     options.gps = systems["gps"] | true;
     options.glo = systems["glo"] | true;
@@ -96,13 +100,13 @@ bool BackendAgent::buildStartupCommands(JsonObject base,
     options.bds = systems["bds"] | true;
     options.qzss = systems["qzss"] | true;
     options.sbas = systems["sbas"] | true;
-    ellipsoid = detected == GnssSensorType::Ublox;
+    position.ellipsoid = detected == GnssSensorType::Ublox;
     if (!restoreFixed)
     {
         const auto duration = AUTO_SURVEY_IN_SECONDS;
         const auto accuracy = configNumber(base["survey_in_accuracy"], 5.0);
-        const auto maxDuration = detected == GnssSensorType::Unicore ? 3600 : 604800;
-        if (!std::isfinite(duration) || std::floor(duration) != duration || duration < 1 || duration > maxDuration || !std::isfinite(accuracy) || accuracy < 0.001 || accuracy > 10000)
+        if (const auto maxDuration = detected == GnssSensorType::Unicore ? 3600 : 604800;
+            !std::isfinite(duration) || std::floor(duration) != duration || duration < 1 || duration > maxDuration || !std::isfinite(accuracy) || accuracy < 0.001 || accuracy > 10000)
         {
             error = "Saved Survey-In parameters are invalid";
             return false;
@@ -126,12 +130,12 @@ bool BackendAgent::buildStartupCommands(JsonObject base,
         error = "Saved Fixed LLA coordinates or accuracy are invalid";
         return false;
     }
-    fixedLatitude = lat;
-    fixedLongitude = lon;
-    fixedAltitude = alt;
+    position.latitude = lat;
+    position.longitude = lon;
+    position.altitude = alt;
     if (detected == GnssSensorType::Unicore)
     {
-        const auto reference = base["altitude_reference"] | "LEGACY";
+        const String reference = base["altitude_reference"] | "LEGACY";
         if (reference != "ELLIPSOID" && reference != "LEGACY")
         {
             error = "Unsupported saved altitude reference";
@@ -139,9 +143,9 @@ bool BackendAgent::buildStartupCommands(JsonObject base,
         }
         if (reference == "ELLIPSOID")
         {
-            ellipsoid = true;
+            position.ellipsoid = true;
             const String zero = "config undulation 0.0\r\n";
-            commands.push_back(Command(zero.begin(), zero.end()));
+            commands.emplace_back(zero.begin(), zero.end());
         }
     }
     const CommandList fixed = buildBaseFixedLlaCommand(lat, lon, alt, accuracy, detected, options);
@@ -150,9 +154,8 @@ bool BackendAgent::buildStartupCommands(JsonObject base,
 }
 
 bool BackendAgent::verifyStartupReadback(GnssCmdBuilder::GnssSensorType detected,
-                                         bool restoreFixed, double fixedLatitude,
-                                         double fixedLongitude, double fixedAltitude,
-                                         bool ellipsoid, String &error)
+                                         bool restoreFixed, const StartupPosition &expected,
+                                         String &error)
 {
     DynamicJsonDocument readback(2048);
     deserializeJson(readback, receiverBaseReadback_.c_str());
@@ -185,17 +188,17 @@ bool BackendAgent::verifyStartupReadback(GnssCmdBuilder::GnssSensorType detected
     {
         const auto raw = position["raw"] | String();
         const auto separator = raw.indexOf(';');
-        auto undulation = 0;
-        char datum[16] = {};
-        if (separator < 0 || std::sscanf(raw.c_str() + separator + 1, "%*[^,],%*[^,],%lf,%lf,%lf,%lf,%15[^,]", &lat, &lon, &height, &undulation, datum) != 5 || std::strcmp(datum, "WGS84") != 0)
+        double undulation = 0.0;
+        if (std::array<char, 16> datum{};
+            separator < 0 || std::sscanf(raw.c_str() + separator + 1, "%*[^,],%*[^,],%lf,%lf,%lf,%lf,%15[^,]", &lat, &lon, &height, &undulation, datum.data()) != 5 || std::strcmp(datum.data(), "WGS84") != 0)
         {
             error = "Receiver fixed-coordinate readback is invalid";
             return false;
         }
-        if (ellipsoid)
+        if (expected.ellipsoid)
             height += undulation;
     }
-    if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(height) || std::abs(lat - fixedLatitude) > 1e-8 || std::abs(lon - fixedLongitude) > 1e-8 || std::abs(height - fixedAltitude) > 0.002)
+    if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(height) || std::abs(lat - expected.latitude) > 1e-8 || std::abs(lon - expected.longitude) > 1e-8 || std::abs(height - expected.altitude) > 0.002)
     {
         error = "Receiver fixed coordinates do not match the saved coordinates";
         return false;
@@ -250,12 +253,9 @@ bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
     if (!restoreFixed && !method.isEmpty() && method != "SURVEY_IN")
         return fail("Unsupported saved Base mode");
     CommandList commands;
-    double fixedLatitude = 0, fixedLongitude = 0, fixedAltitude = 0;
-    auto ellipsoid = false;
+    StartupPosition position;
     if (String commandError;
-        !buildStartupCommands(base, detected, restoreFixed, commands,
-                              fixedLatitude, fixedLongitude, fixedAltitude,
-                              ellipsoid, commandError))
+        !buildStartupCommands(base, detected, restoreFixed, commands, position, commandError))
         return fail(commandError);
     if (!commands.empty() && !writeGnssCommands(commands))
         return fail("Receiver rejected startup configuration");
@@ -272,8 +272,7 @@ bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
     String error;
     if (!refreshReceiverReadback(error))
         return fail(error);
-    if (!verifyStartupReadback(detected, restoreFixed, fixedLatitude,
-                               fixedLongitude, fixedAltitude, ellipsoid, error))
+    if (!verifyStartupReadback(detected, restoreFixed, position, error))
         return fail(error);
     Serial.printf("[GNSS][STARTUP] %s; chip=%s\n", baseStartupState_.c_str(), sensorType_.c_str());
     markStatusDirty();

@@ -2,6 +2,7 @@
 #include "functions/backend/Backend_Agent_Internal.h"
 #include "functions/gnss/Unicore_Readback.h"
 #include "functions/gnss/Ublox_Readback.h"
+#include <array>
 #include <cstdio>
 
     using namespace BackendAgentInternal;
@@ -96,7 +97,7 @@ void BackendAgent::logUbloxReadback(const UbxBaseStatus &status)
 void BackendAgent::appendUbloxPosition(DynamicJsonDocument &doc,
                                        const UbxBaseStatus &status, const String &mode)
 {
-    JsonObject position = doc.createNestedObject("bestpos");
+    JsonObject position = doc["bestpos"].to<JsonObject>();
     position["state"] = status.hasPosition ? "ok" : "unavailable";
     if (!status.hasPosition)
         return;
@@ -104,13 +105,13 @@ void BackendAgent::appendUbloxPosition(DynamicJsonDocument &doc,
     position["position_type"] = surveyInReadbackReady_ ? "FIXEDPOS" : "SURVEY-IN-ESTIMATE";
     position["datum"] = "WGS84";
     position["altitude_reference"] = "ELLIPSOID";
-    char value[32];
-    snprintf(value, sizeof(value), "%.11f", status.latitude);
-    position["lat"] = value;
-    snprintf(value, sizeof(value), "%.11f", status.longitude);
-    position["lon"] = value;
-    snprintf(value, sizeof(value), "%.4f", status.height);
-    position["alt"] = value;
+    std::array<char, 32> value{};
+    snprintf(value.data(), value.size(), "%.11f", status.latitude);
+    position["lat"] = String(value.data());
+    snprintf(value.data(), value.size(), "%.11f", status.longitude);
+    position["lon"] = String(value.data());
+    snprintf(value.data(), value.size(), "%.4f", status.height);
+    position["alt"] = String(value.data());
     if (surveyInReadbackReady_)
         saveSurveyResult(position, mode);
 }
@@ -144,7 +145,7 @@ bool BackendAgent::refreshUnicoreReadback(String &error)
         {
             surveyInMonitoring_ = false;
         }
-        JsonObject bestPosition = readbackDoc.createNestedObject("bestpos");
+        JsonObject bestPosition = readbackDoc["bestpos"].to<JsonObject>();
         String positionError;
         if (!UnicoreReadback::readBestPosition(bestPosition, positionError))
         {

@@ -257,7 +257,7 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
         error = "too many raw commands";
         return false;
     }
-    uint8_t decoded[3072] = {};
+    std::array<uint8_t, 3072> decoded{};
     for (JsonVariant item : commands)
     {
         const auto encoded = item.as<String>();
@@ -266,32 +266,32 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
             error = "invalid raw command item";
             return false;
         }
-        auto length = decodeBase64(encoded, decoded, sizeof(decoded));
+        auto length = decodeBase64(encoded, decoded.data(), decoded.size());
         if (length == 0)
         {
             error = "raw command is not valid base64";
             return false;
         }
         uint32_t delayMs = 0;
-        if (delayMarker(decoded, length, delayMs))
+        if (delayMarker(decoded.data(), length, delayMs))
         {
             delay(delayMs);
             continue;
         }
         if (sensorType == "Unicorecomm")
-            length = routeUnicoreOutput(decoded, length, GNSS_UNICORE_PORT);
+            length = routeUnicoreOutput(decoded.data(), length, GNSS_UNICORE_PORT);
         else if (sensorType == "Ublox")
-            GnssCmdBuilder::routeUbloxOutput(decoded, length);
+            GnssCmdBuilder::routeUbloxOutput(decoded.data(), length);
         const auto unicore = sensorType == "Unicorecomm" || (sensorType.isEmpty() && sensorType_ == "Unicorecomm");
         if (unicore)
         {
-            if (!writeUnicoreCommand(decoded, length, error))
+            if (!writeUnicoreCommand(decoded.data(), length, error))
                 return false;
             continue;
         }
         if (rtcmBufferMutex && xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE)
         {
-            Serial1.write(decoded, length);
+            Serial1.write(decoded.data(), length);
             Serial1.flush();
             xSemaphoreGive(rtcmBufferMutex);
         }
@@ -615,8 +615,8 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
         error = "invalid province_code";
         return false;
     }
-    const auto validCoordinates = baseParsed && std::isfinite(rawLatitude) && std::isfinite(rawLongitude) && std::isfinite(rawAltitude) && transformToVn2000(rawLatitude, rawLongitude, rawAltitude, centralMeridianDeg, scale, localLatitude, localLongitude, localAltitude, northing, easting);
-    if (!validCoordinates)
+    if (const auto validCoordinates = baseParsed && std::isfinite(rawLatitude) && std::isfinite(rawLongitude) && std::isfinite(rawAltitude) && transformToVn2000(rawLatitude, rawLongitude, rawAltitude, centralMeridianDeg, scale, localLatitude, localLongitude, localAltitude, northing, easting);
+        !validCoordinates)
     {
         error = "base coordinates are missing or cannot be transformed";
         return false;
@@ -628,7 +628,7 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
     }
     JsonObject coordinates = base["coords"].as<JsonObject>();
     if (coordinates.isNull())
-        coordinates = base.createNestedObject("coords");
+        coordinates = base["coords"].to<JsonObject>();
     coordinates["lat"] = localLatitude;
     coordinates["lon"] = localLongitude;
     coordinates["alt"] = localAltitude;
