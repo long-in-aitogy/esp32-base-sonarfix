@@ -14,7 +14,7 @@ constexpr size_t MAX_RTCM_FRAME_LENGTH = 1029; // 3-byte header + 1023 + CRC
 
 String nmeaBuffer;
 String pendingRtcmData;
-uint8_t rtcmFrame[MAX_RTCM_FRAME_LENGTH] = {};
+std::array<uint8_t, MAX_RTCM_FRAME_LENGTH> rtcmFrame = {};
 size_t rtcmLength = 0;
 size_t rtcmExpectedLength = 0;
 uint8_t ubxHeader[6] = {};
@@ -248,7 +248,7 @@ bool processRtcmByte(uint8_t value, String &rtcmOutput)
         resetRtcmParser();
         return false;
     }
-    if (rtcmLength >= sizeof(rtcmFrame))
+    if (rtcmLength >= rtcmFrame.size())
     {
         resetRtcmParser();
         return true;
@@ -260,7 +260,7 @@ bool processRtcmByte(uint8_t value, String &rtcmOutput)
         const uint16_t payloadLength =
             (static_cast<uint16_t>(rtcmFrame[1]) & 0x03U) * 256U + rtcmFrame[2];
         rtcmExpectedLength = static_cast<size_t>(payloadLength) + 6U;
-        if (rtcmExpectedLength > sizeof(rtcmFrame))
+        if (rtcmExpectedLength > rtcmFrame.size())
         {
             resetRtcmParser();
             return true;
@@ -270,8 +270,8 @@ bool processRtcmByte(uint8_t value, String &rtcmOutput)
         return true;
 
     // Forward the complete RTCM frame without validating its CRC or decoding its type.
-    rtcmOutput.concat(reinterpret_cast<const char *>(rtcmFrame), rtcmLength);
-    backendAgent.enqueueRtcm(rtcmFrame, rtcmLength);
+    rtcmOutput.concat(reinterpret_cast<const char *>(rtcmFrame.data()), rtcmLength);
+    backendAgent.enqueueRtcm(rtcmFrame.data(), rtcmLength);
     noteRtcmBytes(rtcmLength);
     portENTER_CRITICAL(&telemetryMux);
     ++telemetry.rtcmFrames;
