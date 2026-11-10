@@ -72,7 +72,7 @@ private:
     String autoBaseProgress_ = "{}";
     String baseConfig_ = "{}";
     String serviceConfig_ = "{}";
-    String receiverBaseReadback_ = "{\"state\":\"not_read\",\"chip\":\"Unicorecomm\",\"mode_kind\":\"unknown\"}";
+    String receiverBaseReadback_ = R"({"state":"not_read","chip":"Unicorecomm","mode_kind":"unknown"})";
     String surveyInResult_ = "{}";
     String baseStartupState_ = "pending";
     String baseStartupError_;

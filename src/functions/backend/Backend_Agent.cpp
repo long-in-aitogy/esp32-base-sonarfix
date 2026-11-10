@@ -17,6 +17,8 @@
 #include <nvs.h>
 #include <esp_err.h>
 #include <time.h>
+#include <array>
+#include <cstddef>
 #include <vector>
 #include <ctype.h>
 #include <cstdlib>
@@ -53,13 +55,13 @@ namespace BackendAgentInternal
     struct DataPacket
     {
         uint16_t length = 0;
-        uint8_t data[MAX_RTCM_PACKET] = {};
+        std::array<uint8_t, MAX_RTCM_PACKET> data = {};
     };
 
     struct NmeaPacket
     {
         uint16_t length = 0;
-        uint8_t data[MAX_NMEA_PACKET] = {};
+        std::array<uint8_t, MAX_NMEA_PACKET> data = {};
     };
 
     Preferences &backendPreferences()
@@ -213,8 +215,9 @@ namespace BackendAgentInternal
             else
             {
                 encoded += '%';
-                encoded += hexDigits[(c >> 4) & 0x0F];
-                encoded += hexDigits[c & 0x0F];
+                const std::byte byte{c};
+                encoded += hexDigits[std::to_integer<unsigned int>(byte >> 4)];
+                encoded += hexDigits[std::to_integer<unsigned int>(byte & std::byte{0x0F})];
             }
         }
         return encoded;
@@ -228,18 +231,18 @@ namespace BackendAgentInternal
         }
 
 #if !defined(NATIVE_BUILD)
-        uint8_t digest[32] = {};
+        std::array<uint8_t, 32> digest = {};
         mbedtls_sha256_context context;
         mbedtls_sha256_init(&context);
-        if (mbedtls_sha256_starts_ret(&context, 0) == 0 && mbedtls_sha256_update_ret(&context, reinterpret_cast<const unsigned char *>(token.c_str()), token.length()) == 0 && mbedtls_sha256_finish_ret(&context, digest) == 0)
+        if (mbedtls_sha256_starts_ret(&context, 0) == 0 && mbedtls_sha256_update_ret(&context, reinterpret_cast<const unsigned char *>(token.c_str()), token.length()) == 0 && mbedtls_sha256_finish_ret(&context, digest.data()) == 0)
         {
             mbedtls_sha256_free(&context);
-            char result[17] = {};
+            std::array<char, 17> result = {};
             for (size_t i = 0; i < 8; ++i)
             {
-                snprintf(result + (i * 2), 3, "%02x", digest[i]);
+                snprintf(result.data() + (i * 2), 3, "%02x", digest[i]);
             }
-            return String(result);
+            return String(result.data());
         }
         mbedtls_sha256_free(&context);
 #endif
@@ -251,11 +254,11 @@ namespace BackendAgentInternal
             hash ^= static_cast<uint8_t>(character);
             hash *= 16777619UL;
         }
-        char result[17] = {};
-        snprintf(result, sizeof(result), "%08lx%08lx",
+        std::array<char, 17> result = {};
+        snprintf(result.data(), result.size(), "%08lx%08lx",
                  static_cast<unsigned long>(hash),
                  static_cast<unsigned long>(hash ^ 0xA5A5A5A5UL));
-        return String(result);
+        return String(result.data());
     }
 
     int base64Value(char c)
@@ -458,10 +461,10 @@ void BackendAgent::loadPreferences()
 #if !defined(NATIVE_BUILD)
         mac = ESP.getEfuseMac();
 #endif
-        char generated[24] = {};
-        snprintf(generated, sizeof(generated), "esp_%012llX",
+        std::array<char, 24> generated = {};
+        snprintf(generated.data(), generated.size(), "esp_%012llX",
                  static_cast<unsigned long long>(mac & 0xFFFFFFFFFFFFULL));
-        serialNumber_ = String(generated);
+        serialNumber_ = String(generated.data());
         serialNeedsSave = true;
     }
     else if (serialNumber_.startsWith("LP_"))
@@ -500,10 +503,10 @@ void BackendAgent::loadPreferences()
                   licenseToken_.isEmpty() ? "chua co key" : "da co key",
                   licenseValid_ ? "HOP LE" : "KHONG HOP LE");
 
-    char bootId[40] = {};
-    snprintf(bootId, sizeof(bootId), "%s-%08lx", serialNumber_.c_str(),
+    std::array<char, 40> bootId = {};
+    snprintf(bootId.data(), bootId.size(), "%s-%08lx", serialNumber_.c_str(),
              static_cast<unsigned long>(bootCounter));
-    statusBootId_ = String(bootId);
+    statusBootId_ = String(bootId.data());
     agentState_ = normalAgentState();
 }
 
@@ -632,8 +635,8 @@ bool BackendAgent::probeUblox(Stream &stream)
 {
     while (stream.available())
         stream.read();
-    const uint8_t ubxMonVer[] = {0xB5, 0x62, 0x0A, 0x04, 0x00, 0x00, 0x0E, 0x34};
-    stream.write(ubxMonVer, sizeof(ubxMonVer));
+    const std::array<uint8_t, 8> ubxMonVer = {0xB5, 0x62, 0x0A, 0x04, 0x00, 0x00, 0x0E, 0x34};
+    stream.write(ubxMonVer.data(), ubxMonVer.size());
 
     const uint32_t startMs = millis();
     uint8_t ubxMatch = 0;
@@ -641,7 +644,7 @@ bool BackendAgent::probeUblox(Stream &stream)
     {
         while (stream.available())
         {
-            const uint8_t b = static_cast<uint8_t>(stream.read());
+            const auto b = static_cast<uint8_t>(stream.read());
             if (ubxMatch == 0 && b == 0xB5)
                 ubxMatch = 1;
             else if (ubxMatch == 1 && b == 0x62)
@@ -669,7 +672,7 @@ bool BackendAgent::probePassiveUblox(Stream &stream)
     {
         while (stream.available())
         {
-            const uint8_t b = static_cast<uint8_t>(stream.read());
+            const auto b = static_cast<uint8_t>(stream.read());
             if (b >= 32 && b <= 126)
                 passiveStr += static_cast<char>(b);
             if (passiveStr.length() >= 512)
@@ -858,7 +861,7 @@ void BackendAgent::enqueueNmea(const uint8_t *data, size_t length)
         return;
     NmeaPacket packet;
     packet.length = static_cast<uint16_t>(min(length, MAX_NMEA_PACKET - 1));
-    memcpy(packet.data, data, packet.length);
+    memcpy(packet.data.data(), data, packet.length);
     packet.data[packet.length] = 0;
     if (xQueueSend(nmeaQueue_, &packet, 0) != pdTRUE)
     {
@@ -875,7 +878,7 @@ void BackendAgent::enqueueRtcm(const uint8_t *data, size_t length)
         return;
     DataPacket packet;
     packet.length = static_cast<uint16_t>(length);
-    memcpy(packet.data, data, packet.length);
+    memcpy(packet.data.data(), data, packet.length);
     if (xQueueSend(rtcmQueue_, &packet, 0) != pdTRUE)
     {
         DataPacket discarded;
@@ -896,13 +899,13 @@ void BackendAgent::drainDataQueues()
         auto delivered = false;
         if (mqttConnected())
         {
-            delivered = mqtt.publish(rawDataTopic().c_str(), nmea.data, nmea.length);
+            delivered = mqtt.publish(rawDataTopic().c_str(), nmea.data.data(), nmea.length);
         }
         if (!delivered && websocketConnected())
         {
             DynamicJsonDocument message(1024);
             message["type"] = "nmea_update";
-            message["payload"] = reinterpret_cast<const char *>(nmea.data);
+            message["payload"] = reinterpret_cast<const char *>(nmea.data.data());
             String serialized;
             serializeJson(message, serialized);
             delivered = websocket_->sendText(serialized);
@@ -921,7 +924,7 @@ void BackendAgent::drainDataQueues()
     DataPacket rtcm;
     while (rtcmQueue_ && xQueueReceive(rtcmQueue_, &rtcm, 0) == pdTRUE)
     {
-        if (!mqttConnected() || !mqtt.publish(rawDataTopic().c_str(), rtcm.data, rtcm.length))
+        if (!mqttConnected() || !mqtt.publish(rawDataTopic().c_str(), rtcm.data.data(), rtcm.length))
         {
             xQueueSendToFront(rtcmQueue_, &rtcm, 0);
             break;

@@ -352,7 +352,7 @@ void BackendAgent::runWorkflow()
     if (deserializeJson(document, workflowPayload_) != DeserializationError::Ok || !document.is<JsonObject>())
     {
         setAgentState(normalAgentState());
-        setWorkflowProgress("failed", 0, 4, "{\"reason\":\"invalid workflow payload\"}");
+        setWorkflowProgress("failed", 0, 4, R"({"reason":"invalid workflow payload"})");
         saveStatePreferences();
         return;
     }
@@ -370,7 +370,7 @@ void BackendAgent::runWorkflow()
     else
     {
         setAgentState(normalAgentState());
-        setWorkflowProgress("failed", 0, 4, "{\"reason\":\"unknown workflow\"}");
+        setWorkflowProgress("failed", 0, 4, R"({"reason":"unknown workflow"})");
         saveStatePreferences();
     }
 }
@@ -1077,7 +1077,7 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload)
     {
         setAgentState(normalAgentState());
         setWorkflowProgress("reference_check_failed", 4, 4,
-                            "{\"reason\":\"could not safely restore base/NTRIP state\"}");
+                            R"({"reason":"could not safely restore base/NTRIP state"})");
         saveStatePreferences();
         return false;
     }
