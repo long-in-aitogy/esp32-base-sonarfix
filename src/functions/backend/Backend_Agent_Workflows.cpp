@@ -35,7 +35,7 @@ void BackendAgent::setWorkflowProgress(const String &phase, const uint8_t step,
         {
             for (JsonPairConst pair : extra.as<JsonObjectConst>())
             {
-                progress[pair.key().c_str()] = pair.value();
+                progress[String(pair.key().c_str())] = pair.value();
             }
         }
     }
