@@ -720,6 +720,12 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         payload, host, port, username, password, mountpoint, ntripVersion,
         timeoutSeconds, fixedStreakRequired);
 
+    DynamicJsonDocument previousBase(CONFIG_DOCUMENT_SIZE);
+    deserializeJson(previousBase, baseConfig_);
+    // Startup may use a different duration from the saved UI preference.
+    if (previousBase["base_setup_method"] == "SURVEY_IN")
+        previousBase["survey_in_duration"] = surveyInTargetSeconds_;
+
     auto finish = [&](const bool success, const bool cancelled, const String &reason)
     {
         // restartConfiguredNtrip() stops the temporary rover session while
@@ -976,6 +982,11 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload)
         payload, reference, referenceLatitude, referenceLongitude, referenceAltitude,
         restoreLatitude, restoreLongitude, restoreAltitude, host, port, username, password,
         mountpoint, timeoutSeconds, requestedSamples);
+
+    DynamicJsonDocument storedBase(CONFIG_DOCUMENT_SIZE);
+    deserializeJson(storedBase, baseConfig_);
+    if (storedBase["base_setup_method"] == "SURVEY_IN")
+        storedBase["survey_in_duration"] = surveyInTargetSeconds_;
 
     auto cleanup = [&]()
     {
