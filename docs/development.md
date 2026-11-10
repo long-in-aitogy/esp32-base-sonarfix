@@ -7,7 +7,10 @@ implementation is split by responsibility under `src/functions/backend/`:
 
 | File | Responsibility |
 | --- | --- |
-| `backend/Backend_Agent.cpp` | Startup, saved state, transport lifecycle and data queues |
+| `backend/Backend_Agent.cpp` | Startup, transport lifecycle and data queues |
+| `backend/Backend_Agent_Storage.cpp` | Preferences migration, saved state and default service settings |
+| `backend/Backend_Agent_Codec.cpp` | URL/Base64 decoding, fingerprints and license checks |
+| `backend/cmd_handler.cpp` | Legacy MQTT commands and GNSS UART routing |
 | `backend/Backend_Agent_Commands.cpp` | Backend command validation, execution and results |
 | `backend/Backend_Agent_Workflows.cpp` | Auto Base, reference checks and GNSS command exchanges |
 | `backend/Backend_Agent_Gnss.cpp` | Periodic receiver readback and saved Survey-In results |
