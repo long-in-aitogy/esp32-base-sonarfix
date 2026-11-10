@@ -12,6 +12,7 @@ shim = shim.replace('    void trim() {', '''    int indexOf(const char *s) const
     void trim() {''')
 harness = r'''
 #include <cassert>
+#include <cstring>
 uint32_t now = 0;
 uint32_t millis() { return now; }
 void delay(uint32_t ms) { now += ms; }
