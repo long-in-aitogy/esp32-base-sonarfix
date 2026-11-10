@@ -58,3 +58,21 @@ rerun the checks rather than replacing the target file with an old snapshot.
 PR #103 already merged the previous CORS synchronization. PR #66 still points
 to an older branch with overlapping changes. The new cleanup is prepared on a
 separate branch; changing or closing that PR is a separate repository action.
+
+## Sonar analysis inputs
+
+`.sonarcloud.properties` configures automatic analysis. `sonar-project.properties`
+provides the same source/test scope and C++/Python settings for SonarScanner CLI.
+Keep both scopes aligned. Existing issue decisions remain managed in SonarCloud.
+
+Generate a compilation database from the selected firmware environment:
+
+```sh
+/Users/tun/.platformio/penv/bin/pio run -e tdm240x_dev_general -t compiledb
+```
+
+`compile_commands.json` is machine-specific and remains ignored by Git. Configure
+its use according to the CFamily analysis mode of the scanner being run.
+Coverage report paths are not enabled until a job actually produces those reports.
+Run authenticated CLI analysis with the token supplied through the environment;
+never put a token in either properties file.
