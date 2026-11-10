@@ -411,7 +411,7 @@ namespace ntrip_common
                 else
                 {
                     response += static_cast<char>(value);
-                    headerComplete = response.endsWith("\r\n\r\n");
+                    headerComplete = response.endsWith("\r\n\r\n") || response == "ICY 200 OK\r\n";
                 }
             }
             if (!headerComplete && !readFailed)
