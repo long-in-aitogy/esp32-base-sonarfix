@@ -19,6 +19,20 @@ using namespace BackendAgentInternal;
 extern SemaphoreHandle_t tcpStreamMutex;
 extern SemaphoreHandle_t rtcmBufferMutex;
 
+namespace {
+double coordinateNumber(JsonVariantConst value) {
+    if (value.isNull()) return NAN;
+    if (value.is<const char *>()) {
+        const char *text = value.as<const char *>();
+        char *end = nullptr;
+        const double number = strtod(text, &end);
+        return end != text && *end == '\0' && std::isfinite(number) ? number : NAN;
+    }
+    return value.is<double>() ? value.as<double>() : NAN;
+}
+
+} // namespace
+
 void BackendAgent::setWorkflowProgress(const String &phase, const uint8_t step,
                                        const uint8_t total, const String &details)
 {
@@ -344,6 +358,67 @@ bool BackendAgent::applyBaseCoordinates(const double latitude, const double long
         sensorType_ == "Ublox" ? GnssCmdBuilder::GnssSensorType::Ublox
                                : GnssCmdBuilder::GnssSensorType::Unicore,
         options));
+}
+
+bool BackendAgent::restoreWorkflowBase(JsonObjectConst base) {
+    using namespace GnssCmdBuilder;
+    const auto fail = [&](const String &error) {
+        baseStartupState_ = "error";
+        baseStartupError_ = error;
+        markStatusDirty();
+        Serial.printf("[AUTO BASE][RESTORE][ERROR] %s\n", error.c_str());
+        return false;
+    };
+    const String method = base["base_setup_method"] | String();
+    JsonObjectConst coords = base["coords"].as<JsonObjectConst>();
+    if (coords.isNull()) coords = base;
+    const double lat = coordinateNumber(coords["lat"]);
+    const double lon = coordinateNumber(coords["lon"]);
+    const double alt = coordinateNumber(coords["alt"]);
+    if (method.isEmpty() && !std::isfinite(lat) && !std::isfinite(lon) && !std::isfinite(alt)) {
+        // An unconfigured receiver may remain Rover for review, but cannot publish a Base stream.
+        baseStartupState_ = "awaiting_configuration";
+        markStatusDirty();
+        return true;
+    }
+    if (method == "SURVEY_IN") {
+        const double duration = base["survey_in_duration"].isNull() ? 120 : coordinateNumber(base["survey_in_duration"]);
+        const double accuracy = base["survey_in_accuracy"].isNull() ? 5 : coordinateNumber(base["survey_in_accuracy"]);
+        const double maxDuration = sensorType_ == "Unicorecomm" ? 3600 : 604800;
+        if (!std::isfinite(duration) || duration < 1 || duration > maxDuration || std::floor(duration) != duration
+            || !std::isfinite(accuracy) || accuracy < 0.001 || accuracy > 10000)
+            return fail("invalid saved Survey-In parameters");
+        GnssOptions options;
+        options.ports = {"UART1"};
+        const JsonObjectConst output = base["gnss_options"];
+        options.outputMode = String(output["output_mode"] | "rtcm_only") == "rtcm_only"
+            ? OutputMode::RtcmOnly : OutputMode::DiagnosticsRtcm;
+        const String level = output["msm_level"].isNull() ? "both" : output["msm_level"].as<String>();
+        options.msmLevel = level == "7" ? MsmLevel::Msm7 : level == "4" ? MsmLevel::Msm4 : MsmLevel::Both;
+        const JsonObjectConst systems = output["constellations"];
+        options.gps = systems["gps"] | true; options.glo = systems["glo"] | true;
+        options.gal = systems["gal"] | true; options.bds = systems["bds"] | true;
+        options.qzss = systems["qzss"] | true; options.sbas = systems["sbas"] | true;
+        const auto chip = sensorType_ == "Unicorecomm" ? GnssSensorType::Unicore
+            : sensorType_ == "Ublox" ? GnssSensorType::Ublox : GnssSensorType::Invalid;
+        if (!writeGnssCommands(buildBaseSurveyInCommand(static_cast<uint32_t>(duration), accuracy, chip, options)))
+            return fail("receiver rejected Survey-In restore");
+        surveyInResultPending_ = true;
+    } else if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(alt)
+               || !applyBaseCoordinates(lat, lon, alt)) {
+        return fail("cannot restore saved Base coordinates");
+    }
+    String error;
+    if (!refreshReceiverReadback(error)) return fail(error);
+    DynamicJsonDocument readback(2048);
+    if (deserializeJson(readback, receiverBaseReadback_) != DeserializationError::Ok
+        || String(readback["mode_kind"] | "") != (method == "SURVEY_IN" ? "survey_in" : "base"))
+        return fail("receiver mode does not match restored Base");
+    baseStartupState_ = "configured";
+    baseStartupError_.clear();
+    markStatusDirty();
+    Serial.printf("[AUTO BASE][RESTORE] Previous %s mode confirmed\n", method.c_str());
+    return true;
 }
 
 void BackendAgent::runWorkflow()
@@ -728,21 +803,22 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
 
     auto finish = [&](const bool success, const bool cancelled, const String &reason)
     {
-        // restartConfiguredNtrip() stops the temporary rover session while
-        // holding tcpStreamMutex, then restores the configured source streams.
-        const auto transportRestored = restartConfiguredNtrip();
+        const bool roverStopped = stopNtripRoverLocked();
+        const bool baseRestored = roverStopped && restoreWorkflowBase(previousBase.as<JsonObjectConst>());
+        const bool transportRestored = baseRestored && restartConfiguredNtrip();
+        const bool cleanupSucceeded = baseRestored && transportRestored;
         setAgentState(normalAgentState());
         DynamicJsonDocument details(1024);
         if (!reason.isEmpty())
             details["reason"] = reason;
         if (!transportRestored)
-            details["cleanup_error"] = "could not restore configured NTRIP transport";
+            details["cleanup_error"] = "could not safely restore base/NTRIP state";
         String serialized;
         serializeJson(details, serialized);
-        const char *unfinishedStage = cancelled ? "stopped" : "failed";
-        const char *unfinishedResult = cancelled ? "DA DUNG" : "THAT BAI";
-        setWorkflowProgress(success ? "completed" : unfinishedStage, success ? 4 : 2, 4, serialized);
-        Serial.printf("[AUTO BASE] KET QUA: %s; %s\n", success ? "THANH CONG" : unfinishedResult, reason.c_str());
+        const char *unfinishedStage = cancelled && cleanupSucceeded ? "stopped" : "failed";
+        const char *unfinishedResult = cancelled && cleanupSucceeded ? "DA DUNG" : "THAT BAI";
+        setWorkflowProgress(success && cleanupSucceeded ? "completed" : unfinishedStage, success && cleanupSucceeded ? 4 : 2, 4, serialized);
+        Serial.printf("[AUTO BASE] KET QUA: %s; %s\n", success && cleanupSucceeded ? "THANH CONG" : unfinishedResult, reason.c_str());
         saveStatePreferences();
     };
 
@@ -832,7 +908,7 @@ bool BackendAgent::prepareReferenceCheckConfig(
     requestedSamples = static_cast<uint16_t>(constrain(
         static_cast<int>(payload["samples"] | 60), 5, 120));
 
-    return baseParsed && !reference.isNull() && std::isfinite(referenceLatitude) && std::isfinite(referenceLongitude) && std::isfinite(referenceAltitude) && referenceLatitude >= -90.0 && referenceLatitude <= 90.0 && referenceLongitude >= -180.0 && referenceLongitude <= 180.0 && std::isfinite(restoreLatitude) && std::isfinite(restoreLongitude) && std::isfinite(restoreAltitude) && !host.isEmpty() && !username.isEmpty() && !password.isEmpty() && !mountpoint.isEmpty() && port != 0 && port <= 65535;
+    return baseParsed && !reference.isNull() && std::isfinite(referenceLatitude) && std::isfinite(referenceLongitude) && std::isfinite(referenceAltitude) && referenceLatitude >= -90.0 && referenceLatitude <= 90.0 && referenceLongitude >= -180.0 && referenceLongitude <= 180.0 && (storedBaseObject["base_setup_method"] == "SURVEY_IN" || (std::isfinite(restoreLatitude) && std::isfinite(restoreLongitude) && std::isfinite(restoreAltitude))) && !host.isEmpty() && !username.isEmpty() && !password.isEmpty() && !mountpoint.isEmpty() && port != 0 && port <= 65535;
 }
 
 bool BackendAgent::startReferenceRover(const String &host, const uint16_t port,
@@ -992,12 +1068,8 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload)
     {
         if (!stopNtripRoverLocked())
             return false;
-        auto baseRestored = true;
-        if (std::isfinite(restoreLatitude) && std::isfinite(restoreLongitude) && std::isfinite(restoreAltitude))
-        {
-            baseRestored = applyBaseCoordinates(restoreLatitude, restoreLongitude, restoreAltitude);
-        }
-        const auto transportRestored = restartConfiguredNtrip();
+        const bool baseRestored = restoreWorkflowBase(storedBase.as<JsonObjectConst>());
+        const bool transportRestored = baseRestored && restartConfiguredNtrip();
         return baseRestored && transportRestored;
     };
     auto finish = [&](const bool success, const bool cancelled, const String &reason)
