@@ -10,15 +10,14 @@ number = 'double coordinateNumber(' + workflow.split('double coordinateNumber(',
 restore = 'bool BackendAgent::restoreWorkflowBase(' + workflow.split('bool BackendAgent::restoreWorkflowBase(', 1)[1].split('\nvoid BackendAgent::runWorkflow()', 1)[0]
 snapshot = workflow[workflow.index('    DynamicJsonDocument previousBase(CONFIG_DOCUMENT_SIZE);'):workflow.index('    auto restorePreviousBase = [&]() {')]
 snapshot = 'bool BackendAgent::restoreSnapshot() {\n' + snapshot + '    surveyInTargetSeconds_ = 0; // Rover mode clears the live target after snapshot.\n    return restoreWorkflowBase(previousBase.as<JsonObjectConst>());\n}\n'
-ntrip = (root / 'src/functions/ntrip/ntrip_rover.cpp').read_text()
-rover = 'int loopNtripRover()' + ntrip.split('int loopNtripRover()', 1)[1].split('\nvoid stopNtripRover()', 1)[0]
+ntrip = (root / 'src/functions/ntrip/NTRIP_Handler_IP.cpp').read_text()
+rover = 'int loopNtripRover() {' + ntrip.split('int loopNtripRover() {', 1)[1].split('\nvoid stopNtripRover()', 1)[0]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
 harness = r'''
 #include <cassert>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
-#include <array>
 #include <vector>
 #include <ArduinoJson.h>
 constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
@@ -60,7 +59,7 @@ bool xSemaphoreTake(void *, unsigned) { return true; }
 unsigned releases = 0;
 void xSemaphoreGive(void *) { ++releases; }
 using std::min;
-struct { std::array<char,16> fixStatus = {'S','I','N','G','L','E'}; } snapshot;
+struct { const char *fixStatus = "SINGLE"; } snapshot;
 auto getGnssTelemetrySnapshot() { return snapshot; }
 struct Client {
     std::vector<uint8_t> data;
@@ -131,7 +130,7 @@ int main() {
 '''
 number = mapped(root / 'src/functions/backend/Backend_Agent_Workflows.cpp', number)
 restore = mapped(root / 'src/functions/backend/Backend_Agent_Workflows.cpp', restore)
-rover = mapped(root / 'src/functions/ntrip/ntrip_rover.cpp', rover)
+rover = mapped(root / 'src/functions/ntrip/NTRIP_Handler_IP.cpp', rover)
 with tempfile.TemporaryDirectory(prefix='esp-workflow-restore-') as directory:
     path = Path(directory)
     (path / 'Arduino.h').write_text('#pragma once\n' + shim)

@@ -8,7 +8,7 @@ pio run -e tdm240x_dev_general -t compiledb
 python3 test/host/firmware_coverage_inventory.py
 python3 test/host/run_coverage.py
 
-The runner executes eight native suites and twenty-three integration harnesses with
+The runner executes eight native suites and twenty-one integration harnesses with
 ASan/UBSan and coverage enabled.
 It reuses the installed ArduinoJson 6 headers from PlatformIO by default; supply
 `--arduinojson /path/to/ArduinoJson/src` for a separate checkout. Set CXX,
@@ -120,10 +120,3 @@ Run `python3 geodetic/esp32/test/host/check_nvs_inventory.py` for real JSON fiel
 Run `python3 geodetic/esp32/test/host/check_wifi_nvs.py` for Wi-Fi NVS reuse and missing-key persistence.
 Run `python3 geodetic/esp32/test/host/check_projection_audit.py` for fixed M3/M6 RTCM1025 packets in both decoders, raw evidence preservation and report memory/serialization.
 Run `python3 geodetic/esp32/test/host/check_workflow_progress.py` for JSON key ownership and Vietnamese workflow reports under ASan/UBSan.
-
-NTRIP cleanup regression (ASan/UBSan, no device):
-  python3 test/host/check_ntrip_config.py
-  python3 test/host/check_ntrip_lifecycle.py
-An optional previous firmware root compares all endpoint fields for 68 configurations.
-The check covers both servers, legacy NVS fallback, alias precedence, invalid fields,
-ICY/HTTP boundaries without consuming RTCM payload, and millis() timeout wraparound.

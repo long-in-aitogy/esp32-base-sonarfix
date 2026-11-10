@@ -84,6 +84,7 @@ bool BackendAgent::saveStatePreferences(){++saves;return true;}
 String BackendAgent::buildStatusPayload(){return "{\"online\":true}";}
 String BackendAgent::buildLwtPayload()const{return "{\"online\":false}";}
 bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType){++initialized;baseStartupAttempted_=true;return true;}
+void BackendAgent::startBootAutoBaseWhenReady(){}
 void BackendAgent::pollGnssStatus(){++polls;}
 void BackendAgent::handleCommand(const String&,const String&){++commands;}
 '''
@@ -154,7 +155,6 @@ with tempfile.TemporaryDirectory(prefix='backend-lifecycle-') as directory:
     compile_cpp(['c++','-std=c++17','-DNATIVE_BUILD','-fsanitize=address,undefined','-I'+str(path),'-I'+str(root/'test/host'),'-I'+str(root/'include'),
                  '-I'+str(root/'.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),str(path/'check.cpp'),
                  str(root/'src/functions/backend/Backend_Agent_Codec.cpp'),str(root/'src/functions/gnss/gnss_cmd_builder.cpp'),
-                 str(root/'src/functions/gnss/ublox_commands.cpp'),str(root/'src/functions/gnss/unicore_commands.cpp'),
-                 str(root/'src/functions/gnss/Unicore_Log.cpp'),'-o',str(path/'check')],check=True)
+                 str(root/'src/functions/gnss/ublox_commands.cpp'),str(root/'src/functions/gnss/unicore_commands.cpp'),'-o',str(path/'check')],check=True)
     run_cpp([str(path/'check')],check=True)
 print('PASS: complete backend lifecycle, actual queues/backpressure, status delivery, chip probes, ACK correlation and fail-open recovery')

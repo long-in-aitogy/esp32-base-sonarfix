@@ -6,16 +6,12 @@
 #include <algorithm>
 #include <cstring>
 
-namespace GnssCmdBuilder
-{
+namespace GnssCmdBuilder {
 
-/** @brief Implements isValidPort. */
-    inline bool isValidPort(const String &port)
-    {
+    inline bool isValidPort(const String &port) {
         return port == "UART1" || port == "UART2" || port == "USB";
     }
 
-/** @brief Implements normalizeGnssOptions. */
     GnssOptions normalizeGnssOptions(GnssOptions options)
     {
         std::vector<String> ports;
@@ -34,10 +30,9 @@ namespace GnssCmdBuilder
         return options;
     }
 
-/** @brief Implements sensorTypeFromString. */
     GnssSensorType sensorTypeFromString(const String &sensorType)
     {
-        auto normalized = sensorType;
+        String normalized = sensorType;
         normalized.trim();
         normalized.toUpperCase();
         if (normalized == "INVALID")
@@ -49,10 +44,9 @@ namespace GnssCmdBuilder
         return GnssSensorType::Invalid;
     }
 
-/** @brief Implements commandListToBytes. */
     Command commandListToBytes(const CommandList &commands)
     {
-        auto totalSize = 0;
+        size_t totalSize = 0;
         for (const Command &command : commands)
             totalSize += command.size();
 
@@ -64,76 +58,58 @@ namespace GnssCmdBuilder
         return bytes;
     }
 
-/** @brief Implements buildBaseSurveyInCommand. */
     CommandList buildBaseSurveyInCommand(uint32_t duration, float accuracy,
                                          GnssSensorType sensorType, const GnssOptions &options)
     {
-        if (sensorType == GnssSensorType::Ublox)
-            return UbloxCommands::buildBaseSurveyInCommand(duration, accuracy, options);
-        if (sensorType == GnssSensorType::Unicore)
-            return UnicoreCommands::buildBaseSurveyInCommand(duration, accuracy, options);
+        if (sensorType == GnssSensorType::Ublox) return UbloxCommands::buildBaseSurveyInCommand(duration, accuracy, options);
+        if (sensorType == GnssSensorType::Unicore) return UnicoreCommands::buildBaseSurveyInCommand(duration, accuracy, options);
         return {};
     }
 
-/** @brief Implements buildBaseFixedLlaCommand. */
     CommandList buildBaseFixedLlaCommand(double lat, double lon, double alt, float accuracy,
                                          GnssSensorType sensorType, const GnssOptions &options)
     {
-        if (sensorType == GnssSensorType::Ublox)
-            return UbloxCommands::buildBaseFixedLlaCommand(lat, lon, alt, accuracy, options);
-        if (sensorType == GnssSensorType::Unicore)
-            return UnicoreCommands::buildBaseFixedLlaCommand(lat, lon, alt, accuracy, options);
+        if (sensorType == GnssSensorType::Ublox) return UbloxCommands::buildBaseFixedLlaCommand(lat, lon, alt, accuracy, options);
+        if (sensorType == GnssSensorType::Unicore) return UnicoreCommands::buildBaseFixedLlaCommand(lat, lon, alt, accuracy, options);
         return {};
     }
 
-/** @brief Implements buildBaseRtcmOutputCommand. */
     CommandList buildBaseRtcmOutputCommand(const String &message, const String &port, bool enabled,
                                            GnssSensorType sensorType)
     {
-        if (sensorType == GnssSensorType::Ublox)
-            return UbloxCommands::buildBaseRtcmOutputCommand(message, port, enabled);
-        if (sensorType == GnssSensorType::Unicore)
-            return UnicoreCommands::buildBaseRtcmOutputCommand(message, port, enabled);
+        if (sensorType == GnssSensorType::Ublox) return UbloxCommands::buildBaseRtcmOutputCommand(message, port, enabled);
+        if (sensorType == GnssSensorType::Unicore) return UnicoreCommands::buildBaseRtcmOutputCommand(message, port, enabled);
         return {};
     }
 
-/** @brief Implements buildBaseAllRtcmOutputCommand. */
     CommandList buildBaseAllRtcmOutputCommand(const String &port, bool enabled,
                                               GnssSensorType sensorType)
     {
-        if (sensorType == GnssSensorType::Ublox)
-            return UbloxCommands::buildBaseAllRtcmOutputCommand(port, enabled);
-        if (sensorType == GnssSensorType::Unicore)
-            return UnicoreCommands::buildBaseAllRtcmOutputCommand(port, enabled);
+        if (sensorType == GnssSensorType::Ublox) return UbloxCommands::buildBaseAllRtcmOutputCommand(port, enabled);
+        if (sensorType == GnssSensorType::Unicore) return UnicoreCommands::buildBaseAllRtcmOutputCommand(port, enabled);
         return {};
     }
 
-/** @brief Implements buildRoverCommand. */
-    CommandList buildRoverCommand(GnssSensorType type)
-    {
-        if (type == GnssSensorType::Ublox)
-            return UbloxCommands::buildRoverCommand();
-        if (type == GnssSensorType::Unicore)
-            return UnicoreCommands::buildRoverCommand();
+    CommandList buildRoverCommand(GnssSensorType type) {
+        if (type == GnssSensorType::Ublox) return UbloxCommands::buildRoverCommand();
+        if (type == GnssSensorType::Unicore) return UnicoreCommands::buildRoverCommand();
         return {};
     }
-/** @brief Implements buildUbloxOutputConfigCommand. */
-    Command buildUbloxOutputConfigCommand(const GnssOptions &options)
-    {
+    Command buildUbloxOutputConfigCommand(const GnssOptions &options) {
         return UbloxCommands::buildOutputConfigCommand(options);
     }
+    void routeUbloxOutput(uint8_t *data, size_t length) { UbloxCommands::routeUbloxOutput(data, length); }
 #if PROGRAM_DEBUG
-/** @brief Implements debugCommand. */
     String debugCommand(const Command &command)
     {
         String result;
         for (uint8_t byte : command)
         {
-            std::array<char, 4> hex = {};
-            snprintf(hex.data(), hex.size(), "%02x", byte);
+            char hex[4];
+            snprintf(hex, sizeof(hex), "%02x", byte);
             if (!result.isEmpty())
                 result += ' ';
-            result += hex.data();
+            result += hex;
         }
         return result;
     }

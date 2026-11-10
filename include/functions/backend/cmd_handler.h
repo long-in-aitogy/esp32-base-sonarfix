@@ -4,12 +4,10 @@
 #include <Arduino.h>
 #include <vector>
 
-enum class cmd_action
-{
+typedef enum cmd_action {
     CMD_ACTION_NONE = 0,
     CMD_ACTION_ESP_RESTART = 1
-};
-using cmd_action_t = cmd_action;
+} cmd_action_t;
 
 std::vector<String> splitCommand(const String &command);
 

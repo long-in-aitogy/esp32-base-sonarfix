@@ -1,4 +1,4 @@
-#include "functions/system/cmd_handler.h"
+#include "functions/backend/cmd_handler.h"
 #include <vector>
 #include <Preferences.h>
 #include "Prog_Config.h"
@@ -13,10 +13,9 @@ extern Preferences prefs;
 
 namespace cmd_helper {
 
-/** @brief Implements printGnssResponse. */
     void printGnssResponse(const uint8_t *data, size_t length)
     {
-        auto printable = length > 0;
+        bool printable = length > 0;
         for (size_t i = 0; i < length; ++i) {
             if (data[i] < 0x20 && data[i] != '\r' && data[i] != '\n' && data[i] != '\t') {
                 printable = false;
@@ -47,20 +46,19 @@ namespace cmd_helper {
         Serial.println();
     }
 
-/** @brief Implements readGnssResponse. */
     void readGnssResponse()
     {
         constexpr uint32_t RESPONSE_TIMEOUT_MS = 500;
         constexpr uint32_t RESPONSE_IDLE_MS = 80;
         constexpr size_t RESPONSE_BUFFER_SIZE = 512;
-        std::array<uint8_t, RESPONSE_BUFFER_SIZE> response{};
-        auto length = 0;
+        uint8_t response[RESPONSE_BUFFER_SIZE] = {};
+        size_t length = 0;
         uint32_t lastByteAt = millis();
         const uint32_t startedAt = millis();
 
         while (millis() - startedAt < RESPONSE_TIMEOUT_MS) {
             while (Serial1.available() > 0) {
-                const auto value = Serial1.read();
+                const int value = Serial1.read();
                 if (length < RESPONSE_BUFFER_SIZE) {
                     response[length++] = static_cast<uint8_t>(value);
                 }
@@ -76,7 +74,7 @@ namespace cmd_helper {
         if (length == 0) {
             Serial.println("[GNSS RESPONSE] Khong co phan hoi trong thoi gian cho.");
         } else {
-            printGnssResponse(response.data(), length);
+            printGnssResponse(response, length);
         }
     }
 
@@ -85,7 +83,6 @@ namespace cmd_helper {
         const char *preferenceKey;
     };
 
-/** @brief Implements hasExactArgumentCount. */
     inline bool hasExactArgumentCount(const std::vector<String> &cmdWords, size_t expectedCount,
                             const char *commandName)
     {
@@ -98,19 +95,18 @@ namespace cmd_helper {
         return false;
     }
 
-/** @brief Implements saveStringPreference. */
     inline cmd_action_t saveStringPreference(const char *key, const String &value)
     {
         prefs.begin("myPrefs", false);
         prefs.putString(key, value);
         prefs.end();
-        return cmd_action_t::CMD_ACTION_NONE;
+        return CMD_ACTION_NONE;
     }
 
     inline cmd_action_t saveWifiSetting(bool ssidSetting, const String &value) {
         if (!(ssidSetting ? validWifiSsid(value) : validWifiPassword(value))) {
             Serial.println("[WIFI][ERROR] Invalid Wi-Fi credential.");
-            return cmd_action_t::CMD_ACTION_NONE;
+            return CMD_ACTION_NONE;
         }
         return saveStringPreference(ssidSetting ? "WIFI_SSID" : "WIFI_PASS", value);
     }
@@ -120,16 +116,15 @@ namespace cmd_helper {
         prefs.begin("myPrefs", false);
         prefs.putUShort(key, value);
         prefs.end();
-        return cmd_action_t::CMD_ACTION_NONE;
+        return CMD_ACTION_NONE;
     }
 
-/** @brief Implements saveIntPreference. */
     inline cmd_action_t saveIntPreference(const char *key, int value)
     {
         prefs.begin("myPrefs", false);
         prefs.putInt(key, value);
         prefs.end();
-        return cmd_action_t::CMD_ACTION_NONE;
+        return CMD_ACTION_NONE;
     }
 
     inline const char *findPreferenceKey(const String &command,
@@ -143,7 +138,6 @@ namespace cmd_helper {
         return nullptr;
     }
 
-/** @brief Implements sendGnssCommands. */
     inline void sendGnssCommands(const GnssCmdBuilder::CommandList &commands)
     {
         const GnssCmdBuilder::Command commandBytes = GnssCmdBuilder::commandListToBytes(commands);
@@ -165,12 +159,12 @@ namespace cmd_helper {
 std::vector<String> splitCommand(const String &command) {
     std::vector<String> cmdWords;
 
-    auto start = 0;
-    const auto commandLength = command.length();
+    int start = 0;
+    const int commandLength = command.length();
 
     while (start <= commandLength) {
-        const auto end = command.indexOf(' ', start);
-        auto word = end == -1 ? command.substring(start) : command.substring(start, end);
+        const int end = command.indexOf(' ', start);
+        String word = end == -1 ? command.substring(start) : command.substring(start, end);
         word.trim();
 
         if (!word.isEmpty()) {
@@ -187,14 +181,13 @@ std::vector<String> splitCommand(const String &command) {
     return cmdWords;
 }
 
-/** @brief Implements handleGnssBaseCommand. */
 cmd_action_t handleGnssBaseCommand(const std::vector<String> &cmdWords) {
     GnssCmdBuilder::GnssOptions options;
     options.ports = {"UART1"};
     options.outputMode = GnssCmdBuilder::OutputMode::RtcmOnly;
     GnssCmdBuilder::CommandList commands;
     prefs.begin("myPrefs", true);
-    const auto configuredSensorType = prefs.isKey("GNSS_MDL_TYPE")
+    const String configuredSensorType = prefs.isKey("GNSS_MDL_TYPE")
         ? prefs.getString("GNSS_MDL_TYPE")
         : "UBLOX";
     const GnssCmdBuilder::GnssSensorType sensorType =
@@ -202,63 +195,63 @@ cmd_action_t handleGnssBaseCommand(const std::vector<String> &cmdWords) {
     if (sensorType == GnssCmdBuilder::GnssSensorType::Invalid) {
         prefs.end();
         Serial.println("[MQTT COMMAND DOWNLINK] LOI - Chip GNSS dang o trang thai INVALID.");
-        return cmd_action_t::CMD_ACTION_NONE;
+        return CMD_ACTION_NONE;
     }
     prefs.end();
 
     if (cmdWords.empty()) {
         Serial.println("[MQTT COMMAND DOWNLINK] Error: Lenh GNSS BASE khong day du.");
-        return cmd_action_t::CMD_ACTION_NONE;
+        return CMD_ACTION_NONE;
     }
 
     if (cmdWords[0] == "SURVEY_IN") {
         Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh GNSS BASE SURVEY_IN");
         if (cmdWords.size() != 3 && cmdWords.size() != 4) {
             Serial.println("[MQTT COMMAND DOWNLINK] LOI - GNSS BASE SURVEY_IN can 2 hoac 3 tham so.");
-            return cmd_action_t::CMD_ACTION_NONE;
+            return CMD_ACTION_NONE;
         }
         if (cmdWords.size() == 4) {
-            auto outputMode = cmdWords[3];
+            String outputMode = cmdWords[3];
             outputMode.toUpperCase();
             if (outputMode != "W_DIAG") {
                 Serial.println("[MQTT COMMAND DOWNLINK] LOI - Tham so thu ba phai la W_DIAG.");
-                return cmd_action_t::CMD_ACTION_NONE;
+                return CMD_ACTION_NONE;
             }
             options.outputMode = GnssCmdBuilder::OutputMode::DiagnosticsRtcm;
         }
         uint32_t duration = cmdWords[1].toInt();
-        auto accuracy = cmdWords[2].toFloat();
+        float accuracy = cmdWords[2].toFloat();
         
         commands = GnssCmdBuilder::buildBaseSurveyInCommand(duration, accuracy, sensorType, options);
         cmd_helper::sendGnssCommands(commands);
         Serial.println("[MQTT COMMAND DOWNLINK] Da gui lenh cau hinh GNSS BASE SURVEY_IN.");
 
-        return cmd_action_t::CMD_ACTION_NONE;
+        return CMD_ACTION_NONE;
     } else if (cmdWords[0] == "FIXED") {
         Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh GNSS FIXED LLA");
         if (!cmd_helper::hasExactArgumentCount(cmdWords, 5, "GNSS BASE FIXED")) {
-            return cmd_action_t::CMD_ACTION_NONE;
+            return CMD_ACTION_NONE;
         }
-        auto lat = cmdWords[1].toDouble();
-        auto lon = cmdWords[2].toDouble();
-        auto alt = cmdWords[3].toDouble();
-        auto accuracy = cmdWords[4].toFloat();
+        double lat = cmdWords[1].toDouble();
+        double lon = cmdWords[2].toDouble();
+        double alt = cmdWords[3].toDouble();
+        float accuracy = cmdWords[4].toFloat();
 
         commands = GnssCmdBuilder::buildBaseFixedLlaCommand(lat, lon, alt, accuracy, sensorType, options);
         cmd_helper::sendGnssCommands(commands);
         Serial.println("[MQTT COMMAND DOWNLINK] Da gui lenh cau hinh GNSS BASE FIXED LLA.");
 
-        return cmd_action_t::CMD_ACTION_NONE;
+        return CMD_ACTION_NONE;
     } else if (cmdWords.size() == 3) {
-        auto message = cmdWords[0];
+        String message = cmdWords[0];
         message.toUpperCase();
-        auto action = cmdWords[2];
+        String action = cmdWords[2];
         action.toUpperCase();
         if (action != "ON" && action != "OFF") {
             Serial.println("[MQTT COMMAND DOWNLINK] LOI - Trang thai RTCM phai la ON hoac OFF.");
-            return cmd_action_t::CMD_ACTION_NONE;
+            return CMD_ACTION_NONE;
         }
-        const auto enabled = action == "ON";
+        const bool enabled = action == "ON";
         Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau " + action + " RTCM " + cmdWords[0] +
                        " tren cong " + cmdWords[1]);
         commands = message == "ALL"
@@ -266,54 +259,53 @@ cmd_action_t handleGnssBaseCommand(const std::vector<String> &cmdWords) {
             : GnssCmdBuilder::buildBaseRtcmOutputCommand(cmdWords[0], cmdWords[1], enabled, sensorType);
         if (commands.empty()) {
             Serial.println("[MQTT COMMAND DOWNLINK] LOI - RTCM message hoac cong khong hop le.");
-            return cmd_action_t::CMD_ACTION_NONE;
+            return CMD_ACTION_NONE;
         }
         cmd_helper::sendGnssCommands(commands);
         Serial.println("[MQTT COMMAND DOWNLINK] Da gui lenh RTCM.");
-        return cmd_action_t::CMD_ACTION_NONE;
+        return CMD_ACTION_NONE;
     } else {
         Serial.println("[MQTT COMMAND DOWNLINK] LOI - Lenh khong kha dung: " + cmdWords[0]);
-        return cmd_action_t::CMD_ACTION_NONE;
+        return CMD_ACTION_NONE;
     }
 }
 
-/** @brief Implements handleGnssSetCommand. */
 cmd_action_t handleGnssSetCommand(const std::vector<String> &cmdWords) {
     if (!cmd_helper::hasExactArgumentCount(cmdWords, 3, "GNSS SET")) {
-        return cmd_action_t::CMD_ACTION_NONE;
+        return CMD_ACTION_NONE;
     }
 
     if (cmdWords[1] != "CHIP") {
         Serial.println("[MQTT COMMAND DOWNLINK] LOI - Lenh GNSS SET khong kha dung.");
-        return cmd_action_t::CMD_ACTION_NONE;
+        return CMD_ACTION_NONE;
     }
 
-    auto sensorType = cmdWords[2];
+    String sensorType = cmdWords[2];
     sensorType.toUpperCase();
     if (sensorType != "UBLOX" && sensorType != "UNICORE") {
         Serial.println("[MQTT COMMAND DOWNLINK] LOI - Chip GNSS phai la UBLOX hoac UNICORE.");
-        return cmd_action_t::CMD_ACTION_NONE;
+        return CMD_ACTION_NONE;
     }
 
     cmd_helper::saveStringPreference("GNSS_MDL_TYPE", sensorType);
     Serial.println("[MQTT COMMAND DOWNLINK] Da chuyen chip GNSS sang " + sensorType +
                    ", dang khoi dong lai ESP32...");
-    return cmd_action_t::CMD_ACTION_ESP_RESTART;
+    return CMD_ACTION_ESP_RESTART;
 }
 
 static cmd_action_t handleEspConnectionSet(const std::vector<String> &cmdWords) {
     if (cmdWords[1] == "CONNECTION" && cmdWords[2] == "4G") {
         Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh 4G");
         cmd_helper::saveStringPreference("CONNECTION_TYPE", "4G");
-        return cmd_action_t::CMD_ACTION_ESP_RESTART;
+        return CMD_ACTION_ESP_RESTART;
     }
     if (cmdWords[1] == "CONNECTION" && cmdWords[2] == "WIFI") {
         Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh WIFI");
         cmd_helper::saveStringPreference("CONNECTION_TYPE", "WIFI");
-        return cmd_action_t::CMD_ACTION_ESP_RESTART;
+        return CMD_ACTION_ESP_RESTART;
     }
     Serial.println("[MQTT COMMAND DOWNLINK] This command is not yet implemented.");
-    return cmd_action_t::CMD_ACTION_NONE;
+    return CMD_ACTION_NONE;
 }
 
 static cmd_action_t handleEspValueSet(const std::vector<String> &cmdWords) {
@@ -346,21 +338,21 @@ static cmd_action_t handleEspValueSet(const std::vector<String> &cmdWords) {
             return cmd_helper::saveUShortPreference("BACKEND_PORT", static_cast<uint16_t>(port));
         }
         Serial.println("[BACKEND] Port must be 1..65535.");
-        return cmd_action_t::CMD_ACTION_NONE;
+        return CMD_ACTION_NONE;
     }
     Serial.println("[MQTT COMMAND DOWNLINK] This command is not yet implemented.");
-    return cmd_action_t::CMD_ACTION_NONE;
+    return CMD_ACTION_NONE;
 }
 
 cmd_action_t handleEspCommand(const std::vector<String> &cmdWords) {
     if (cmdWords.empty()) {
         Serial.println("[MQTT COMMAND DOWNLINK] Error: Lenh ESP khong day du.");
-        return cmd_action_t::CMD_ACTION_NONE;
+        return CMD_ACTION_NONE;
     }
 
     if (cmdWords[0] == "RESTART") {
         Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau khoi dong lai ESP32");
-        return cmd_action_t::CMD_ACTION_ESP_RESTART;
+        return CMD_ACTION_ESP_RESTART;
     }
 
     if (cmdWords[0] == "SET" && cmd_helper::hasExactArgumentCount(cmdWords, 3, "ESP SET")) {
@@ -372,19 +364,19 @@ cmd_action_t handleEspCommand(const std::vector<String> &cmdWords) {
     }
     
     Serial.println("[MQTT COMMAND DOWNLINK] This command is not yet implemented.");
-    return cmd_action_t::CMD_ACTION_NONE;
+    return CMD_ACTION_NONE;
 }
 
-/** @brief Implements handleMqttCommand. */
 cmd_action_t handleMqttCommand(const std::vector<String> &cmdWords) {
     if (cmd_helper::hasExactArgumentCount(cmdWords, 3, "MQTT" ) && cmdWords[0] == "SET") {
-        static constexpr std::array<cmd_helper::PreferenceMapping, 5> stringSettings{{
+        static constexpr cmd_helper::PreferenceMapping stringSettings[] = {
             {"SERVER", "MQTT_SERVER"}, {"USER", "MQTT_USER"},
             {"PASS", "MQTT_PASS"}, {"PUBTPCHEALTH", "TPC_HEALTH"},
             {"SUBTPCCMD", "TPC_SUB_CMD"},
-        }};
-        if (const char *key = cmd_helper::findPreferenceKey(cmdWords[1], stringSettings.data(),
-                                            std::size(stringSettings)); key != nullptr) {
+        };
+        const char *key = cmd_helper::findPreferenceKey(cmdWords[1], stringSettings,
+                                            sizeof(stringSettings) / sizeof(stringSettings[0]));
+        if (key != nullptr) {
             return cmd_helper::saveStringPreference(key, cmdWords[2]);
         }
         if (cmdWords[1] == "PORT") {
@@ -392,18 +384,18 @@ cmd_action_t handleMqttCommand(const std::vector<String> &cmdWords) {
         }
     }
     Serial.println("[MQTT COMMAND DOWNLINK] Lenh sai hoac khong kha dung.");
-    return cmd_action_t::CMD_ACTION_NONE;
+    return CMD_ACTION_NONE;
 }
 
-/** @brief Implements handleNtripCommand. */
 cmd_action_t handleNtripCommand(const std::vector<String> &cmdWords) {
     if (cmd_helper::hasExactArgumentCount(cmdWords, 3, "NTRIP") && cmdWords[0] == "SET") {
-        static constexpr std::array<cmd_helper::PreferenceMapping, 3> stringSettings{{
+        static constexpr cmd_helper::PreferenceMapping stringSettings[] = {
             {"CSTRADDR", "NTRIP_SERVER"}, {"MNTPNT", "NTRIP_MPT"},
             {"CSTRAUTH", "NT_AUTH_BS"},
-        }};
-        if (const char *key = cmd_helper::findPreferenceKey(cmdWords[1], stringSettings.data(),
-                                            std::size(stringSettings)); key != nullptr) {
+        };
+        const char *key = cmd_helper::findPreferenceKey(cmdWords[1], stringSettings,
+                                            sizeof(stringSettings) / sizeof(stringSettings[0]));
+        if (key != nullptr) {
             return cmd_helper::saveStringPreference(key, cmdWords[2]);
         }
         if (cmdWords[1] == "CSTRPORT") {
@@ -411,13 +403,13 @@ cmd_action_t handleNtripCommand(const std::vector<String> &cmdWords) {
         }
     }
     Serial.println("[MQTT COMMAND DOWNLINK] Lenh sai hoac khong kha dung.");
-    return cmd_action_t::CMD_ACTION_NONE;
+    return CMD_ACTION_NONE;
 }
 
 cmd_action_t handleGnssCommand(std::vector<String> &cmdWords) {
     if (cmdWords.size() < 3) {
         Serial.println("[MQTT COMMAND DOWNLINK] Error: Incomplete GNSS command.");
-        return cmd_action_t::CMD_ACTION_NONE;
+        return CMD_ACTION_NONE;
     }
     if (cmdWords.size() == 3 && cmdWords[2] == "ROVER") {
         if (backendAgent.workflowActive()) {
@@ -427,7 +419,7 @@ cmd_action_t handleGnssCommand(std::vector<String> &cmdWords) {
             Serial.println(confirmed ? "[GNSS ROVER] Rover va GGA da xac nhan"
                                      : "[GNSS ROVER][ERROR] Chua xac nhan Rover/GGA");
         }
-        return cmd_action_t::CMD_ACTION_NONE;
+        return CMD_ACTION_NONE;
     }
     if (cmdWords[2] == "BASE") {
         cmdWords.erase(cmdWords.begin(), cmdWords.begin() + 3);
@@ -438,22 +430,22 @@ cmd_action_t handleGnssCommand(std::vector<String> &cmdWords) {
         return handleGnssSetCommand(cmdWords);
     }
     Serial.println("[MQTT COMMAND DOWNLINK] Error: Unknown GNSS command: " + cmdWords[2]);
-    return cmd_action_t::CMD_ACTION_NONE;
+    return CMD_ACTION_NONE;
 }
 
 cmd_action_t handleConfigCommand(const std::vector<String> &cmdWords) {
-    if (cmdWords.size() < 3 || cmdWords[2] != "RESET") return cmd_action_t::CMD_ACTION_NONE;
+    if (cmdWords.size() < 3 || cmdWords[2] != "RESET") return CMD_ACTION_NONE;
     Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau reset ve cau hinh mac dinh");
     prefs.begin("myPrefs", false);
     prefs.putBool("NEED_RESET", true);
     prefs.end();
-    return cmd_action_t::CMD_ACTION_ESP_RESTART;
+    return CMD_ACTION_ESP_RESTART;
 }
 
 cmd_action_t handleCommand(std::vector<String> &cmdWords) {
     if (cmdWords.size() < 2 || cmdWords[0] != "ATG") {
         Serial.println("[MQTT COMMAND DOWNLINK] Error: Empty or invalid command format. Command must start with 'ATG'.");
-        return cmd_action_t::CMD_ACTION_NONE;
+        return CMD_ACTION_NONE;
     }
     if (cmdWords[1] == "GNSS") return handleGnssCommand(cmdWords);
     if (cmdWords[1] == "ESP") {
@@ -472,5 +464,5 @@ cmd_action_t handleCommand(std::vector<String> &cmdWords) {
         return handleConfigCommand(cmdWords);
     }
     Serial.println("[MQTT COMMAND DOWNLINK] Unknown command: " + cmdWords[1]);
-    return cmd_action_t::CMD_ACTION_NONE;
+    return CMD_ACTION_NONE;
 }

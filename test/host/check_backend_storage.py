@@ -79,8 +79,9 @@ void nvs_close(nvs_handle_t handle) { ++nativeCloses; handles.erase(handle); }
 namespace BackendAgentInternal {
 bool licenseMatchesSerial(const String &, const String &token) { return token == "test-license"; }
 }
-void setupNTRIP() {}
-void connectNTRIP() {}
+unsigned ntripSetups = 0, ntripConnects = 0;
+void setupNTRIP() { ++ntripSetups; }
+void connectNTRIP() { ++ntripConnects; }
 struct BackendAgent {
     String serialNumber_, deviceName_, sensorType_, baseConfig_, serviceConfig_, licenseToken_, lastCommandResult_,
            autoBaseProgress_, surveyInResult_, statusBootId_, agentState_;
@@ -163,6 +164,18 @@ int main() {
     payload.clear(); payload["stream_on_demand"] = false;
     assert(generated.executeServiceConfigCommand(payload.as<JsonObject>(), error, detail));
     deserializeJson(deployed, generated.serviceConfig_); assert(deployed["stream_active"] == true);
+    payload.clear(); payload["serverhost2"] = "custom.example"; payload["mountpoint2"] = "test";
+    const unsigned beforeChange = ntripSetups;
+    assert(generated.executeServiceConfigCommand(payload.as<JsonObject>(), error, detail));
+    assert(ntripSetups == beforeChange + 1 && ntripConnects == ntripSetups);
+    // A retry with a new command ID and reordered keys must preserve both sockets.
+    payload.clear(); payload["mountpoint2"] = "test"; payload["serverhost2"] = "custom.example";
+    for (int retry = 0; retry < 10; ++retry)
+        assert(generated.executeServiceConfigCommand(payload.as<JsonObject>(), error, detail));
+    assert(ntripSetups == beforeChange + 1 && ntripConnects == ntripSetups);
+    assert(detail == "service config unchanged; connections preserved");
+    deserializeJson(deployed, generated.serviceConfig_);
+    assert(deployed["mountpoint2"] == "test");
     payload.clear(); generated.workflow = true;
     assert(!generated.executeReferenceCheckCommand(payload.as<JsonObject>(), error, detail));
     generated.workflow = false;

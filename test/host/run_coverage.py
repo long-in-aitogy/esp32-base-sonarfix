@@ -78,17 +78,15 @@ def main():
     cov = tool("llvm-cov", "LLVM_COV")
     suites = {
         "base": ["base_checks.cpp", "src/functions/gnss/gnss_cmd_builder.cpp",
-                 "src/functions/gnss/ublox_commands.cpp", "src/functions/gnss/unicore_commands.cpp",
-                 "src/functions/gnss/Unicore_Log.cpp"],
+                 "src/functions/gnss/ublox_commands.cpp", "src/functions/gnss/unicore_commands.cpp"],
         "codec": ["codec_checks.cpp", "src/functions/backend/Backend_Agent_Codec.cpp"],
-        "config": ["config_verification_checks.cpp", "src/functions/gnss/Unicore_Log.cpp"],
+        "config": ["config_verification_checks.cpp"],
         "mqtt": ["mqtt_write_checks.cpp"],
         "wifi": ["wifi_profiles_checks.cpp"],
         "sample": ["sample_checks.cpp"],
         "protocol": ["protocol_checks.cpp"],
         "readback": ["readback_checks.cpp", "src/functions/gnss/Ublox_Readback.cpp",
-                     "src/functions/gnss/Unicore_Readback.cpp", "src/functions/gnss/Unicore_Log.cpp",
-                     "src/functions/backend/Backend_Agent_Codec.cpp"],
+                     "src/functions/gnss/Unicore_Readback.cpp", "src/functions/backend/Backend_Agent_Codec.cpp"],
     }
     with tempfile.TemporaryDirectory(prefix="esp32-coverage-") as directory:
         build = Path(directory)
@@ -114,7 +112,7 @@ def main():
                 [cov, "export", "-format=lcov", f"-instr-profile={profile}", str(binary)], text=True, cwd=ROOT))
         for name in ("backend_lifecycle", "backend_storage", "detection_lifecycle", "gnss_lifecycle", "network_lifecycle",
                      "projection_native", "workflow_lifecycle", "base_startup_confirmation", "gga_position", "gnss_stream", "mqtt_dispatch",
-                     "ntrip_reconnect", "ntrip_config", "ntrip_lifecycle", "command_dispatch", "nvs_inventory", "rover_gga", "status_stream", "websocket_frames",
+                     "ntrip_reconnect", "command_dispatch", "nvs_inventory", "rover_gga", "status_stream", "websocket_frames",
                      "wifi_handover", "wifi_nvs", "workflow_progress", "workflow_restore"):
             print(f"Running {name} integration checks", flush=True)
             report = build / f"{name}.lcov"

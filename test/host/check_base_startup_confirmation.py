@@ -10,7 +10,7 @@ helpers = source[source.index('double configNumber('):source.index('\n}\n\nbool 
 storage = (root / 'src/functions/backend/Backend_Agent_Storage.cpp').read_text()
 restore_progress = storage[storage.index('String restoreWorkflowProgress('):storage.index('} // namespace')]
 startup_readback = source[source.index('bool BackendAgent::readStartupReceiverMode('):source.index('\nvoid BackendAgent::reconcileBaseStartupReadback(')]
-reconcile = source[source.index('void BackendAgent::reconcileBaseStartupReadback('):]
+reconcile = source[source.index('void BackendAgent::reconcileBaseStartupReadback('):source.index('void BackendAgent::startBootAutoBaseWhenReady(')]
 verification = (root / 'src/functions/backend/Backend_Agent_Gnss.cpp').read_text()
 verification = verification[verification.index('bool BackendAgent::verifyUnicoreConfig('):verification.index('bool BackendAgent::verifyGnssConfig(')]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
@@ -163,7 +163,7 @@ with tempfile.TemporaryDirectory(prefix='base-confirmation-') as directory:
     compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     '-I' + str(root / 'include'),
-                    str(path / 'check.cpp'), str(root / 'src/functions/gnss/Unicore_Log.cpp'), '-o', str(path / 'check')], check=True)
+                    str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     run_cpp([str(path / 'check')], check=True)
 print('PASS: delayed Fixed LLA confirmation clears startup error; MODE coordinates confirm Unicore without BESTNAV; malformed modes, wrong coordinates and unrelated errors remain blocked')
 print('PASS: reboot drops interrupted Auto Base progress and preserves saved results')

@@ -6,8 +6,7 @@
 class BackendAgent;
 
 // RFC6455 client shared by Wi-Fi and cellular TCP transports.
-class BackendAgentWebsocket
-{
+class BackendAgentWebsocket {
 public:
     explicit BackendAgentWebsocket(BackendAgent *owner);
 

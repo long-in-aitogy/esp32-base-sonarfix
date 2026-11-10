@@ -9,15 +9,13 @@
 #include <type_traits>
 inline bool isDigit(char value) { return value >= '0' && value <= '9'; }
 
-class String : public std::string
-{
+class String : public std::string {
 public:
     using std::string::string;
     String(const std::string &value) : std::string(value) {}
-    template <class T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    template<class T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
     String(T value) : std::string(std::to_string(value)) {}
-    String(double value, unsigned precision)
-    {
+    String(double value, unsigned precision) {
         char buffer[100];
         snprintf(buffer, sizeof(buffer), "%.*f", precision, value);
         assign(buffer);
@@ -47,19 +45,12 @@ public:
         const auto start = find_first_not_of(" \r\n\t");
         *this = start == npos ? String() : String(substr(start, find_last_not_of(" \r\n\t") - start + 1));
     }
-    void toUpperCase()
-    {
-        std::transform(begin(), end(), begin(), [](unsigned char c)
-                       { return std::toupper(c); });
+    void toUpperCase() {
+        std::transform(begin(), end(), begin(), [](unsigned char c) { return std::toupper(c); });
     }
 };
-struct HostSerial
-{
-    template <class... Args>
-    void printf(const char *, Args...) const
-    {
-        // Host checks discard firmware diagnostics.
-    }
+struct HostSerial {
+    template<class... Args> void printf(const char *, Args...) {}
     void println(const char *) {}
 };
 inline HostSerial Serial;

@@ -4,7 +4,7 @@ import tempfile
 from host_coverage import compile_cpp, run_cpp, mapped
 
 root = Path(__file__).resolve().parents[2]
-path = root / 'src/functions/system/cmd_handler.cpp'
+path = root / 'src/functions/backend/cmd_handler.cpp'
 source = path.read_text()
 esp_functions = 'static cmd_action_t handleEspConnectionSet(' + source.split('static cmd_action_t handleEspConnectionSet(', 1)[1].split('cmd_action_t handleMqttCommand(', 1)[0]
 functions = 'cmd_action_t handleGnssCommand(' + source.split('cmd_action_t handleGnssCommand(', 1)[1]

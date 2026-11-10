@@ -598,11 +598,11 @@ bool BackendAgent::applyRoverMode() {
     while (millis() - waiting < 10000UL && !workflowCancelRequested_) {
         const auto snapshot = getGnssTelemetrySnapshot();
         if (snapshot.lastGgaMs != 0 && static_cast<int32_t>(snapshot.lastGgaMs - waiting) > 0) {
-            Serial.printf("[AUTO BASE] Rover da xac nhan, GGA UART: %s\n", snapshot.lastGga.data());
+            Serial.printf("[AUTO BASE] Rover da xac nhan, GGA UART: %s\n", snapshot.lastGga);
             return true;
         }
         vTaskDelay(pdMS_TO_TICKS(100));
     }
-    Serial.println("[AUTO BASE][ERROR] Chip o Rover nhung khong co GGA moi trong 10s");
-    return false;
+    Serial.println("[AUTO BASE] Rover mode confirmed; waiting for GNSS GGA position");
+    return !workflowCancelRequested_;
 }

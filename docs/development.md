@@ -89,10 +89,8 @@ build instructions use the same layout.
   recovery timing and transport client selection. Its MQTT-side helpers run
   with `tcpStreamMutex` held; maintenance acquires that mutex itself.
 - `src/functions/gnss/Gnss_Detection.cpp`: receiver identity probes and baud scan.
-- `src/functions/ntrip/ntrip_base.cpp`: source endpoints, configuration and correction uploads.
-- `src/functions/ntrip/ntrip_rover.cpp`: temporary Rover sessions, GGA and datum decoding.
-- `src/functions/ntrip/ntrip_common.cpp`: shared sockets, header validation and response reading.
-- `src/functions/system/cmd_handler.cpp`: serial/MQTT legacy ATG command routing.
+- `src/functions/ntrip/NTRIP_Handler_IP.cpp`: caster endpoints, authentication,
+  correction streaming and temporary rover sessions.
 
 The unused `bootstrapUM980`/`bootstrapUblox` UART configuration paths were
 removed. Receiver startup is owned by `Backend_Agent_Startup.cpp`; do not add
@@ -200,64 +198,3 @@ optional previous firmware root. The same WebSocket checks pass before and
 after extraction; all status JSON matches the pre-refactor snapshot. Existing
 Auto Base, mixed GNSS stream and MQTT dispatch checks and the PlatformIO build
 are the remaining regression gates. Hardware behavior has not been measured.
-
-## Selective sonarfix cleanup — 8 November 2026
-
-Reviewed `long-in-aitogy/esp32-base-sonarfix/develop` at
-`0d7eeb895b239be6494da20c3d71f0d9067d5459`. This is a selective port, not a full
-merge: earlier status, stream, command, startup and workflow extractions are
-already present locally. Adopt the latest NTRIP Base/Rover/common ownership split,
-endpoint configuration helpers and the `system/cmd_handler` directory placement.
-Endpoint state remains private to Base; Rover datum, counters and diagnostics
-remain private to Rover. Share only sockets, response parsing and the session
-flags needed to exclude simultaneous source/Rover traffic.
-
-Retain the local shared Base64/JSON helpers, full GNSS readback validation,
-multiline UNILOGLIST handling, WGS84/geoid/sigma fields, receiver detection and
-network recovery. Retain NVS APN overrides and connection defaults, MQTT input
-validation, workflow review/cancellation and reboot recovery. Do not restore dead
-GNSS bootstrap paths or change command byte types solely for style. The upstream
-Rover implementation lacks the current datum decoder, UART short-write handling,
-ICY single-line boundary and fixed status return (a 504-byte read is valid data).
-The upstream header timeout also uses an absolute millis deadline; retain the
-wraparound-safe elapsed-time calculation.
-
-The native endpoint check runs 68 configurations against both the previous
-monolith and the new loader and compares every serialized endpoint field.
-Existing reconnect, GGA and workflow restore harnesses follow the new source
-owners; coverage still maps unchanged production fragments to real source lines.
-CI builds and links firmware before inventorying coverage, then waits for the
-Sonar Quality Gate instead of treating successful scan submission as a gate pass.
-
-### Follow-up review of remaining cleanup
-
-A second comparison against the same sonarfix tip removes formatting/comment-only
-differences before reviewing incoming code. It also adopts the status early returns,
-explicit Survey-In state selection, shared loop for the two stream-status objects,
-and one transport connectivity snapshot per status report. All existing verification,
-NVS, GNSS quality units and workflow fields remain in the report. The native status
-harness compares all 144 cases against the previous firmware and retains 44 stream
-command checks under ASan/UBSan.
-
-The remaining parser cleanup separates RTCM accumulation and UBX header handling
-from mixed-stream dispatch. It preserves raw RTCM forwarding, malformed-byte
-reconsideration and the current ellipsoidal-height calculation. The u-blox routing
-cleanup separates key remapping and packet processing without replacing the local
-message-key table or the 64-entry VALSET packet limit. A deterministic comparison
-of 2,000 generated VALSET/CFG-MSG packets matches the previous routed bytes exactly.
-Durable regression cases cover truncated/malformed routing input, zero/maximum
-RTCM payloads, malformed UBX/RTCM header recovery and oversized UBX lengths.
-
-Do not copy the upstream u-blox table wholesale: it omits 1127 and changes the
-1094/1097 keys that the independent local vectors check. Do not revert the split
-VALSET builder to a single oversized packet. Other excluded changes are cosmetic
-array/byte/enum conversions, restored duplicate bootstrap/codec/storage/network
-implementations, older deployment defaults, and removals of local readback,
-WebSocket validation, datum conversion, startup and workflow protections. These
-are intentional differences, not unresolved merge conflicts.
-
-
-The [remaining sonarfix review](sonarfix-remaining-review.md) records the current
-upstream tip, excluded changes, feature-preservation checks and the reproduced
-legacy per-server stream-state failure. This is the disposition ledger for
-remaining upstream differences; it does not claim a complete ancestry merge.

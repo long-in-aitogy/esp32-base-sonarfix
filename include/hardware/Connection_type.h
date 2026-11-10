@@ -3,8 +3,7 @@
 
 #include <Arduino.h>
 
-enum class ConnectionType : uint8_t
-{
+enum class ConnectionType : uint8_t {
     WIFI,
     GSM,
 };
@@ -15,15 +14,11 @@ extern ConnectionType connectionType;
 
 void loadConnectionTypeFromPrefs();
 
-/** @brief Implements isWifiConnection. */
-inline bool isWifiConnection()
-{
+inline bool isWifiConnection() {
     return connectionType == ConnectionType::WIFI;
 }
 
-/** @brief Implements isGsmConnection. */
-inline bool isGsmConnection()
-{
+inline bool isGsmConnection() {
     return connectionType == ConnectionType::GSM;
 }
 

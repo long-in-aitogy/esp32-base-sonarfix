@@ -30,6 +30,13 @@ inline constexpr int MUTEX_TIMEOUT_MS = 1500; // Thời gian tối đa để ch�
 // Giá trị mặc định khi chưa có cấu hình NVS hoặc sau lệnh reset phần tương ứng.
 // Sửa header/nạp firmware/reboot không ghi đè cấu hình đã lưu.
 // Muốn dùng lại mặc định mới: gửi lệnh xóa/reset cấu hình NVS tương ứng.
+// Tài khoản rover chung để ESP32 lấy cải chính trong luồng Auto Base.
+inline constexpr char AUTO_BASE_CASTER_HOST[] = "aitogy.click";
+inline constexpr uint16_t AUTO_BASE_CASTER_PORT = 2101;
+inline constexpr char AUTO_BASE_CASTER_USER[] = "aitogy";
+inline constexpr char AUTO_BASE_CASTER_PASSWORD[] = "aitogy";
+inline constexpr char AUTO_BASE_CASTER_MOUNTPOINT[] = "test";
+
 inline constexpr char CONNECTION_PREFERENCE[] = "4G"; // "4G" hoặc "WIFI".
 static_assert(std::string_view(CONNECTION_PREFERENCE) == "4G" || std::string_view(CONNECTION_PREFERENCE) == "WIFI",
               "CONNECTION_PREFERENCE must be 4G or WIFI");

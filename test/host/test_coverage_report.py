@@ -29,8 +29,9 @@ class CoverageReportTests(unittest.TestCase):
             result = remap_lcov(f"SF:{harness}\nDA:{physical},3\nDA:{test},999\nend_of_record", [harness])
             self.assertIn(f"SF:{source.resolve()}\nDA:3,3", result)
             self.assertNotIn("999", result)
+            changed_fragment = fragment.replace('7', '8')
             with self.assertRaises(ValueError):
-                mapped(source, fragment.replace("7", "8"))
+                mapped(source, changed_fragment)
             source.write_text(fragment + "\n" + fragment)
             with self.assertRaises(ValueError):
                 mapped(source, fragment)

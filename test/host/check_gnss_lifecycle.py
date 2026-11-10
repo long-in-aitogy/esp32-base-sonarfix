@@ -22,7 +22,6 @@ harness=r'''
 #include "functions/gnss/Unicore_Reply.h"
 #include <cassert>
 #include <cstring>
-#include <array>
 constexpr unsigned VERIFICATION_DOCUMENT_SIZE=12288,MUTEX_TIMEOUT_MS=1500,GNSS_UNICORE_PORT=0;
 using QueueHandle_t=void*;using TaskHandle_t=void*;
 class Stream;
@@ -30,7 +29,7 @@ String operator+(const String &text,uint8_t value){return String(std::string(tex
 bool readOk=true,positionOk=true,mismatch=false,freshGga=true;
 unsigned saves=0,reconciled=0;
 void delay(unsigned ms){hostMillis+=ms;}
-struct GnssTelemetrySnapshot{uint32_t lastGgaMs=0;std::array<char,128> lastGga={'$','G','G','A'};};
+struct GnssTelemetrySnapshot{uint32_t lastGgaMs=0;char lastGga[128]="$GGA";};
 GnssTelemetrySnapshot getGnssTelemetrySnapshot(){GnssTelemetrySnapshot value;value.lastGgaMs=freshGga?millis():0;return value;}
 namespace BackendAgentInternal{String epochString(){return "123";}}
 UbxBaseStatus baseStatus;uint8_t observedMode[40]={};
@@ -148,7 +147,6 @@ with tempfile.TemporaryDirectory(prefix='gnss-lifecycle-') as directory:
     compile_cpp(['c++','-std=c++17','-DNATIVE_BUILD','-fsanitize=address,undefined','-I'+str(root/'test/host/readback'),
                  '-I'+str(root/'test/host'),'-I'+str(root/'include'),'-I'+str(root/'.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                  str(path/'check.cpp'),str(root/'src/functions/backend/Backend_Agent_Codec.cpp'),str(root/'src/functions/gnss/gnss_cmd_builder.cpp'),
-                 str(root/'src/functions/gnss/ublox_commands.cpp'),str(root/'src/functions/gnss/unicore_commands.cpp'),
-                 str(root/'src/functions/gnss/Unicore_Log.cpp'),'-o',str(path/'check')],check=True)
+                 str(root/'src/functions/gnss/ublox_commands.cpp'),str(root/'src/functions/gnss/unicore_commands.cpp'),'-o',str(path/'check')],check=True)
     run_cpp([str(path/'check')],check=True)
 print('PASS: complete GNSS verification/readback/polling, Survey-In persistence, ASCII ACK and UBX-confirmed Rover transitions')

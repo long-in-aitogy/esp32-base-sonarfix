@@ -14,10 +14,10 @@ harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include "functions/gnss/gnss_cmd_builder.h"
+#include "functions/gnss/Unicore_Config_Verification.h"
 #include "functions/backend/Base_Sample.h"
 #include "functions/backend/Vn2000_Datum.h"
 #include <cassert>
-#include <array>
 #include <cstring>
 #include <limits>
 #include <vector>
@@ -44,21 +44,25 @@ void stopNtrip(){++stops;}
 void stopNtripRover(){++stops;}
 void setupNTRIP(){++starts;}
 void connectNTRIP(){}
-bool startNtripRover(const String&,uint16_t,const String&,const String&,const String&,uint8_t){return startOk;}
-const char *ntripRoverLastError(){return "injected CORS disconnect";}
+bool startNtripRover(const String&,uint16_t,const String&,const String&,const String&,uint8_t,String *selected=nullptr,const String &receiverId=String()){if(startOk&&selected)*selected="SelectedFixed";return startOk;}
+const char *ntripRoverLastError(){
+    if(fault=="outside")return "ERROR - NO STATION WITHIN 20 KM";
+    if(fault=="in_range")return "ERROR - FIXED STATION IN RANGE UNAVAILABLE";
+    return "injected CORS disconnect";
+}
 Vn2000Datum sessionDatum;
 Vn2000Datum ntripRoverDatum(){return sessionDatum;}
 namespace BackendAgentInternal {
 String epochString(){return "123";}
 bool jsonBool(JsonObjectConst object,const String &key,bool fallback){return object[key].isNull()?fallback:object[key].as<bool>();}
 }
-struct GnssTelemetrySnapshot {uint32_t lastGgaMs; std::array<char,16> fixStatus{}; double latitude,longitude,altitude;};
+struct GnssTelemetrySnapshot {uint32_t lastGgaMs; const char *fixStatus; double latitude,longitude,altitude;};
 struct BackendAgent {
     struct AutoBaseLocationReply{char json[1536];};
     void *workflowTask_=nullptr,*autoBaseLocationQueue_=reinterpret_cast<void*>(1);
     bool workflowCancelRequested_=false,surveyInResultPending_=false;
     uint32_t surveyInTargetSeconds_=120;
-    String workflowKind_,workflowPayload_,autoBaseProgress_,agentState_,statusBootId_="boot-1";
+    String workflowKind_,workflowPayload_,autoBaseProgress_,agentState_,statusBootId_="boot-1",serialNumber_="esp_test";
     String baseConfig_=R"({"base_setup_method":"FIXED_LLA","coords":{"lat":21,"lon":105,"alt":12}})";
     String sensorType_="Ublox",baseStartupState_,baseStartupError_,receiverBaseReadback_;
     std::vector<String> phases;
@@ -68,18 +72,19 @@ struct BackendAgent {
     bool stopNtripRoverLocked();bool applyBaseCoordinates(double,double,double);
     bool restoreWorkflowBase(JsonObjectConst);void runWorkflow();
     bool runAutoBaseWorkflow(JsonObject);bool runReferenceCheckWorkflow(JsonObject);
-    bool waitForAutoBaseFix(uint32_t, uint8_t, bool &, String &);
-    bool collectAutoBaseSamples(int, std::vector<double> &, std::vector<double> &, std::vector<double> &, bool &, String &);
+    bool waitForAutoBaseFix(uint32_t, uint8_t, bool &, String &, const String &);
+    bool collectAutoBaseSamples(int, std::vector<double> &, std::vector<double> &, std::vector<double> &, bool &, String &, const String &);
     void setAgentState(const String &value){agentState_=value;}
     String normalAgentState()const{return "online";}
     void markStatusDirty(){
         DynamicJsonDocument progress(8192);deserializeJson(progress,autoBaseProgress_);
         phases.push_back(progress["phase"]|String());
     }
+    void publishConfigState(const String&){}
     bool saveStatePreferences(){++saves;return true;}
     bool applyRoverMode(){return roverOk;}
     bool writeGnssCommands(const GnssCmdBuilder::CommandList &commands){++receiverWrites;return restoreOk&&!commands.empty();}
-    bool refreshReceiverReadback(String&){receiverBaseReadback_=R"({"mode_kind":"base"})";return restoreOk;}
+    bool refreshReceiverReadback(String&){receiverBaseReadback_=fault=="outside"?R"({"mode_kind":"survey_in"})":R"({"mode_kind":"base"})";return restoreOk;}
 } *current=nullptr;
 void vTaskDelay(unsigned ticks){
     now+=ticks;
@@ -90,9 +95,7 @@ bool averaging(){return current->agentState_=="auto_setup_averaging"||current->a
 int loopNtripRover(){return (fault=="lose_wait"&&!averaging())||(fault=="lose_average"&&averaging())?504:200;}
 GnssTelemetrySnapshot getGnssTelemetrySnapshot(){
     bool fixed=fault!="no_fix"&&!(fault=="no_samples"&&averaging());
-    GnssTelemetrySnapshot snapshot{};snapshot.lastGgaMs=now;
-    std::strcpy(snapshot.fixStatus.data(),fixed?"RTK_FIXED":"SINGLE");
-    snapshot.latitude=21.0;snapshot.longitude=105.0;snapshot.altitude=12.0;return snapshot;
+    return {now,fixed?"RTK_FIXED":"SINGLE",21.0,105.0,12.0};
 }
 void xQueueReset(void*){}
 unsigned xQueueReceive(void*,void *target,unsigned ticks){
@@ -126,7 +129,9 @@ String phase(BackendAgent &agent){DynamicJsonDocument doc(8192);deserializeJson(
 int main(){
     for(unsigned mode=0;mode<4;++mode){
         BackendAgent agent;reset(agent);DynamicJsonDocument doc(8192);auto payload=config(doc);
-        if(mode){payload["enable_itrf_vn2000_transform"]=true;sessionDatum.has1025=mode==1;}
+        payload["enable_itrf_vn2000_transform"]=true;
+        if(mode){payload["ip"]=mode==2?"14.238.1.125":"vngeonet.vn";sessionDatum.has1025=mode==1;}
+        else sessionDatum.has1021=false;
         if(mode==2){payload["l0_deg"]=105;payload["k0"]=0.9999;}
         assert(agent.runAutoBaseWorkflow(payload)&&phase(agent)=="ready_for_review");
         DynamicJsonDocument progress(8192);deserializeJson(progress,agent.autoBaseProgress_);
@@ -141,15 +146,32 @@ int main(){
         if(fault=="rover")roverOk=false;
         if(fault=="start")startOk=false;
         if(fault=="cancel_wait")payload["fixed_streak_seconds"]=5;
-        if(fault=="datum"){payload["enable_itrf_vn2000_transform"]=true;sessionDatum.has1021=false;}
-        if(fault=="lookup"){payload["enable_itrf_vn2000_transform"]=true;sessionDatum.has1025=false;deliverLocation=false;}
-        if(fault=="shift"){payload["enable_itrf_vn2000_transform"]=true;payload["resN"]="bad";}
-        if(fault=="conversion"){payload["enable_itrf_vn2000_transform"]=true;sessionDatum.scale=0;}
+        if(fault=="datum"){payload["ip"]="vngeonet.vn";payload["enable_itrf_vn2000_transform"]=true;sessionDatum.has1021=false;}
+        if(fault=="lookup"){payload["ip"]="vngeonet.vn";payload["enable_itrf_vn2000_transform"]=true;sessionDatum.has1025=false;deliverLocation=false;}
+        if(fault=="shift"){payload["ip"]="vngeonet.vn";payload["enable_itrf_vn2000_transform"]=true;payload["resN"]="bad";}
+        if(fault=="conversion"){payload["ip"]="vngeonet.vn";payload["enable_itrf_vn2000_transform"]=true;sessionDatum.scale=0;}
         if(fault=="restore")restoreOk=false;
         if(fault=="lock")locked=true;
         assert(!agent.runAutoBaseWorkflow(payload));
         assert(phase(agent)==(fault=="cancel_wait"||fault=="cancel_average"?"stopped":"failed"));
         assert(saves>=1&&locks==unlocks&&agent.agentState_=="online");
+    }
+    {
+        BackendAgent agent;reset(agent);DynamicJsonDocument doc(8192);auto payload=config(doc);
+        payload["source_mode"]="nearest";
+        assert(agent.runAutoBaseWorkflow(payload));
+        DynamicJsonDocument progress(8192);deserializeJson(progress,agent.autoBaseProgress_);
+        assert(progress["conversion_report"]["source"]["mountpoint"]=="SelectedFixed");
+        assert(progress["conversion_report"]["source"]["requested_mountpoint"]=="BASE");
+    }
+    for(const char *rejection:{"outside","in_range"}){
+        BackendAgent agent;reset(agent);DynamicJsonDocument doc(8192);auto payload=config(doc);
+        payload["source_mode"]="nearest";fault=rejection;startOk=false;
+        bool outside=fault=="outside";
+        assert(agent.runAutoBaseWorkflow(payload)==outside);
+        assert(phase(agent)==(outside?"completed":"failed"));
+        assert(agent.surveyInResultPending_==outside);
+        assert(locks==unlocks);
     }
     for(const char *failure:{"success","missing","rover","start","no_fix","no_samples","lose_wait","lose_average","restore","lock"}){
         BackendAgent agent;reset(agent);DynamicJsonDocument doc(8192);auto payload=config(doc);fault=failure;
@@ -184,7 +206,6 @@ with tempfile.TemporaryDirectory(prefix='workflow-lifecycle-') as directory:
                  '-I'+str(root/'.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'), str(path/'check.cpp'),
                  str(root/'src/functions/backend/Backend_Agent_Projection.cpp'),
                  str(root/'src/functions/gnss/gnss_cmd_builder.cpp'),str(root/'src/functions/gnss/ublox_commands.cpp'),
-                 str(root/'src/functions/gnss/unicore_commands.cpp'),
-                 str(root/'src/functions/gnss/Unicore_Log.cpp'),'-o',str(path/'check')],check=True)
+                 str(root/'src/functions/gnss/unicore_commands.cpp'),'-o',str(path/'check')],check=True)
     run_cpp([str(path/'check')],check=True)
 print('PASS: complete Auto Base/reference lifecycle, real 60-sample averaging, review report, location fallback, cleanup, cancellation and disconnects')

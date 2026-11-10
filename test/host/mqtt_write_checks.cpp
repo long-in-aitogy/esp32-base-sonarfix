@@ -4,15 +4,12 @@
 #include <cstring>
 #include <vector>
 
-int main()
-{
+int main() {
     std::vector<uint8_t> packet(5411);
-    for (size_t i = 0; i < packet.size(); ++i)
-        packet[i] = static_cast<uint8_t>(i);
+    for (size_t i = 0; i < packet.size(); ++i) packet[i] = static_cast<uint8_t>(i);
     std::vector<uint8_t> received;
-    auto calls = 0;
-    auto fullWrite = [&received, &calls](const uint8_t *data, size_t count)
-    {
+    size_t calls = 0;
+    auto fullWrite = [&](const uint8_t* data, size_t count) {
         assert(count <= 1024);
         received.insert(received.end(), data, data + count);
         ++calls;
@@ -26,16 +23,15 @@ int main()
     assert(calls == 0);
     assert(writeMqttChunks(packet.data(), 20, fullWrite) == 20);
     calls = 0;
-    const auto shortWrite = [&calls](const uint8_t *, size_t count)
-    {
+    const auto shortWrite = [&](const uint8_t*, size_t count) {
         return ++calls == 2 ? size_t(17) : count;
     };
     assert(writeMqttChunks(packet.data(), packet.size(), shortWrite) == 1041);
     assert(calls == 2); // No replay or retry on a damaged MQTT stream.
     calls = 0;
-    assert(writeMqttChunks(packet.data(), packet.size(), [&](const uint8_t *, size_t)
-                           {
+    assert(writeMqttChunks(packet.data(), packet.size(), [&](const uint8_t*, size_t) {
         ++calls;
-        return size_t(0); }) == 0);
+        return size_t(0);
+    }) == 0);
     assert(calls == 1);
 }

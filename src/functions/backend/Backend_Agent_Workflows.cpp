@@ -1,10 +1,10 @@
 #include "functions/backend/Backend_Agent.h"
 #include "functions/backend/Backend_Agent_Internal.h"
 #include "Prog_Config.h"
-#include "functions/ntrip/ntrip_base.h"
-#include "functions/ntrip/ntrip_rover.h"
+#include "functions/ntrip/NTRIP_Handler_IP.h"
 #include "functions/ntrip/RTCM_Receiver.h"
 #include "functions/backend/Base_Sample.h"
+#include "functions/gnss/Unicore_Config_Verification.h"
 #include <cmath>
 #include <cstring>
 #include <vector>
@@ -60,6 +60,30 @@ bool acceptAutoBaseLocationReply(JsonObjectConst response, const String &request
     return !location.overflowed();
 }
 
+bool confirmsFixedCoordinates(JsonObjectConst base, JsonObjectConst readback, bool ublox) {
+    if (readback["state"] != "ok" || readback["mode_kind"] != "base") return false;
+    JsonObjectConst coords = base["coords"].as<JsonObjectConst>();
+    const double wantedLat = coordinateNumber(coords["lat"]);
+    const double wantedLon = coordinateNumber(coords["lon"]);
+    const double wantedAlt = coordinateNumber(coords["alt"]);
+    if (!std::isfinite(wantedLat) || !std::isfinite(wantedLon) || !std::isfinite(wantedAlt)) return false;
+    double actualLat = NAN, actualLon = NAN, actualAlt = NAN;
+    if (ublox) {
+        const JsonObjectConst bestpos = readback["bestpos"].as<JsonObjectConst>();
+        if (bestpos["state"] != "ok" || bestpos["position_type"] != "FIXEDPOS") return false;
+        actualLat = coordinateNumber(bestpos["lat"]);
+        actualLon = coordinateNumber(bestpos["lon"]);
+        actualAlt = coordinateNumber(bestpos["alt"]);
+    } else {
+        const String mode = readback["mode_raw"] | String();
+        if (!UnicoreConfigVerification::parseFixedMode(mode.c_str(), actualLat, actualLon, actualAlt)) return false;
+    }
+    return std::isfinite(actualLat) && std::isfinite(actualLon) && std::isfinite(actualAlt)
+        && std::abs(actualLat - wantedLat) <= 1e-8
+        && std::abs(actualLon - wantedLon) <= 1e-8
+        && std::abs(actualAlt - wantedAlt) <= 0.002;
+}
+
 }
 
 void BackendAgent::setWorkflowProgress(const String &phase, const uint8_t step,
@@ -111,7 +135,7 @@ void BackendAgent::requestWorkflowStop() {
 }
 
 void BackendAgent::workflowTaskThunk(void *parameter) {
-    auto *agent = static_cast<BackendAgent *>(parameter);
+    BackendAgent *agent = static_cast<BackendAgent *>(parameter);
     if (agent) {
         agent->runWorkflow();
         agent->workflowPayload_ = String();
@@ -188,9 +212,13 @@ bool BackendAgent::restoreWorkflowBase(JsonObjectConst base) {
     const double lat = coordinateNumber(coords["lat"]);
     const double lon = coordinateNumber(coords["lon"]);
     const double alt = coordinateNumber(coords["alt"]);
-    if (method.isEmpty() && !std::isfinite(lat) && !std::isfinite(lon) && !std::isfinite(alt)) {
+    if ((method.isEmpty() || method == "AUTO_CORS")
+        && !std::isfinite(lat) && !std::isfinite(lon) && !std::isfinite(alt)) {
         // An unconfigured receiver may remain Rover for review, but cannot publish a Base stream.
-        baseStartupState_ = "awaiting_configuration";
+        if (!applyRoverMode()) return fail("cannot restore unconfigured receiver to Rover mode");
+        baseStartupState_ = method == "AUTO_CORS"
+            && base["auto_cors_source_mode"] == "nearest"
+            ? "awaiting_auto_base" : "awaiting_configuration";
         markStatusDirty();
         return true;
     }
@@ -257,7 +285,7 @@ void BackendAgent::runWorkflow() {
     }
 }
 
-bool BackendAgent::waitForAutoBaseFix(uint32_t timeoutSeconds, uint8_t fixedStreakRequired, bool &cancelled, String &failureReason) {
+bool BackendAgent::waitForAutoBaseFix(uint32_t timeoutSeconds, uint8_t fixedStreakRequired, bool &cancelled, String &failureReason, const String &sourceMountpoint) {
     const uint32_t waitStartedMs = millis();
     uint32_t nextSecondMs = waitStartedMs;
     uint8_t fixedStreak = 0;
@@ -276,13 +304,14 @@ bool BackendAgent::waitForAutoBaseFix(uint32_t timeoutSeconds, uint8_t fixedStre
         if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
             nextSecondMs = now + 1000UL;
             const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus.data());
+            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
             fixedStreak = usable ? static_cast<uint8_t>(fixedStreak + 1) : 0;
             fixed = fixedStreak >= fixedStreakRequired;
             DynamicJsonDocument details(1024);
+            details["source_mountpoint"] = sourceMountpoint;
             details["timeout"] = timeoutSeconds;
             details["elapsed"] = (now - waitStartedMs) / 1000UL;
-            details["fix_status"] = snapshot.fixStatus.data();
+            details["fix_status"] = snapshot.fixStatus;
             details["fixed_streak"] = fixedStreak;
             details["fixed_streak_required"] = fixedStreakRequired;
             String serialized;
@@ -300,7 +329,7 @@ bool BackendAgent::waitForAutoBaseFix(uint32_t timeoutSeconds, uint8_t fixedStre
     return true;
 }
 
-bool BackendAgent::collectAutoBaseSamples(int configuredSamples, std::vector<double> &latitudes, std::vector<double> &longitudes, std::vector<double> &altitudes, bool &cancelled, String &failureReason) {
+bool BackendAgent::collectAutoBaseSamples(int configuredSamples, std::vector<double> &latitudes, std::vector<double> &longitudes, std::vector<double> &altitudes, bool &cancelled, String &failureReason, const String &sourceMountpoint) {
     constexpr uint16_t samplesNeeded = 60;
     constexpr uint32_t averagingSeconds = 60;
     setWorkflowProgress("averaging", 3, 4);
@@ -326,7 +355,7 @@ bool BackendAgent::collectAutoBaseSamples(int configuredSamples, std::vector<dou
         if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
             nextSecondMs = now + 1000UL;
             const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus.data());
+            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
             if (usable && snapshot.lastGgaMs != lastSampleGgaMs
                 && std::isfinite(snapshot.latitude) && std::isfinite(snapshot.longitude)
                 && std::isfinite(snapshot.altitude)
@@ -338,11 +367,12 @@ bool BackendAgent::collectAutoBaseSamples(int configuredSamples, std::vector<dou
                 altitudes.push_back(snapshot.altitude);
             }
             DynamicJsonDocument details(1200);
+            details["source_mountpoint"] = sourceMountpoint;
             details["samples_collected"] = latitudes.size();
             details["samples_target"] = samplesNeeded;
             details["averaging_seconds"] = averagingSeconds;
             details["elapsed"] = (now - averageStartedMs) / 1000UL;
-            details["fix_status"] = snapshot.fixStatus.data();
+            details["fix_status"] = snapshot.fixStatus;
             if (configuredSamples != samplesNeeded) {
                 details["requested_samples_overridden"] = configuredSamples;
             }
@@ -370,16 +400,18 @@ bool BackendAgent::collectAutoBaseSamples(int configuredSamples, std::vector<dou
 bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
     String host = payload["ip"] | String();
     host.trim();
-    const auto port = static_cast<uint16_t>(payload["port"] | 0);
+    const uint16_t port = static_cast<uint16_t>(payload["port"] | 0);
     const String username = payload["user"] | String();
     const String password = payload["password"] | String();
     const String mountpoint = payload["mountpoint"] | String();
-    const auto ntripVersion = static_cast<uint8_t>(payload["ntrip_version"] | 1);
+    const uint8_t ntripVersion = static_cast<uint8_t>(payload["ntrip_version"] | 1);
     const uint32_t timeoutSeconds = constrain(
         static_cast<uint32_t>(payload["timeout"] | 3600UL), 30UL, 86400UL);
-    const auto fixedStreakRequired = static_cast<uint8_t>(constrain(
+    const uint8_t fixedStreakRequired = static_cast<uint8_t>(constrain(
         static_cast<int>(payload["fixed_streak_seconds"] | 5), 1, 60));
 
+    const bool autoNearest = payload["source_mode"] == "nearest";
+    String selectedMountpoint;
     DynamicJsonDocument previousBase(CONFIG_DOCUMENT_SIZE);
     deserializeJson(previousBase, baseConfig_);
     // Startup can run 120 seconds while the saved UI preference remains 1800.
@@ -396,8 +428,19 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
         const bool baseRestored = roverStopped && restorePreviousBase();
         const bool transportRestored = baseRestored && restartConfiguredNtrip();
         const bool cleanupSucceeded = baseRestored && transportRestored;
+        JsonObjectConst savedCoords = previousBase["coords"].as<JsonObjectConst>();
+        if (savedCoords.isNull()) savedCoords = previousBase.as<JsonObjectConst>();
+        const bool savedCoordinatesExist = std::isfinite(coordinateNumber(savedCoords["lat"]))
+            && std::isfinite(coordinateNumber(savedCoords["lon"]))
+            && std::isfinite(coordinateNumber(savedCoords["alt"]));
+        if (cancelled && cleanupSucceeded && previousBase["base_setup_method"] == "AUTO_CORS"
+            && previousBase["auto_cors_source_mode"] == "nearest" && !savedCoordinatesExist) {
+            baseStartupState_ = "awaiting_configuration";
+            markStatusDirty();
+        }
         setAgentState(normalAgentState());
         DynamicJsonDocument details(1024);
+        if (!selectedMountpoint.isEmpty()) details["source_mountpoint"] = selectedMountpoint;
         if (!reason.isEmpty()) details["reason"] = reason;
         if (!transportRestored || !baseRestored) details["cleanup_error"] = "could not restore configured NTRIP transport";
         String serialized;
@@ -424,23 +467,71 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
         return false;
     }
 
+    if (autoNearest) {
+        setWorkflowProgress("wait_gga", 1, 4);
+        const uint32_t started = millis();
+        bool hasPosition = false;
+        while (!workflowCancelRequested_ && millis() - started < timeoutSeconds * 1000UL) {
+            const auto position = getGnssTelemetrySnapshot();
+            if (position.lastGgaMs != 0 && millis() - position.lastGgaMs < 3000UL
+                && std::isfinite(position.latitude) && std::abs(position.latitude) <= 90
+                && std::isfinite(position.longitude) && std::abs(position.longitude) <= 180
+                && (position.latitude != 0 || position.longitude != 0)) {
+                hasPosition = true;
+                break;
+            }
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+        if (!hasPosition || workflowCancelRequested_) {
+            finish(false, workflowCancelRequested_, "no valid GGA position for AutoNearest");
+            return false;
+        }
+    }
+
+    setWorkflowProgress("connect_caster", 1, 4);
+    Serial.printf("[AUTO BASE][CASTER] Connecting %s:%u/%s; AutoNearest=%s.\n",
+                  host.c_str(), port, mountpoint.c_str(), autoNearest ? "YES" : "NO");
     bool roverStarted = false;
     if (tcpStreamMutex
         && xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
         stopNtrip();
-        roverStarted = startNtripRover(host, port, username, password, mountpoint, ntripVersion);
+        roverStarted = startNtripRover(host, port, username, password, mountpoint, ntripVersion,
+                                      autoNearest ? &selectedMountpoint : nullptr,
+                                      autoNearest ? serialNumber_ : String());
         xSemaphoreGive(tcpStreamMutex);
     }
     if (!roverStarted) {
-        finish(false, false, "cannot connect to CORS rover mountpoint");
+        const String reason = ntripRoverLastError();
+        Serial.printf("[AUTO BASE][CASTER][REJECT] %s\n", reason.c_str());
+        if (payload["source_mode"] == "nearest" && reason == "ERROR - NO STATION WITHIN 20 KM"
+            && !workflowCancelRequested_) {
+            Serial.println("[AUTO BASE][FALLBACK] Caster reports no station within 20 km; starting Survey-In.");
+            DynamicJsonDocument survey(CONFIG_DOCUMENT_SIZE);
+            survey.set(previousBase.as<JsonObjectConst>());
+            survey["base_setup_method"] = "SURVEY_IN";
+            const bool surveyStarted = restoreWorkflowBase(survey.as<JsonObjectConst>());
+            if (surveyStarted && restartConfiguredNtrip()) {
+                Serial.printf("[AUTO BASE][SURVEY-IN] Started; target=%lu seconds; RTCM SOURCE restored.\n",
+                              static_cast<unsigned long>(surveyInTargetSeconds_));
+                setAgentState(normalAgentState());
+                setWorkflowProgress("completed", 4, 4,
+                    "{\"mode\":\"survey_in\",\"reason\":\"no_fixed_station_within_20_km\"}");
+                saveStatePreferences();
+                return true;
+            }
+            finish(false, false, "cannot start Survey-In fallback");
+            return false;
+        }
+        finish(false, workflowCancelRequested_, reason);
         return false;
     }
 
+    const String sourceMountpoint = autoNearest ? selectedMountpoint : mountpoint;
     setAgentState("auto_setup_wait_fix");
     setWorkflowProgress("wait_fix", 2, 4);
     bool cancelled = false;
     String failureReason;
-    if (!waitForAutoBaseFix(timeoutSeconds, fixedStreakRequired, cancelled, failureReason)) {
+    if (!waitForAutoBaseFix(timeoutSeconds, fixedStreakRequired, cancelled, failureReason, sourceMountpoint)) {
         finish(false, cancelled, failureReason);
         return false;
     }
@@ -448,7 +539,7 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
     setAgentState("auto_setup_averaging");
     const int configuredSamples = payload["samples"] | 60;
     std::vector<double> latitudes, longitudes, altitudes;
-    if (!collectAutoBaseSamples(configuredSamples, latitudes, longitudes, altitudes, cancelled, failureReason)) {
+    if (!collectAutoBaseSamples(configuredSamples, latitudes, longitudes, altitudes, cancelled, failureReason, sourceMountpoint)) {
         finish(false, cancelled, failureReason);
         return false;
     }
@@ -465,7 +556,9 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
     rawLongitude /= longitudes.size();
     rawAltitude /= altitudes.size();
 
-    const bool enableTransform = jsonBool(payload, "enable_itrf_vn2000_transform", true);
+    const bool enableTransform = (strcasecmp(host.c_str(), "vngeonet.vn") == 0
+        || strcasecmp(host.c_str(), "vngeonet.vn.") == 0 || host == "14.238.1.125")
+        && jsonBool(payload, "enable_itrf_vn2000_transform", true);
     setAgentState("auto_setup_base");
     DynamicJsonDocument location(2048);
     Vn2000Datum datum;
@@ -554,13 +647,18 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
     progress["sample_count"] = latitudes.size();
     progress["fixed_samples_only"] = true;
     progress["receiver_write_completed"] = false;
+    progress["source_mountpoint"] = sourceMountpoint;
     progress["transform_applied"] = enableTransform;
     JsonObject report = progress.createNestedObject("conversion_report");
     report["version"] = 1;
     report["input_coord"].set(raw);
     report["calculated_coord"].set(calculated);
     report["output_coord"].set(averaged);
-    report["source"]["host"] = host; report["source"]["port"] = port; report["source"]["mountpoint"] = mountpoint;
+    report["source"]["host"] = host; report["source"]["port"] = port; report["source"]["mountpoint"] = sourceMountpoint;
+    if (autoNearest) report["source"]["requested_mountpoint"] = mountpoint;
+    if (!String(payload["source_name"] | "").isEmpty()) report["source"]["station_name"] = payload["source_name"];
+    if (!String(payload["source_serial"] | "").isEmpty()) report["source"]["station_serial"] = payload["source_serial"];
+    if (!payload["source_distance_m"].isNull()) report["source"]["distance_m"] = payload["source_distance_m"];
     report["input_reference"] = "receiver_reported";
     report["output_reference"] = enableTransform ? "local_llh" : "receiver_reported";
     report["altitude_reference"] = "ELLIPSOID";
@@ -615,6 +713,65 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
         parameters["resN"] = datumParameterText(datum.resN); parameters["resE"] = datumParameterText(datum.resE); parameters["resHS"] = datumParameterText(datum.resHS);
     }
     if (progress.overflowed()) { finish(false, false, "Auto Base report exceeds memory capacity"); return false; }
+    const bool autoApply = payload["auto_apply"] | false;
+    if (autoApply) {
+        DynamicJsonDocument appliedBase(CONFIG_DOCUMENT_SIZE);
+        appliedBase.set(previousBase);
+        JsonObject applied = appliedBase.as<JsonObject>();
+        applied["base_setup_method"] = "AUTO_CORS";
+        applied["auto_cors_source_mode"] = "nearest";
+        applied["mode"] = "BASE";
+        applied["accuracy"] = 0.01;
+        applied["coordinate_source"] = "AUTO_CORS";
+        JsonObject appliedCoords = applied.createNestedObject("coords");
+        appliedCoords["lat"] = result.latitude;
+        appliedCoords["lon"] = result.longitude;
+        appliedCoords["alt"] = result.altitude;
+        appliedCoords["accuracy"] = 0.01;
+        appliedCoords["altitude_reference"] = "ELLIPSOID";
+        if (!restoreWorkflowBase(JsonObjectConst(applied))) {
+            finish(false, false, "receiver did not accept automatically measured Fixed LLA");
+            return false;
+        }
+        DynamicJsonDocument actualReadback(2048);
+        if (deserializeJson(actualReadback, receiverBaseReadback_) != DeserializationError::Ok
+            || !confirmsFixedCoordinates(JsonObjectConst(applied), actualReadback.as<JsonObjectConst>(), sensorType_ == "Ublox")) {
+            finish(false, false, "receiver readback did not match automatically measured Fixed LLA");
+            return false;
+        }
+        report["receiver_write_completed"] = true;
+        report["auto_applied"] = true;
+        progress["receiver_write_completed"] = true;
+        progress["auto_applied"] = true;
+        if (appliedBase.overflowed() || progress.overflowed()) {
+            finish(false, false, "Auto Base result exceeds memory capacity after applying Fixed LLA");
+            return false;
+        }
+        applied["conversion_report"].set(report);
+        const String previousConfig = baseConfig_;
+        baseConfig_.clear();
+        serializeJson(appliedBase, baseConfig_);
+        if (!saveStatePreferences()) {
+            baseConfig_ = previousConfig;
+            finish(false, false, "could not save automatically applied Fixed LLA");
+            return false;
+        }
+        publishConfigState("base_config_state");
+        if (!restartConfiguredNtrip()) {
+            baseConfig_ = previousConfig;
+            saveStatePreferences();
+            finish(false, false, "could not restore configured NTRIP after applying Fixed LLA");
+            return false;
+        }
+        setAgentState(normalAgentState());
+        String serialized;
+        serializeJson(progress, serialized);
+        setWorkflowProgress("completed", 4, 4, serialized);
+        saveStatePreferences();
+        Serial.printf("[AUTO BASE] Applied Fixed LLA; samples=%u; lat=%.17g; lon=%.17g; h=%.17g\n",
+            unsigned(latitudes.size()), result.latitude, result.longitude, result.altitude);
+        return true;
+    }
     if (!restorePreviousBase() || !restartConfiguredNtrip()) {
         finish(false, false, "cannot restore previous Base/NTRIP state after sampling"); return false;
     }
@@ -646,13 +803,13 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload) {
     const double restoreLongitude = storedCoordinates["lon"] | NAN;
     const double restoreAltitude = storedCoordinates["alt"] | NAN;
     const String host = payload["ip"] | String();
-    const auto port = static_cast<uint16_t>(payload["port"] | 0);
+    const uint16_t port = static_cast<uint16_t>(payload["port"] | 0);
     const String username = payload["user"] | String();
     const String password = payload["password"] | String();
     const String mountpoint = payload["mountpoint"] | String();
     const uint32_t timeoutSeconds = constrain(
         static_cast<uint32_t>(payload["timeout"] | 300UL), 30UL, 86400UL);
-    const auto requestedSamples = static_cast<uint16_t>(constrain(
+    const uint16_t requestedSamples = static_cast<uint16_t>(constrain(
         static_cast<int>(payload["samples"] | 60), 5, 120));
 
     auto cleanup = [&]() {
@@ -727,9 +884,9 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload) {
         if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
             nextSecondMs = now + 1000UL;
             const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-            fixed = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus.data());
+            fixed = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
             DynamicJsonDocument details(512);
-            details["fix_status"] = snapshot.fixStatus.data();
+            details["fix_status"] = snapshot.fixStatus;
             details["elapsed"] = (now - waitStartedMs) / 1000UL;
             String serialized;
             serializeJson(details, serialized);
@@ -768,7 +925,7 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload) {
         if (static_cast<int32_t>(now - nextSecondMs) >= 0) {
             nextSecondMs = now + 1000UL;
             const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus.data());
+            const bool usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus);
             if (usable && std::isfinite(snapshot.latitude) && std::isfinite(snapshot.longitude)
                 && std::isfinite(snapshot.altitude) && snapshot.latitude >= -90.0
                 && snapshot.latitude <= 90.0 && snapshot.longitude >= -180.0
@@ -780,7 +937,7 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload) {
             DynamicJsonDocument details(768);
             details["samples_collected"] = latitudes.size();
             details["samples_target"] = requestedSamples;
-            details["fix_status"] = snapshot.fixStatus.data();
+            details["fix_status"] = snapshot.fixStatus;
             String serialized;
             serializeJson(details, serialized);
             setWorkflowProgress("reference_check_averaging", 3, 4, serialized);

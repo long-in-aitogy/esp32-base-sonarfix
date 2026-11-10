@@ -6,11 +6,6 @@
 #include <cstdint>
 #include <vector>
 
-namespace UbloxCommands
-{
-    void routeUbloxOutput(uint8_t *data, size_t length);
-}
-
 namespace GnssCmdBuilder
 {
 
@@ -65,16 +60,12 @@ namespace GnssCmdBuilder
     CommandList buildBaseAllRtcmOutputCommand(const String &port, bool enabled,
                                               GnssSensorType sensorType);
     CommandList buildRoverCommand(GnssSensorType sensorType);
-/** @brief Implements routeUbloxOutput. */
-    inline void routeUbloxOutput(uint8_t *data, size_t length)
-    {
-        UbloxCommands::routeUbloxOutput(data, length);
-    }
+    void routeUbloxOutput(uint8_t *data, size_t length);
     Command commandListToBytes(const CommandList &commands);
 
-#if PROGRAM_DEBUG
+    #if PROGRAM_DEBUG
     String debugCommand(const Command &command);
-#endif
+    #endif
 
 } // namespace GnssCmdBuilder
 

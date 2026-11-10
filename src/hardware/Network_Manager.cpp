@@ -3,18 +3,18 @@
 #include "functions/backend/Backend_Agent.h"
 
 namespace {
-bool tryWifiFallback(bool protocolsRunning);
-void activateNetwork(ConnectionType type, bool protocolsRunning);
-void checkSimRecovery();
-void checkSimInternetFallback();
-void settleModemBeforeNtrip();
-void logNetworkStatus(bool force = false);
+static bool tryWifiFallback(bool protocolsRunning);
+static void activateNetwork(ConnectionType type, bool protocolsRunning);
+static void checkSimRecovery();
+static void checkSimInternetFallback();
+static void settleModemBeforeNtrip();
+static void logNetworkStatus(bool force = false);
 bool wifiFallbackActive = false;
 uint32_t lastSimProbeMs = 0;
 uint8_t simRecoverySuccesses = 0;
 
 // Called with the shared modem mutex held once worker tasks are running.
-bool tryWifiFallback(bool protocolsRunning) {
+static bool tryWifiFallback(bool protocolsRunning) {
     const bool simPreferred = isGsmConnection() || wifiFallbackActive;
     Serial.println("[NETWORK] Dang thu cac mang Wi-Fi da luu.");
     // setupWiFi disconnects STA before trying profiles. Release the caster's
@@ -35,7 +35,7 @@ bool tryWifiFallback(bool protocolsRunning) {
 }
 
 // Both switching directions close old sockets before selecting new clients.
-void activateNetwork(ConnectionType type, bool protocolsRunning) {
+static void activateNetwork(ConnectionType type, bool protocolsRunning) {
     if (protocolsRunning) {
         mqtt.disconnect();
         stopNtrip();
@@ -50,7 +50,7 @@ void activateNetwork(ConnectionType type, bool protocolsRunning) {
 }
 
 // Caller holds tcpStreamMutex after startup; connected() may issue modem AT.
-void logNetworkStatus(bool force) {
+static void logNetworkStatus(bool force) {
     static uint32_t lastLogMs = 0;
     const uint32_t now = millis();
     if (!force && now - lastLogMs < 30000UL) return;
@@ -62,28 +62,24 @@ void logNetworkStatus(bool force) {
                   isNtripConnected() ? "UP" : "DOWN");
     if (isWifiConnection()) {
         Serial.printf("[NETWORK][WIFI] connected=%s; SSID=%s; IP=%s; RSSI=%d dBm\n",
-                      WiFiClass::status() == WL_CONNECTED ? "YES" : "NO",
+                      WiFi.status() == WL_CONNECTED ? "YES" : "NO",
                       WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(), WiFi.RSSI());
     }
 }
 
 // Only Wi-Fi entered through SIM fallback is eligible for automatic return.
-void checkSimRecovery() {
+static void checkSimRecovery() {
     if (!wifiFallbackActive || !isWifiConnection()) return;
     const bool wifiConnected = WiFiClass::status() == WL_CONNECTED;
     const uint32_t now = millis();
-    
-    if (const uint32_t interval = wifiConnected ? 60000UL : 15000UL;
-            now - lastSimProbeMs < interval
-         ) return;
+    const uint32_t interval = wifiConnected ? 60000UL : 15000UL;
+    if (now - lastSimProbeMs < interval) return;
     lastSimProbeMs = now;
     // Avoid a blocking registration wait while healthy Wi-Fi carries traffic.
-    
-    if (const bool reachable = modem.isNetworkConnected()
+    const bool reachable = modem.isNetworkConnected()
         && (modem.isGprsConnected() || connectGSM(1))
         && probeMqttTransport(true);
-        !reachable) 
-    {
+    if (!reachable) {
         simRecoverySuccesses = 0;
         return;
     }
@@ -97,7 +93,7 @@ void checkSimRecovery() {
     logNetworkStatus(true);
 }
 
-void checkSimInternetFallback() {
+static void checkSimInternetFallback() {
     static uint32_t unavailableSinceMs = 0;
     static uint32_t lastWifiAttemptMs = 0;
     if (!isGsmConnection()) return;
@@ -117,7 +113,7 @@ void checkSimInternetFallback() {
     if (tryWifiFallback(true)) unavailableSinceMs = 0;
 }
 
-void settleModemBeforeNtrip() {
+static void settleModemBeforeNtrip() {
     Serial.println("[SETUP][NTRIP] Cho modem on dinh truoc khi bat tay NTRIP...");
     const uint32_t settleStart = millis();
     const uint32_t settleDurationMs = 600;

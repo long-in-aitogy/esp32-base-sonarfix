@@ -1,9 +1,8 @@
 #include "helper.h"
 #include "functions/backend/Backend_Agent.h"
 #include "functions/ntrip/RTCM_Receiver.h"
-#include "functions/system/cmd_handler.h"
-#include "functions/ntrip/ntrip_base.h"
-#include "functions/ntrip/ntrip_rover.h"
+#include "functions/backend/cmd_handler.h"
+#include "functions/ntrip/NTRIP_Handler_IP.h"
 #include "functions/gnss/Gnss_Detection.h"
 #include "hardware/Network_Manager.h"
 
@@ -15,8 +14,7 @@ Preferences prefs;
 
 extern PubSubClient mqtt;
 
-namespace
-{
+namespace {
     constexpr uint32_t GNSS_DATA_TIMEOUT_MS = 5000;
 
     // The MQTT task also runs WebSocket and JSON command handling, so it
@@ -26,8 +24,7 @@ namespace
     constexpr uint32_t NTRIP_TASK_STACK_BYTES = 6144;
     constexpr uint32_t HEALTH_TASK_STACK_BYTES = 4096;
 
-    struct RtcmState
-    {
+    struct RtcmState {
         uint32_t lastGnssReceptionMs = 0;
         bool hasGnssReception = false;
         RtcmMessageCounts messageCounts;
@@ -43,13 +40,11 @@ void initPrefs();
 static void serviceMqtt();
 
 __attribute__((noreturn)) void taskNtrip([[maybe_unused]] void *parameter);
-__attribute__((noreturn)) void healthCheckTask(void *parameter);
+__attribute__((noreturn)) void healthCheckTask([[maybe_unused]] void *parameter);
 __attribute__((noreturn)) void taskMQTT([[maybe_unused]] void *parameter);
 __attribute__((noreturn)) void taskSerialCommand([[maybe_unused]] void *parameter);
 
-/** @brief Implements setup. */
-void setup()
-{
+void setup() {
     static RtcmState rtcmState;
     Serial.begin(115200);
 
@@ -66,20 +61,19 @@ void setup()
     esp_bt_controller_mem_release(ESP_BT_MODE_BTDM);
 
     prefs.begin("myPrefs");
-    const auto needReset = prefs.getBool("NEED_RESET", true);
-    const auto restartCount = prefs.getInt("RSTRT_COUNT", 0);
+    const bool needReset = prefs.getBool("NEED_RESET", true);
+    const int restartCount = prefs.getInt("RSTRT_COUNT", 0);
     prefs.putInt("RSTRT_COUNT", restartCount + 1);
-    if (needReset)
-    {
+    if (needReset) {
         Serial.println("[SETUP] Khoi tao Preferences lan dau tien...");
         initPrefs();
     }
 
     loadConnectionTypeFromPrefs();
-    const auto gnssTX = TX_GNSS;
-    const auto gnssRX = RX_GNSS;
-    const auto rx2ModemTX = RX_TO_MODEM_TX;
-    const auto tx2ModemRX = TX_TO_MODEM_RX;
+    const int gnssTX = TX_GNSS;
+    const int gnssRX = RX_GNSS;
+    const int rx2ModemTX = RX_TO_MODEM_TX;
+    const int tx2ModemRX = TX_TO_MODEM_RX;
     prefs.end();
 
     Serial.println("[SETUP] Khoi dong UART GNSS: TX=" + String(gnssTX)
@@ -94,13 +88,10 @@ void setup()
 
     const GnssCmdBuilder::GnssSensorType detectedSensorType = detectGnssSensorType();
     const char *detectedSensorTypeName = "INVALID";
-    if (detectedSensorType == GnssCmdBuilder::GnssSensorType::Ublox)
-    {
+    if (detectedSensorType == GnssCmdBuilder::GnssSensorType::Ublox) {
         detectedSensorTypeName = "UBLOX";
         backendAgent.setDetectedChipIfUnknown("Ublox");
-    }
-    else if (detectedSensorType == GnssCmdBuilder::GnssSensorType::Unicore)
-    {
+    } else if (detectedSensorType == GnssCmdBuilder::GnssSensorType::Unicore) {
         detectedSensorTypeName = "UNICORE";
         backendAgent.setDetectedChipIfUnknown("Unicorecomm");
     }
@@ -111,24 +102,21 @@ void setup()
     Serial.println("[SETUP] Da nhan dien chip GNSS: " + String(detectedSensorTypeName));
 
     rtcmBufferMutex = xSemaphoreCreateMutex();
-    while (rtcmBufferMutex == nullptr)
-    {
+    while (rtcmBufferMutex == nullptr) {
         Serial.println("[ERROR] Tao mutex rtcmDataMutex that bai! Dang thu lai...");
         rtcmBufferMutex = xSemaphoreCreateMutex();
     }
     Serial.println("[SETUP] Tao mutex rtcmDataMutex thanh cong!");
 
     tcpStreamMutex = xSemaphoreCreateMutex();
-    while (tcpStreamMutex == nullptr)
-    {
+    while (tcpStreamMutex == nullptr) {
         Serial.println("[ERROR] Tao mutex tcpStreamMutex that bai! Dang thu lai...");
         tcpStreamMutex = xSemaphoreCreateMutex();
     }
     Serial.println("[SETUP] Tao mutex tcpStreamMutex thanh cong!");
 
     gnssSerialMutex = xSemaphoreCreateMutex();
-    while (gnssSerialMutex == nullptr)
-    {
+    while (gnssSerialMutex == nullptr) {
         Serial.println("[ERROR] Tao mutex gnssSerialMutex that bai! Dang thu lai...");
         gnssSerialMutex = xSemaphoreCreateMutex();
     }
@@ -142,8 +130,7 @@ void setup()
                             nullptr, 1, nullptr, 1);
 
 #ifndef NATIVE_BUILD
-    if (isGsmConnection())
-    {
+    if (isGsmConnection()) {
         SerialAT.begin(115200, SERIAL_8N1,
                        static_cast<uint8_t>(rx2ModemTX), static_cast<uint8_t>(tx2ModemRX));
         delay(500);
@@ -174,9 +161,8 @@ void setup()
     digitalWrite(LED_PIN, LOW);
 }
 
-__attribute__((noreturn)) void taskNtrip([[maybe_unused]] void *parameter)
-{
-    auto *const rtcmState = static_cast<RtcmState *>(parameter);
+__attribute__((noreturn)) void taskNtrip([[maybe_unused]] void *parameter) {
+    auto* const rtcmState = static_cast<RtcmState*>(parameter);
     Serial.println("[NTRIP TASK] Bat dau task NTRIP...");
     int loopStatus = 0;
 #if PROGRAM_DEBUG
@@ -185,36 +171,30 @@ __attribute__((noreturn)) void taskNtrip([[maybe_unused]] void *parameter)
 #endif
     while (true) {
         String rtcmRead;
-        if (rtcmBufferMutex && xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)))
-        {
+        if (rtcmBufferMutex && xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS))) {
             rtcmRead = receiveRtcmFromGnss();
-            if (!rtcmRead.isEmpty())
-            {
+            if (!rtcmRead.isEmpty()) {
                 rtcmState->lastGnssReceptionMs = millis();
                 rtcmState->hasGnssReception = true;
             }
             xSemaphoreGive(rtcmBufferMutex);
         }
 
-        if (isGsmConnection())
-        {
-            if (!xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)))
-            {
+        if (isGsmConnection()) {
+            if (!xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS))) {
                 vTaskDelay(pdMS_TO_TICKS(100));
                 continue;
             }
-            const auto gprsConnected = modem.isGprsConnected();
+            const bool gprsConnected = modem.isGprsConnected();
             xSemaphoreGive(tcpStreamMutex);
-            if (!gprsConnected)
-            {
+            if (!gprsConnected) {
                 // The network manager retries SIM or switches to Wi-Fi. Keep
                 // GNSS and the local console alive while connectivity recovers.
                 vTaskDelay(pdMS_TO_TICKS(1000));
                 continue;
             }
         }
-        if (xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)))
-        {
+        if (xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS))) {
             // loopNTRIP owns reconnect attempts and the per-endpoint backoff.
             loopStatus = loopNTRIP(rtcmRead);
             xSemaphoreGive(tcpStreamMutex);
@@ -252,7 +232,7 @@ __attribute__((noreturn)) void healthCheckTask([[maybe_unused]] void* const para
             if (xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS))) {
                 if (isGsmConnection()) signalQualityDbm = modem.getSignalQuality();
                 healthPayload = formDeviceHealthString(signalQualityDbm, gnssDataOk,
-                                                       messageCounts.values.data());
+                                                       messageCounts.values);
                 xSemaphoreGive(tcpStreamMutex);
             }
         }
@@ -262,8 +242,7 @@ __attribute__((noreturn)) void healthCheckTask([[maybe_unused]] void* const para
     }
 }
 
-__attribute__((noreturn)) void taskMQTT([[maybe_unused]] void *parameter)
-{
+__attribute__((noreturn)) void taskMQTT([[maybe_unused]] void *parameter) {
     Serial.println("[MQTT TASK] Bat dau task MQTT...");
     while (true) {
         if (tcpStreamMutex && xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS))) {
@@ -278,12 +257,10 @@ __attribute__((noreturn)) void taskMQTT([[maybe_unused]] void *parameter)
     }
 }
 
-__attribute__((noreturn)) void taskSerialCommand([[maybe_unused]] void *parameter)
-{
+__attribute__((noreturn)) void taskSerialCommand([[maybe_unused]] void *parameter) {
     SerialCommandProcessor commandProcessor;
     Serial.println("[SERIAL COMMAND TASK] Bat dau task lang nghe Serial...");
-    while (true)
-    {
+    while (true) {
         commandProcessor.processPending();
         vTaskDelay(pdMS_TO_TICKS(500));
     }
@@ -295,9 +272,7 @@ void loop() {
 }
 
 
-/** @brief Implements initPrefs. */
-void initPrefs()
-{
+void initPrefs() {
     prefs.clear();
     prefs.putBool("NEED_RESET", false);
     prefs.putInt("RSTRT_COUNT", 0);

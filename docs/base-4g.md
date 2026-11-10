@@ -6,19 +6,22 @@ Mặc định thiết bị dùng 4G; có thể chuyển sang Wi-Fi bằng lệnh
 
 ## Chức năng
 
-Khi bật nguồn, firmware nhận diện receiver và thiết lập Base trước khi chờ
-Wi-Fi/4G. Survey-In tự động lúc bật nguồn luôn chạy 120 giây. Thiết bị chưa
-có cấu hình dùng RTCM-only MSM4 + MSM7 và ngưỡng mặc định 5 m cho u-blox;
-cấu hình đầu ra đã lưu được giữ nguyên. UM đặt undulation bằng 0 trước khảo
-sát, không dùng giá trị 5 m làm tham số Distance.
+Khi bật nguồn, firmware nhận diện receiver rồi vào Rover để gửi GGA vị trí lên
+backend. Backend chọn trạm CORS gần nhất trong danh sách Rover mà chủ thiết bị
+có quyền dùng, sau đó gửi cấu hình NTRIP xuống ESP32. Khi RTK_FIXED và mẫu tọa
+độ đạt điều kiện, firmware tự áp dụng Fixed LLA, xác nhận readback rồi phát
+RTCM. Nếu người vận hành chọn Survey-In, thiết bị mới chạy khảo sát 120 giây.
+Thiết bị mới dùng RTCM-only MSM4 + MSM7; cấu hình đầu ra đã lưu được giữ lại.
+UM đặt undulation bằng 0 trước Survey-In.
 
-Thời lượng cấu hình Survey-In từ UI chỉ áp dụng cho lệnh người dùng bấm áp dụng;
-giá trị đó không đổi thời lượng tự động lúc khởi động.
+Thời lượng Survey-In cấu hình trên UI áp dụng khi người dùng chọn Survey-In;
+Survey-In không tự chạy khi bật nguồn.
 
 Fixed LLA đã lưu được khôi phục cùng quy ước độ cao và được đối chiếu với
-receiver trước khi cho phép kết nối phát NTRIP. Auto Base đã lưu được giữ
-nguyên. Khóa toàn bộ thiết bị ngăn bước tự cấu hình. Lỗi đọc/cấu hình được
-báo qua `system_info.base_startup`; không tự chuyển Fixed LLA lỗi sang Survey-In.
+receiver trước khi cho phép kết nối phát NTRIP. Auto Base gần nhất được chọn
+lại sau mỗi lần khởi động; Survey-In đã lưu tiếp tục chạy theo lựa chọn đó.
+Khóa toàn bộ thiết bị ngăn bước tự cấu hình. Trạng thái được báo qua
+`system_info.base_startup`.
 
 Mỗi lần ESP khởi động trong chế độ Survey-In, firmware gửi lại cấu hình khảo
 sát 120 giây, kể cả receiver vẫn báo MODE Survey-In. MODE không
@@ -35,12 +38,14 @@ tính và cờ valid/active; chỉ lưu kết quả khi valid=1 và active=0. T�
 | --- | --- | --- |
 | Tọa độ chính xác (`FIXED_LLA`) | `EXECUTE_RAW_COMMANDS` + `original_config` | Gửi nguyên lệnh tọa độ do backend tạo, lưu cấu hình và loại chip. |
 | Survey-in (`SURVEY_IN`) | `EXECUTE_RAW_COMMANDS` + `original_config` | Gửi lệnh khảo sát do backend tạo. Unicore dùng thời gian khảo sát; u-blox có thêm ngưỡng chính xác, đúng theo command builder của CORS. |
-| Auto base (`AUTO_CORS`) | `TRIGGER_AUTO_BASE` | Chuyển rover, nhận cải chính CORS, đợi RTK_FIXED với GGA mới, lấy mẫu, đặt lại base rồi phát RTCM tới caster. |
+| Auto base gần nhất (`AUTO_CORS`, `nearest`) | `TRIGGER_AUTO_BASE` hai bước | Chuyển Rover, gửi GGA lên backend, nhận profile NTRIP của CORS gần nhất, đợi RTK_FIXED, lấy mẫu hợp lệ, tự áp dụng Fixed LLA rồi phát RTCM. |
+| Auto base nhập tay (`AUTO_CORS`, `manual`) | `TRIGGER_AUTO_BASE` | Dùng IP/tài khoản/mountpoint do người vận hành nhập; kết quả được giữ để kiểm tra và duyệt trên UI. |
 | Khóa/mở trạm | `LOCK_DEVICE` / `UNLOCK_DEVICE` | Giữ kênh quản lý; ngừng output RTCM theo phạm vi khóa. |
 
 Base di động ở đây là bộ base có thể mang đến điểm đặt mới. Khi phát cải chính,
-anten vẫn phải đứng yên. Sau khi chuyển vị trí, chọn lại một trong ba chế độ;
-không tiếp tục dùng tọa độ của điểm đặt cũ.
+anten vẫn phải đứng yên. Auto Base gần nhất sẽ lấy vị trí hiện trường và chọn
+nguồn cải chính gần nhất; người vận hành cũng có thể nhập nguồn thủ công hoặc
+chọn Survey-In.
 
 Loại GNSS được chọn từ CORS (`sensor_type`: `Ublox` hoặc `Unicorecomm`), lưu
 trong NVS và dùng cho auto base. Cùng một firmware chứa cả hai bộ lệnh.

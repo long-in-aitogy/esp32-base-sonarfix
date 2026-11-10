@@ -16,10 +16,11 @@ source = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_text(
 functions = source.split('namespace {', 1)[1].split('\n}\n\nvoid BackendAgent::setWorkflowProgress', 1)[0]
 agent = (root / 'src/functions/backend/Backend_Agent.cpp').read_text()
 handler = 'void BackendAgent::handleControlAck(' + agent.split('void BackendAgent::handleControlAck(', 1)[1].split('\nvoid BackendAgent::onMqttMessage', 1)[0]
-ntrip = (root / 'src/functions/ntrip/ntrip_common.cpp').read_text()
-handshake = 'bool waitForNtripResponse(' + ntrip.split('bool waitForNtripResponse(', 1)[1].split('} // namespace ntrip_common', 1)[0]
+ntrip = (root / 'src/functions/ntrip/NTRIP_Handler_IP.cpp').read_text()
+handshake = 'bool waitForNtripResponse(' + ntrip.split('bool waitForNtripResponse(', 1)[1].split('\nvoid sendRoverGgaIfAvailable', 1)[0]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
 shim = shim.replace('    void trim() {', '''    int indexOf(const char *value) const { const auto p = find(value); return p == npos ? -1 : int(p); }
+    int indexOf(char value, int start) const { const auto p = find(value, start); return p == npos ? -1 : int(p); }
     void trim() {''')
 harness = r'''
 #include <cassert>
@@ -29,6 +30,7 @@ harness = r'''
 #include <fstream>
 #include <iterator>
 #include <ArduinoJson.h>
+#include "functions/gnss/Unicore_Config_Verification.h"
 uint32_t now = 1000;
 uint32_t millis() { return now; }
 void delay(uint32_t duration) { now += duration; }
@@ -101,12 +103,12 @@ int main(int argc, char **argv) {
     Client ntrip;
     ntrip.wire = "ICY 200 OK\r\n";
     ntrip.wire += char(0xD3); ntrip.wire += "datum-frame";
-    assert(waitForNtripResponse(ntrip, nullptr, true));
+    assert(waitForNtripResponse(ntrip, nullptr));
     assert(ntrip.available() && ntrip.read() == 0xD3);
     Client httpNtrip;
     httpNtrip.wire = "HTTP/1.1 200 OK\r\nServer: caster\r\n\r\n";
     httpNtrip.wire += char(0xD3);
-    assert(waitForNtripResponse(httpNtrip, nullptr, true));
+    assert(waitForNtripResponse(httpNtrip, nullptr));
     assert(httpNtrip.read() == 0xD3);
 }
 '''
@@ -115,6 +117,7 @@ with tempfile.TemporaryDirectory(prefix='esp-location-') as directory:
     (path / 'ack.json').write_text(json.dumps(ack))
     (path / 'check.cpp').write_text(shim + harness + functions + handler + handshake + checks)
     subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+                    '-I' + str(root / 'include'),
                     '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     subprocess.run([str(path / 'check'), str(path / 'ack.json')], check=True)
