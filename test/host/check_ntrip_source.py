@@ -21,6 +21,8 @@ harness = r'''
 #include <cstring>
 #include <map>
 #include <ArduinoJson.h>
+bool roverSessionActive=true, roverSessionAuthenticated=true;
+unsigned roverLastGgaMs=0;
 unsigned now=10000;
 uint32_t millis(){return now;}
 void delay(unsigned ms){now+=ms;}
@@ -57,6 +59,7 @@ struct Client {
     void print(const String&s){request=s;}
 } clients[2];
 Client&clientFor(uint8_t i){return clients[i];}
+bool ntripServerConnected(uint8_t);
 '''
 checks = r'''
 int main(){
@@ -67,6 +70,7 @@ int main(){
     assert(streamActive(0)&&!streamActive(1));
     backendAgent.config="{}"; loadEndpoints(); assert(!endpoints[0].enabled);
     backendAgent.config=R"({"server1_enabled":true,"serverhost1":"first","port1":2101,"mountpoint1":"///ONE","password1":"source-value","server2_enabled":true,"serverhost2":"second","port2":2201,"mountpoint2":"TWO","username2":"custom","password2":"other-value","ntrip_version2":2})";
+    const String validConfig=backendAgent.config;
     loadEndpoints();
     assert(endpoints[0].mountpoint=="ONE"&&endpoints[1].port==2201&&endpoints[1].enabled);
     assert(!streamActive(2));
@@ -97,6 +101,20 @@ int main(){
     assert(!safeNtripField("x\n")&&!safeNtripField("x\r"));
     endpoints[0].windowStartedMs=0;updateBps(endpoints[0]);
     assert(endpoints[0].windowStartedMs==now);
+    backendAgent.config=validConfig; clients[0]=Client{}; clients[1]=Client{};
+    assert(setupNTRIP()==0);
+    assert(&activeNtripClient()==&clients[0]);
+    assert(connectNTRIP()==0&&isNtripConnected());
+    assert(ntripServerConnected(1)&&ntripServerConnected(2));
+    assert(!ntripServerConnected(0)&&!ntripServerConnected(3));
+    endpoints[0].bytesInWindow=120;now+=1000;
+    assert(ntripServerBps(1)==120&&ntripServerBps(0)==0);
+    endpoints[1].lastError="diagnostic";
+    assert(ntripServerError(2)=="diagnostic"&&ntripServerError(3).isEmpty());
+    stopNtrip();
+    assert(!isNtripConnected()&&!roverSessionActive&&!roverSessionAuthenticated);
+    clients[0].accept=clients[1].accept=false;
+    assert(connectNTRIP()==-1);
 }
 '''
 production = section('bool safeNtripField(', 'NtripEndpoint endpoints[')
@@ -104,6 +122,8 @@ production += 'NtripEndpoint endpoints[NTRIP_SERVER_COUNT];\n'
 production += section('void clearEndpointState(', 'bool waitForNtripResponse(')
 production += section('bool waitForNtripResponse(', 'void sendRoverGgaIfAvailable(')
 production += section('bool connectEndpoint(', '} // namespace')
+production += section('Client &activeNtripClient()', 'static bool sendEndpointRtcm(')
+production += section('void stopNtrip()', 'bool startNtripRover(')
 with tempfile.TemporaryDirectory(prefix='ntrip-source-') as directory:
     build = Path(directory)
     (build / 'check.cpp').write_text(shim+harness+production+checks)
