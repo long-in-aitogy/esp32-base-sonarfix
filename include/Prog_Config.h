@@ -34,14 +34,7 @@ inline constexpr int MUTEX_TIMEOUT_MS = 1500; // Thời gian tối đa để ch�
 inline constexpr char AUTO_BASE_CASTER_HOST[] = "aitogy.click";
 inline constexpr uint16_t AUTO_BASE_CASTER_PORT = 2101;
 inline constexpr char AUTO_BASE_CASTER_USER[] = "aitogy";
-// Copy Auto_Base_Credentials.example.h to Auto_Base_Credentials.h locally.
-#if __has_include("Auto_Base_Credentials.h")
-#include "Auto_Base_Credentials.h"
-#endif
-#ifndef AUTO_BASE_CASTER_SECRET
-#define AUTO_BASE_CASTER_SECRET ""
-#endif
-inline constexpr char AUTO_BASE_CASTER_PASSWORD[] = AUTO_BASE_CASTER_SECRET;
+inline constexpr char AUTO_BASE_CASTER_PASSWORD[] = "aitogy";
 inline constexpr char AUTO_BASE_CASTER_MOUNTPOINT[] = "test";
 
 inline constexpr char CONNECTION_PREFERENCE[] = "4G"; // "4G" hoặc "WIFI".
