@@ -11,6 +11,7 @@
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
+#include <memory>
 #include <vector>
 
 class BackendAgentWebsocket;
@@ -21,6 +22,8 @@ struct GnssTelemetrySnapshot;
 class BackendAgent
 {
 public:
+    BackendAgent();
+    ~BackendAgent();
     void begin();
     bool initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected);
     void loop();
@@ -115,7 +118,7 @@ private:
 
     QueueHandle_t nmeaQueue_ = nullptr;
     QueueHandle_t rtcmQueue_ = nullptr;
-    BackendAgentWebsocket *websocket_ = nullptr;
+    std::unique_ptr<BackendAgentWebsocket> websocket_;
     TaskHandle_t workflowTask_ = nullptr;
     String workflowKind_;
     String workflowPayload_;

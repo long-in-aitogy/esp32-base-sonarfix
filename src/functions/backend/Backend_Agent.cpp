@@ -412,6 +412,9 @@ namespace
     TinyGsmClient backendWebsocketGsmClient(modem, 3);
 }
 
+BackendAgent::BackendAgent() = default;
+BackendAgent::~BackendAgent() = default;
+
 BackendAgent backendAgent;
 
 void BackendAgent::begin()
@@ -431,7 +434,7 @@ void BackendAgent::begin()
     }
     if (!websocket_)
     {
-        websocket_ = new BackendAgentWebsocket(this);
+        websocket_ = std::make_unique<BackendAgentWebsocket>(this);
     }
     // Initialize the WebSocket endpoint with the restored device identity and token.
     setupWebsocket();
