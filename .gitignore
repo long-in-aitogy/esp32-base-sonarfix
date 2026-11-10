@@ -11,3 +11,5 @@ compile_commands.json
 coverage.xml
 cpp-coverage.xml
 cpp-baseline.lcov
+
+include/Auto_Base_Credentials.h

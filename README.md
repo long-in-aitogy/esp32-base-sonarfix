@@ -206,3 +206,7 @@ Các lệnh này cấu hình module GNSS ở chế độ base và được gửi
 | `ATG CONFIG RESET` | Đánh dấu khôi phục cấu hình mặc định, sau đó khởi động lại ESP32. Lần khởi động kế tiếp sẽ xóa toàn bộ cấu hình đã lưu trong Preferences và nạp lại giá trị mặc định. |
 
 > Lệnh JSON từ CORS phản hồi qua `last_command_result` trong gói status MQTT/WebSocket. Lệnh `ATG` cũ vẫn ghi kết quả lên Serial Monitor; lệnh GNSS báo lỗi khi thiếu hoặc thừa tham số.
+
+### Auto Base caster credential
+
+Copy `include/Auto_Base_Credentials.example.h` to `include/Auto_Base_Credentials.h` and set `AUTO_BASE_CASTER_SECRET` before building for a device. The local header is ignored by Git. CI builds without a caster credential; Auto Base requires the configured credential on the device.
