@@ -135,7 +135,10 @@ int main(){
         for(const auto &command:commands)Serial1.replies.push_back(ubx(5,1,{command[2],command[3]}));
         std::vector<uint8_t> mode(40);mode[2]=failure==2?1:0;Serial1.replies.push_back(ubx(6,0x71,mode));
         if(failure==3)deniedLock=gnssSerialMutex;if(failure==4)Serial1.shortWrite=true;
-        assert(agent.applyRoverMode()==(failure==0));assert(acquiredLocks==releasedLocks);
+        // Confirmed Rover may wait for GGA in the Auto Base position loop.
+        assert(agent.applyRoverMode()==(failure==0 || failure==1));
+        if(failure==1)assert(millis()>=11000);
+        assert(acquiredLocks==releasedLocks);
     }
     resetUart();agent.sensorType_="Unicorecomm";for(const char *name:{"mode","gpgga","gpgst","saveconfig"})ascii(name);
     assert(agent.applyRoverMode());resetUart();assert(!agent.writeGnssCommands({{'m','o','d','e',' ','r','o','v','e','r'}}));

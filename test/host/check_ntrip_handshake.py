@@ -1,6 +1,6 @@
 """A persistent SOURCE ACK must not hold the transport lock for 10 seconds."""
 from pathlib import Path
-import subprocess
+from host_coverage import compile_cpp, run_cpp, mapped
 import tempfile
 
 root = Path(__file__).resolve().parents[2]
@@ -49,8 +49,8 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='esp-ntrip-handshake-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + harness + handshake + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
+    (path / 'check.cpp').write_text(shim + harness + mapped(root / 'src/functions/ntrip/NTRIP_Handler_IP.cpp', handshake) + checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
                     '-fsanitize=address,undefined', str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: two immediate SOURCE ACKs, rover bytes, HTTP mountpoint header, rejection and timeout')

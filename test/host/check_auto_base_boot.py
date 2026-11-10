@@ -1,6 +1,6 @@
 """Every power cycle requests fresh AutoNearest, including after saved Fixed LLA."""
 from pathlib import Path
-import subprocess
+from host_coverage import compile_cpp, run_cpp, mapped
 import tempfile
 
 root = Path(__file__).resolve().parents[2]
@@ -96,9 +96,9 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='auto-base-boot-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + harness + startup + local_start + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    (path / 'check.cpp').write_text(shim + harness + mapped(root / 'src/functions/backend/Backend_Agent_Startup.cpp', startup) + mapped(root / 'src/functions/backend/Backend_Agent_Startup.cpp', local_start) + checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: fresh AutoNearest at boot for both chips and saved modes; options, lock, persistence failure and detection retry')

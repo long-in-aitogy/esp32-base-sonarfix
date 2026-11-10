@@ -33,6 +33,7 @@ struct BackendAgent {
     GnssCmdBuilder::GnssOptions restoredOptions;
     bool restoreWorkflowBase(JsonObjectConst);
     bool restoreSnapshot();
+    bool applyRoverMode() { ++writes; survey = false; return !reject; }
     String baseConfig_;
     uint32_t surveyInTargetSeconds_ = 120;
     bool applyBaseCoordinates(double lat, double lon, double alt) { ++writes; survey = false; return !reject && std::isfinite(lat+lon+alt); }
@@ -115,6 +116,10 @@ int main() {
     config.clear(); config.to<JsonObject>();
     assert(agent.restoreWorkflowBase(config.as<JsonObjectConst>()));
     assert(agent.baseStartupState_ == "awaiting_configuration" && !agent.baseStartupConfigured());
+    agent.reject = true;
+    assert(!agent.restoreWorkflowBase(config.as<JsonObjectConst>()));
+    assert(agent.baseStartupState_ == "error");
+    agent.reject = false;
     client.data = {0xd3,0,1,0x66};
     assert(loopNtripRover() == 200);
     assert(roverBytesReceived == 4 && roverBytesWritten == 4 && Serial1.data.size() == 4);
