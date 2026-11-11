@@ -32,6 +32,7 @@ template<class T,class L,class H> T constrain(T value,L low,H high){return value
 void *tcpStreamMutex=reinterpret_cast<void*>(1);
 bool locked=false, createTaskOk=true, roverOk=true, startOk=true, restoreOk=true, deliverLocation=true;
 bool stopOk=true;
+GnssCmdBuilder::CommandList receiverCommands;
 std::string fault;
 unsigned locks=0,unlocks=0,stops=0,starts=0,saves=0,taskDeletes=0,receiverWrites=0;
 BaseType_t xTaskCreatePinnedToCore(void(*)(void*),const char*,unsigned,void*,unsigned,void **task,unsigned){
@@ -83,8 +84,8 @@ struct BackendAgent {
     void publishConfigState(const String&){}
     bool saveStatePreferences(){++saves;return true;}
     bool applyRoverMode(){return roverOk;}
-    bool writeGnssCommands(const GnssCmdBuilder::CommandList &commands){++receiverWrites;return restoreOk&&!commands.empty();}
-    bool refreshReceiverReadback(String&){receiverBaseReadback_=fault=="outside"?R"({"mode_kind":"survey_in"})":R"({"mode_kind":"base"})";return restoreOk;}
+    bool writeGnssCommands(const GnssCmdBuilder::CommandList &commands){++receiverWrites;receiverCommands=commands;return restoreOk&&!commands.empty();}
+    bool refreshReceiverReadback(String&){receiverBaseReadback_=fault=="outside"?R"({"mode_kind":"survey_in"})":R"({"state":"ok","mode_kind":"base","mode_raw":"MODE BASE 21 105 12"})";return restoreOk;}
 } *current=nullptr;
 void vTaskDelay(unsigned ticks){
     now+=ticks;
@@ -127,6 +128,27 @@ JsonObject config(DynamicJsonDocument &doc){
 }
 String phase(BackendAgent &agent){DynamicJsonDocument doc(8192);deserializeJson(doc,agent.autoBaseProgress_);return doc["phase"]|String();}
 int main(){
+    {
+        BackendAgent agent; reset(agent); agent.sensorType_="Unicorecomm";
+        assert(agent.applyBaseCoordinates(21,105,12));
+        std::string output;
+        for(const auto &command:receiverCommands) output.append(command.begin(),command.end());
+        assert(output.find("mode base ")!=std::string::npos);
+        assert(output.find("rtcm1006 ")!=std::string::npos);
+        assert(output.find("saveconfig")!=std::string::npos);
+        for(const char *nmea:{"gpgga ","glgga ","gagga ","bdgga "})
+            assert(output.find(nmea)==std::string::npos);
+    }
+    {
+        BackendAgent agent;reset(agent);agent.sensorType_="Unicorecomm";
+        DynamicJsonDocument doc(8192);auto payload=config(doc);
+        payload["source_mode"]="nearest";payload["auto_apply"]=true;
+        assert(agent.runAutoBaseWorkflow(payload)&&phase(agent)=="completed");
+        DynamicJsonDocument saved(8192);deserializeJson(saved,agent.baseConfig_);
+        assert(saved["base_setup_method"]=="FIXED_LLA");
+        assert(saved["coordinate_source"]=="AUTO_CORS");
+        assert(saved["coords"]["lat"].as<double>()==21.0);
+    }
     for(unsigned mode=0;mode<4;++mode){
         BackendAgent agent;reset(agent);DynamicJsonDocument doc(8192);auto payload=config(doc);
         payload["enable_itrf_vn2000_transform"]=true;
@@ -171,6 +193,12 @@ int main(){
         assert(agent.runAutoBaseWorkflow(payload)==outside);
         assert(phase(agent)==(outside?"completed":"failed"));
         assert(agent.surveyInResultPending_==outside);
+        if (outside) {
+            DynamicJsonDocument saved(8192);deserializeJson(saved,agent.baseConfig_);
+            assert(saved["base_setup_method"]=="SURVEY_IN" && saved["coords"].isNull());
+            DynamicJsonDocument progress(8192);deserializeJson(progress,agent.autoBaseProgress_);
+            assert(progress["mode"]=="survey_in" && progress["receiver_write_completed"]==true);
+        }
         assert(locks==unlocks);
     }
     for(const char *failure:{"success","missing","rover","start","no_fix","no_samples","lose_wait","lose_average","restore","lock"}){

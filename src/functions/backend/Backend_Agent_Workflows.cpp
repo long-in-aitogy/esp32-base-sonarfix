@@ -190,6 +190,7 @@ bool BackendAgent::applyBaseCoordinates(const double latitude, const double long
     if (sensorType_ != "Ublox" && sensorType_ != "Unicorecomm") return false;
     GnssCmdBuilder::GnssOptions options;
     options.ports = {"UART1"};
+    options.outputMode = GnssCmdBuilder::OutputMode::RtcmOnly;
     return writeGnssCommands(GnssCmdBuilder::buildBaseFixedLlaCommand(
         latitude, longitude, altitude, 0.01f,
         sensorType_ == "Ublox" ? GnssCmdBuilder::GnssSensorType::Ublox
@@ -509,14 +510,26 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
             DynamicJsonDocument survey(CONFIG_DOCUMENT_SIZE);
             survey.set(previousBase.as<JsonObjectConst>());
             survey["base_setup_method"] = "SURVEY_IN";
+            survey.remove("coords");
+            survey.remove("coordinate_source");
+            survey.remove("conversion_report");
             const bool surveyStarted = restoreWorkflowBase(survey.as<JsonObjectConst>());
             if (surveyStarted && restartConfiguredNtrip()) {
+                const String oldConfig = baseConfig_;
+                baseConfig_.clear();
+                serializeJson(survey, baseConfig_);
+                if (!saveStatePreferences()) {
+                    baseConfig_ = oldConfig;
+                    finish(false, false, "cannot save Survey-In fallback");
+                    return false;
+                }
                 Serial.printf("[AUTO BASE][SURVEY-IN] Started; target=%lu seconds; RTCM SOURCE restored.\n",
                               static_cast<unsigned long>(surveyInTargetSeconds_));
                 setAgentState(normalAgentState());
                 setWorkflowProgress("completed", 4, 4,
-                    "{\"mode\":\"survey_in\",\"reason\":\"no_fixed_station_within_20_km\"}");
+                    "{\"mode\":\"survey_in\",\"auto_applied\":true,\"receiver_write_completed\":true,\"reason\":\"no_fixed_station_within_20_km\"}");
                 saveStatePreferences();
+                publishConfigState("base_config_state");
                 return true;
             }
             finish(false, false, "cannot start Survey-In fallback");
@@ -718,7 +731,7 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
         DynamicJsonDocument appliedBase(CONFIG_DOCUMENT_SIZE);
         appliedBase.set(previousBase);
         JsonObject applied = appliedBase.as<JsonObject>();
-        applied["base_setup_method"] = "AUTO_CORS";
+        applied["base_setup_method"] = "FIXED_LLA";
         applied["auto_cors_source_mode"] = "nearest";
         applied["mode"] = "BASE";
         applied["accuracy"] = 0.01;
