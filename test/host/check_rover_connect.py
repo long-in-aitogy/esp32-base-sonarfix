@@ -12,6 +12,7 @@ shim = shim.replace('    void trim()', '''    bool startsWith(const String &valu
     void remove(unsigned start, unsigned count) { erase(start, count); }
     void remove(unsigned start) { erase(start); }
     int indexOf(const char *s) const { auto p = find(s); return p == npos ? -1 : int(p); }
+    int indexOf(char c, unsigned start) const { auto p = find(c, start); return p == npos ? -1 : int(p); }
     String substring(unsigned start, unsigned end) const { return substr(start, end - start); }
     void trim()''').replace('    void println(const char *) {}', '    void println(const char *) {}\n    void println(const String &) {}')
 harness = r'''
@@ -47,6 +48,9 @@ bool safeNtripField(const String &s) { return s.find_first_of("\r\n") == String:
 String base64Encode(const String &) { return "encoded"; }
 void sendRoverGgaIfAvailable(Client &, bool) {}
 '''
+declarations = r'''
+bool waitForNtripResponse(Client &, String *, String * = nullptr);
+'''
 checks = r'''
 int main() {
     for (const char *reason : {"ERROR - NO STATION WITHIN 20 KM", "ERROR - FIXED STATION IN RANGE UNAVAILABLE",
@@ -67,6 +71,20 @@ int main() {
     client = Client{}; client.reply = "ICY 200 OK\r\n";
     assert(startNtripRover("host", 2101, "user", "secret", "mount", 1));
     assert(session.active && session.authenticated && String(session.lastError) == "CORS rover connection lost");
+    String selected = "old";
+    client = Client{}; client.reply = "HTTP/1.1 200 OK\r\nX-NTRIP-Selected-Mountpoint:  STATION1  \r\n\r\n";
+    client.reply += char(0xD3);
+    assert(startNtripRover("host", 2101, "user", "secret", "AutoNearest", 2, &selected, "receiver"));
+    assert(selected == "STATION1" && client.read() == 0xD3);
+    assert(client.request.find("X-NTRIP-Report-Selected: 1\r\n") != String::npos);
+    assert(client.request.find("User-Agent: NTRIP ESP32-Agent/test/receiver\r\n") != String::npos);
+    client = Client{}; client.reply = "ICY 200 OK\r\n";
+    assert(!startNtripRover("host", 2101, "user", "secret", "AutoNearest", 1, &selected));
+    assert(selected.isEmpty() && !client.up && !session.active);
+    assert(String(session.lastError) == "Caster did not confirm the selected mountpoint");
+    client = Client{};
+    assert(!startNtripRover("host", 2101, "user", "secret", "mount", 1, &selected, "bad\r\nheader"));
+    assert(client.connects == 0 && selected.isEmpty());
     for (uint8_t version : {1, 2}) {
         client = Client{}; client.reply = "ICY 200 OK\r\n"; now = 10000;
         std::snprintf(snapshot.lastGga.data(), snapshot.lastGga.size(), "%s", "$GNGGA,valid*00\r\n");
@@ -93,7 +111,7 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='rover-connect-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + harness + wait + start + checks)
+    (path / 'check.cpp').write_text(shim + harness + declarations + wait + start.replace('String *selectedMountpoint, const String &receiverId)', 'String *selectedMountpoint = nullptr, const String &receiverId = String())') + checks)
     subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     subprocess.run([str(path / 'check')], check=True)

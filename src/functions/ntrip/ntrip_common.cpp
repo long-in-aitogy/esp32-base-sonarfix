@@ -392,7 +392,7 @@ namespace ntrip_common
     }
 
 /** @brief Implements waitForNtripResponse. */
-    bool waitForNtripResponse(Client &client, String *statusLine)
+    bool waitForNtripResponse(Client &client, String *statusLine, String *selectedMountpoint)
     {
         String response;
         response.reserve(512);
@@ -424,6 +424,21 @@ namespace ntrip_common
             statusLine->trim();
             if (statusLine->isEmpty())
                 *statusLine = "No response from caster (timeout or closed connection)";
+        }
+        if (selectedMountpoint && response.endsWith("\r\n\r\n"))
+        {
+            const char *header = "\r\nX-NTRIP-Selected-Mountpoint:";
+            const int field = response.indexOf(header);
+            if (field >= 0)
+            {
+                const int start = field + strlen(header);
+                const int end = response.indexOf('\r', start);
+                if (end > start)
+                {
+                    *selectedMountpoint = response.substring(start, end);
+                    selectedMountpoint->trim();
+                }
+            }
         }
         return response.indexOf("ICY 200 OK") >= 0 || response.indexOf("HTTP/1.1 200 OK") >= 0 || response.indexOf("HTTP/1.0 200 OK") >= 0;
     }

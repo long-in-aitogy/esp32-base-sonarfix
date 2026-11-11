@@ -68,10 +68,13 @@ void sendRoverGgaIfAvailable(Client &client, const bool force = false)
 
 /** @brief Implements startNtripRover. */
 bool startNtripRover(const String &host, const uint16_t port, const String &username,
-                     const String &password, String mountpoint, const uint8_t version)
+                     const String &password, String mountpoint, const uint8_t version,
+                     String *selectedMountpoint, const String &receiverId)
 {
+    if (selectedMountpoint)
+        selectedMountpoint->clear();
     roverSession().lastError = "cannot connect to CORS rover mountpoint";
-    if (host.isEmpty() || port == 0 || mountpoint.isEmpty() || !safeNtripField(host) || !safeNtripField(username) || !safeNtripField(password) || !safeNtripField(mountpoint))
+    if (host.isEmpty() || port == 0 || mountpoint.isEmpty() || !safeNtripField(host) || !safeNtripField(username) || !safeNtripField(password) || !safeNtripField(mountpoint) || !safeNtripField(receiverId))
         return false;
     while (mountpoint.startsWith("/"))
         mountpoint.remove(0, 1);
@@ -96,6 +99,9 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
 
     const auto user = username.isEmpty() ? String("source") : username;
     const auto auth = base64Encode(user + ":" + password);
+    String agent = "NTRIP ESP32-Agent/" + String(AGENT_VERSION);
+    if (!receiverId.isEmpty())
+        agent += "/" + receiverId;
     String request;
     if (version == 2)
     {
@@ -103,8 +109,8 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
                                          "Host: " +
                   host + ":" + String(port) + "\r\n"
                                               "Ntrip-Version: Ntrip/2.0\r\n"
-                                              "User-Agent: NTRIP ESP32-Agent/" +
-                  String(AGENT_VERSION) + "\r\n"
+                                              "User-Agent: " +
+                  agent + "\r\n"
                                           "Authorization: Basic " +
                   auth + "\r\n"
                          "Accept: */*\r\n"
@@ -113,8 +119,8 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
     else
     {
         request = "GET /" + mountpoint + " HTTP/1.0\r\n"
-                                         "User-Agent: NTRIP ESP32-Agent/" +
-                  String(AGENT_VERSION) + "\r\n"
+                                         "User-Agent: " +
+                  agent + "\r\n"
                                           "Authorization: Basic " +
                   auth + "\r\n"
                          "Accept: */*\r\n"
@@ -133,10 +139,15 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
             request += "Ntrip-GGA: " + gga + "\r\n\r\n";
         }
     }
+    if (selectedMountpoint)
+    {
+        request.remove(request.length() - 2);
+        request += "X-NTRIP-Report-Selected: 1\r\n\r\n";
+    }
     client.print(request);
 
     String responseLine;
-    if (!waitForNtripResponse(client, &responseLine))
+    if (!waitForNtripResponse(client, &responseLine, selectedMountpoint))
     {
         for (const char *reason : {"ERROR - NO STATION WITHIN 20 KM",
                                    "ERROR - FIXED STATION IN RANGE UNAVAILABLE",
@@ -149,6 +160,13 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
                 break;
             }
         }
+        client.stop();
+        roverSession().active = false;
+        return false;
+    }
+    if (selectedMountpoint && (selectedMountpoint->isEmpty() || !safeNtripField(*selectedMountpoint)))
+    {
+        roverSession().lastError = "Caster did not confirm the selected mountpoint";
         client.stop();
         roverSession().active = false;
         return false;

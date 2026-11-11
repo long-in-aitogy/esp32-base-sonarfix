@@ -8,6 +8,7 @@ source = (root / 'src/functions/ntrip/ntrip_common.cpp').read_text()
 function = source[source.index('    bool waitForNtripResponse('):source.index('\n} // namespace ntrip_common')]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
 shim = shim.replace('    void trim()', '''    int indexOf(const char *s) const { auto p = find(s); return p == npos ? -1 : int(p); }
+    int indexOf(char c, unsigned start) const { auto p = find(c, start); return p == npos ? -1 : int(p); }
     String substring(unsigned start, unsigned end) const { return substr(start, end - start); }
     void trim()''')
 harness = r'''
@@ -22,6 +23,9 @@ struct Client {
     int available() { return offset < wire.size(); }
     int read() { return available() ? uint8_t(wire[offset++]) : -1; }
 };
+'''
+declarations = r'''
+bool waitForNtripResponse(Client &, String *, String * = nullptr);
 '''
 checks = r'''
 int main() {
@@ -45,7 +49,7 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='ntrip-handshake-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + harness + function + checks)
+    (path / 'check.cpp').write_text(shim + harness + declarations + function + checks)
     subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
                     '-fsanitize=address,undefined', str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     subprocess.run([str(path / 'check')], check=True)
