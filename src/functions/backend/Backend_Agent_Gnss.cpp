@@ -121,6 +121,7 @@ void BackendAgent::appendUbloxPosition(JsonDocument &doc,
 
 bool BackendAgent::refreshUnicoreReadback(String &error)
 {
+    unicoreQualityMs_ = 0;
     String mode;
     const auto success = UnicoreReadback::readMode(mode, error);
     DynamicJsonDocument readbackDoc(1024);
@@ -160,6 +161,11 @@ bool BackendAgent::refreshUnicoreReadback(String &error)
         else
         {
             surveyInReadbackHasPosition_ = true;
+            if (!bestPosition["horizontal_sigma_m"].isNull())
+            {
+                unicoreHorizontalSigma_ = bestPosition["horizontal_sigma_m"].as<float>();
+                unicoreQualityMs_ = millis();
+            }
             surveyInReadbackReady_ = String(bestPosition["position_type"] | "") == "FIXEDPOS";
         }
         saveSurveyResult(bestPosition, mode);

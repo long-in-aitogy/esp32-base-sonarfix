@@ -21,6 +21,8 @@ struct BackendAgent {
     UbxNavigation navigation_;
     UbxDop dop_;
     uint32_t navigationMs_ = 0, dopMs_ = 0;
+    float unicoreHorizontalSigma_ = 0;
+    uint32_t unicoreQualityMs_ = 0;
     void appendGnssStatus(JsonDocument &, const GnssTelemetrySnapshot &, uint32_t) const;
 };
 '''
@@ -62,6 +64,14 @@ int main() {
     assert(std::abs(doc["hacc"].as<double>() - 400.0) < 0.01);
     doc.clear(); gnss.hdop = 0.8f; agent.appendGnssStatus(doc, gnss, 61001);
     assert(doc["hacc"].isNull()); // Dimensionless HDOP is not an accuracy measurement.
+    doc.clear(); agent.sensorType_ = "Unicorecomm"; agent.unicoreQualityMs_ = 61001;
+    agent.unicoreHorizontalSigma_ = 0.05f;
+    agent.appendGnssStatus(doc, gnss, 62001);
+    assert(doc["gnss_quality"]["source"] == "unicore_bestnav_sigma");
+    assert(std::abs(doc["gnss_quality"]["hacc_m"].as<double>() - 0.05) < 1e-6);
+    assert(std::abs(doc["hacc"].as<double>() - 50.0) < 0.01);
+    doc.clear(); agent.appendGnssStatus(doc, gnss, 106002);
+    assert(doc["gnss_quality"].isNull() && doc["hacc"].isNull());
 }
 '''
 with tempfile.TemporaryDirectory(prefix='ublox-nav-') as directory:

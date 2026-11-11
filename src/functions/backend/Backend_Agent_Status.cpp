@@ -282,6 +282,14 @@ void BackendAgent::appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapsh
             doc["hacc"] = navigation_.haccMm;
         }
     }
+    else if (sensorType_ == "Unicorecomm" && unicoreQualityMs_ > 0 && nowMs - unicoreQualityMs_ <= 45000UL)
+    {
+        JsonObject quality = doc.createNestedObject("gnss_quality");
+        quality["source"] = "unicore_bestnav_sigma";
+        quality["age_seconds"] = (nowMs - unicoreQualityMs_) / 1000.0;
+        quality["hacc_m"] = unicoreHorizontalSigma_;
+        doc["hacc"] = unicoreHorizontalSigma_ * 1000.0;
+    }
     else if (gnss.gstHacc > 0 && gnss.lastGstMs > 0 && nowMs - gnss.lastGstMs <= 15000UL)
     {
         // The legacy hacc field is in mm; gnss_quality.hacc_m is in metres.

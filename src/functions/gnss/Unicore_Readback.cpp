@@ -200,12 +200,12 @@ namespace UnicoreReadback
         const auto checksum = payload.indexOf('*');
         if (checksum >= 0)
             payload.remove(checksum);
-        std::array<String, 5> fields;
+        std::array<String, 10> fields;
         auto start = 0;
-        for (size_t index = 0; index < 5; ++index)
+        for (size_t index = 0; index < fields.size(); ++index)
         {
             const auto comma = payload.indexOf(',', start);
-            if (index < 4 && comma < 0)
+            if (index < 6 && comma < 0)
             {
                 error = "Unicore BESTNAV response is incomplete";
                 return false;
@@ -213,6 +213,8 @@ namespace UnicoreReadback
             const auto end = comma < 0 ? payload.length() : comma;
             fields[index] = payload.substring(start, end);
             start = end + 1;
+            if (comma < 0)
+                break;
         }
         for (String &field : fields)
             field.trim();
@@ -251,6 +253,21 @@ namespace UnicoreReadback
         position["latitude"] = latitude;
         position["longitude"] = longitude;
         position["height_msl"] = height;
+        const double undulation = std::strtod(fields[5].c_str(), &end);
+        if (end == fields[5].c_str() || *end != '\0' || !std::isfinite(undulation) || fields[6] != "WGS84")
+        {
+            error = "Unicore BESTNAV undulation/datum is invalid";
+            return false;
+        }
+        position["undulation"] = undulation;
+        if (!fields[7].isEmpty() && !fields[8].isEmpty())
+        {
+            const double latSigma = std::strtod(fields[7].c_str(), &end);
+            const bool latValid = end != fields[7].c_str() && *end == '\0' && std::isfinite(latSigma) && latSigma >= 0 && latSigma <= 10000000;
+            const double lonSigma = std::strtod(fields[8].c_str(), &end);
+            if (latValid && end != fields[8].c_str() && *end == '\0' && std::isfinite(lonSigma) && lonSigma >= 0 && lonSigma <= 10000000)
+                position["horizontal_sigma_m"] = std::hypot(latSigma, lonSigma);
+        }
         return true;
     }
 
