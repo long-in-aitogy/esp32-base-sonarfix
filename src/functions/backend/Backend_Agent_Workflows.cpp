@@ -499,14 +499,17 @@ bool BackendAgent::prepareAutoBaseConfig(JsonObject payload, String &host, uint1
 
 bool BackendAgent::startAutoBaseRover(const String &host, const uint16_t port,
                                       const String &username, const String &password,
-                                      const String &mountpoint, const uint8_t ntripVersion)
+                                      const String &mountpoint, const uint8_t ntripVersion, String &error)
 {
     if (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
     {
+        error = "network transport is busy";
         return false;
     }
     stopNtrip();
     const auto started = startNtripRover(host, port, username, password, mountpoint, ntripVersion);
+    if (!started)
+        error = ntripRoverLastError();
     xSemaphoreGive(tcpStreamMutex);
     return started;
 }
@@ -913,16 +916,16 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         return false;
     }
 
-    if (!startAutoBaseRover(host, port, username, password, mountpoint, ntripVersion))
+    String failureReason;
+    if (!startAutoBaseRover(host, port, username, password, mountpoint, ntripVersion, failureReason))
     {
-        finish(false, false, "cannot connect to CORS rover mountpoint");
+        finish(false, false, failureReason);
         return false;
     }
 
     setAgentState("auto_setup_wait_fix");
     setWorkflowProgress("wait_fix", 2, 4);
     auto cancelled = false;
-    String failureReason;
     if (!waitForAutoBaseFix(timeoutSeconds, fixedStreakRequired, cancelled, failureReason))
     {
         finish(false, cancelled, failureReason);
@@ -990,14 +993,17 @@ bool BackendAgent::prepareReferenceCheckConfig(
 
 bool BackendAgent::startReferenceRover(const String &host, const uint16_t port,
                                               const String &username, const String &password,
-                                              const String &mountpoint)
+                                              const String &mountpoint, String &error)
 {
     if (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
     {
+        error = "network transport is busy";
         return false;
     }
     stopNtrip();
     const auto started = startNtripRover(host, port, username, password, mountpoint, 1);
+    if (!started)
+        error = ntripRoverLastError();
     xSemaphoreGive(tcpStreamMutex);
     return started;
 }
@@ -1187,15 +1193,15 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload)
         return false;
     }
 
-    if (!startReferenceRover(host, port, username, password, mountpoint))
+    String failureReason;
+    if (!startReferenceRover(host, port, username, password, mountpoint, failureReason))
     {
-        finish(false, false, "cannot connect to CORS reference mountpoint");
+        finish(false, false, failureReason);
         return false;
     }
 
     setAgentState("reference_check_wait_fix");
     setWorkflowProgress("reference_check_wait_fix", 2, 4);
-    String failureReason;
     if (!waitForReferenceFix(timeoutSeconds, failureReason))
     {
         finish(false, failureReason == "cancelled by user",

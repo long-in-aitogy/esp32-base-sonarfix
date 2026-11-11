@@ -164,7 +164,7 @@ private:
                                uint8_t &fixedStreakRequired);
     bool startAutoBaseRover(const String &host, uint16_t port, const String &username,
                             const String &password, const String &mountpoint,
-                            uint8_t ntripVersion);
+                            uint8_t ntripVersion, String &error);
     bool waitForAutoBaseFix(uint32_t timeoutSeconds, uint8_t fixedStreakRequired,
                             bool &cancelled, String &failureReason);
     bool collectAutoBaseSamples(int configuredSamples, std::vector<double> &latitudes,
@@ -195,7 +195,7 @@ private:
                                      String &password, String &mountpoint,
                                      uint32_t &timeoutSeconds, uint16_t &requestedSamples);
     bool startReferenceRover(const String &host, uint16_t port, const String &username,
-                                    const String &password, const String &mountpoint);
+                                    const String &password, const String &mountpoint, String &error);
     bool waitForReferenceFix(uint32_t timeoutSeconds, String &failureReason);
     bool collectReferenceSamples(uint16_t requestedSamples, std::vector<double> &latitudes,
                                  std::vector<double> &longitudes,

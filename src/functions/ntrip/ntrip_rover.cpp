@@ -70,6 +70,7 @@ void sendRoverGgaIfAvailable(Client &client, const bool force = false)
 bool startNtripRover(const String &host, const uint16_t port, const String &username,
                      const String &password, String mountpoint, const uint8_t version)
 {
+    roverSession().lastError = "cannot connect to CORS rover mountpoint";
     if (host.isEmpty() || port == 0 || mountpoint.isEmpty() || !safeNtripField(host) || !safeNtripField(username) || !safeNtripField(password) || !safeNtripField(mountpoint))
         return false;
     while (mountpoint.startsWith("/"))
@@ -81,7 +82,6 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
     // Close that client before opening a receive-only correction stream.
     roverSession().bytesReceived = 0;
     roverSession().packetsReceived = 0;
-    roverSession().lastError = "CORS rover connection lost";
     roverSession().active = true;
     roverSession().authenticated = false;
     roverSession().lastGgaMs = 0;
@@ -122,13 +122,26 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
     }
     client.print(request);
 
-    if (!waitForNtripResponse(client))
+    String responseLine;
+    if (!waitForNtripResponse(client, &responseLine))
     {
+        for (const char *reason : {"ERROR - NO STATION WITHIN 20 KM",
+                                   "ERROR - FIXED STATION IN RANGE UNAVAILABLE",
+                                   "ERROR - FIXED STATION CATALOG UNAVAILABLE",
+                                   "ERROR - AUTONEAREST NOT ENABLED"})
+        {
+            if (responseLine == reason)
+            {
+                roverSession().lastError = reason;
+                break;
+            }
+        }
         client.stop();
         roverSession().active = false;
         return false;
     }
     roverSession().authenticated = true;
+    roverSession().lastError = "CORS rover connection lost";
     sendRoverGgaIfAvailable(client, true);
     Serial.println("[NTRIP ROVER] Da ket noi CORS " + host + ":" + String(port) + "/" + mountpoint);
     return true;
