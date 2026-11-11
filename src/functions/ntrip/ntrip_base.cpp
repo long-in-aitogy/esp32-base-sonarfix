@@ -449,7 +449,8 @@ int loopNTRIP(String &rtcmData)
       endpoint.authenticated = false;
       if (millis() - endpoint.lastReconnectMs >= RECONNECT_INTERVAL_MS)
       {
-        connectEndpoint(index);
+        if (connectEndpoint(index))
+          anyConnected = true;
       }
       continue;
     }
