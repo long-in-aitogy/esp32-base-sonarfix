@@ -103,6 +103,15 @@ void checkUbloxModes(const CommandList &survey, const CommandList &fixed, const 
 
 void checkUnicoreModes(const CommandList &survey, const CommandList &fixed)
 {
+    GnssOptions options;
+    const auto precise = commandListToBytes(buildBaseFixedLlaCommand(
+        21.12345678919, -105.98765432196, 12.5, 0.01f, GnssSensorType::Unicore, options));
+    const std::string preciseOutput(precise.begin(), precise.end());
+    assert(preciseOutput.find("mode base 21.1234567891 -105.9876543219 12.5000\r\n") != std::string::npos);
+    const auto exact = commandListToBytes(buildBaseFixedLlaCommand(
+        21.084987612, 105.786714188, 12.5, 0.01f, GnssSensorType::Unicore, options));
+    const std::string exactOutput(exact.begin(), exact.end());
+    assert(exactOutput.find("mode base 21.0849876120 105.7867141880 12.5000\r\n") != std::string::npos);
     const auto text = commandListToBytes(fixed);
     const std::string output(text.begin(), text.end());
     assert(output.find("mode base 10.7500000000 106.5000000000 12.5000\r\n") != std::string::npos);
