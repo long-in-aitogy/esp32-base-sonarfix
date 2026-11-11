@@ -437,11 +437,11 @@ bool BackendAgent::executeServiceConfigCommand(JsonObject payload, String &error
         const auto onDemandKey = prefix + "_stream_on_demand";
         const auto activeKey = prefix + "_stream_active";
         const auto serverOnDemand = jsonBool(service, onDemandKey, onDemand);
-        service[onDemandKey.c_str()] = serverOnDemand;
+        service[onDemandKey] = serverOnDemand;
         if (!serverOnDemand)
-            service[activeKey.c_str()] = true;
-        else if (service[activeKey.c_str()].isNull())
-            service[activeKey.c_str()] = globalActive;
+            service[activeKey] = true;
+        else if (service[activeKey].isNull())
+            service[activeKey] = globalActive;
     }
     String updatedServiceConfig;
     serializeJson(serviceDoc, updatedServiceConfig);
