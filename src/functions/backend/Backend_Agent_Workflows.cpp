@@ -347,7 +347,7 @@ bool BackendAgent::applyRoverMode()
 }
 
 bool BackendAgent::applyBaseCoordinates(const double latitude, const double longitude,
-                                        const double altitude)
+                                        const double altitude, JsonObjectConst base)
 {
     if (!std::isfinite(latitude) || !std::isfinite(longitude) || !std::isfinite(altitude) || latitude < -90.0 || latitude > 90.0 || longitude < -180.0 || longitude > 180.0)
     {
@@ -357,6 +357,20 @@ bool BackendAgent::applyBaseCoordinates(const double latitude, const double long
         return false;
     GnssCmdBuilder::GnssOptions options;
     options.ports = {"UART1"};
+    options.outputMode = GnssCmdBuilder::OutputMode::RtcmOnly;
+    const JsonObjectConst output = base["gnss_options"];
+    const String level = output["msm_level"].isNull() ? "4" : output["msm_level"].as<String>();
+    if (level == "7")
+        options.msmLevel = GnssCmdBuilder::MsmLevel::Msm7;
+    else if (level == "both")
+        options.msmLevel = GnssCmdBuilder::MsmLevel::Both;
+    const JsonObjectConst systems = output["constellations"];
+    options.gps = systems["gps"] | true;
+    options.glo = systems["glo"] | true;
+    options.gal = systems["gal"] | true;
+    options.bds = systems["bds"] | true;
+    options.qzss = systems["qzss"] | false;
+    options.sbas = systems["sbas"] | false;
     return writeGnssCommands(GnssCmdBuilder::buildBaseFixedLlaCommand(
         latitude, longitude, altitude, GnssCmdBuilder::BASE_ACCURACY_METERS,
         sensorType_ == "Ublox" ? GnssCmdBuilder::GnssSensorType::Ublox

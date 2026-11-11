@@ -199,7 +199,7 @@ private:
     bool restartConfiguredNtrip();
     int loopNtripRoverLocked();
     bool stopNtripRoverLocked();
-    bool applyBaseCoordinates(double latitude, double longitude, double altitude);
+    bool applyBaseCoordinates(double latitude, double longitude, double altitude, JsonObjectConst base);
     bool restoreWorkflowBase(JsonObjectConst base);
     bool refreshReceiverReadback(String &error);
     bool refreshUbloxReadback(String &error);

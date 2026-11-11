@@ -631,11 +631,14 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
         error = "base coordinates are missing or cannot be transformed";
         return false;
     }
-    if (!applyBaseCoordinates(result.latitude, result.longitude, result.altitude))
+    if (!applyBaseCoordinates(result.latitude, result.longitude, result.altitude, base))
     {
         error = "cannot apply transformed coordinates to GNSS";
         return false;
     }
+    if (!base["gnss_options"].is<JsonObject>())
+        base.createNestedObject("gnss_options");
+    base["gnss_options"]["output_mode"] = "rtcm_only";
     JsonObject coordinates = base["coords"].as<JsonObject>();
     if (coordinates.isNull())
         coordinates = base["coords"].to<JsonObject>();
