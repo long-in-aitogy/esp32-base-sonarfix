@@ -3,6 +3,7 @@
 #include "HardwareSerial.h"
 #include "Prog_Config.h"
 #include "functions/backend/Backend_Agent.h"
+#include "functions/backend/Base_Sample.h"
 #include <array>
 #include <cstdio>
 
@@ -131,7 +132,8 @@ namespace
         reading.longitude = nmeaCoordinate(fields[4], fields[5]);
         reading.satellites = static_cast<uint8_t>(constrain(atoi(fields[7]), 0, 255));
         reading.hdop = static_cast<float>(atof(fields[8]));
-        reading.altitude = atof(fields[9]);
+        reading.altitude = fieldCount > 12
+            ? ggaEllipsoidalHeight(fields[9], fields[10], fields[11], fields[12]) : NAN;
         reading.hasPosition = true;
         return reading;
     }
@@ -248,6 +250,8 @@ namespace
             snprintf(telemetry.lastGga.data(), telemetry.lastGga.size(), "%s", sentence.c_str());
             telemetry.lastGga[telemetry.lastGga.size() - 1] = '\0';
             telemetry.lastGgaMs = millis();
+            if (!gga.hasPosition)
+                telemetry.latitude = telemetry.longitude = telemetry.altitude = NAN;
         }
         if (gga.hasPosition)
         {
