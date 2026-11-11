@@ -163,7 +163,8 @@ int loopNtripRover()
         ++roverSession().packetsReceived;
     }
     xSemaphoreGive(rtcmBufferMutex);
-    return bytesRead > 0 ? bytesRead : 200;
+    // Return status, not byte count: a valid 504-byte read is not a disconnect.
+    return 200;
 }
 
 /** @brief Implements stopNtripRover. */
