@@ -802,11 +802,13 @@ bool BackendAgent::completeAutoBaseSetup(
     coordinates["lon"] = result.longitude;
     coordinates["alt"] = result.altitude;
     coordinates["accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
+    coordinates["altitude_reference"] = "ELLIPSOID";
     baseConfig["altitude_reference"] = "ELLIPSOID";
     baseConfig["accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
     if (!baseConfig["survey_in_accuracy"].isUnbound())
         baseConfig["survey_in_accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
     baseConfig["base_setup_method"] = "FIXED_LLA";
+    baseConfig["auto_cors_source_mode"] = "nearest";
     baseConfig["coordinate_source"] = "AUTO_CORS";
     baseConfig["mode"] = "BASE";
     if (!baseConfig["gnss_options"].is<JsonObject>())

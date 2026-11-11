@@ -24,6 +24,7 @@ struct BackendAgent {
         ++writes;
         assert(config["base_setup_method"] == "FIXED_LLA");
         assert(config["mode"] == "BASE" && config["coordinate_source"] == "AUTO_CORS");
+        assert(config["auto_cors_source_mode"] == "nearest" && config["coords"]["altitude_reference"] == "ELLIPSOID");
         assert(config["gnss_options"]["output_mode"] == "rtcm_only");
         assert(config["coords"]["lat"] == 21.25 && config["coords"]["alt"] == 10.5);
         assert(config["accuracy"] == 5);
@@ -70,6 +71,7 @@ int main() {
     DynamicJsonDocument result(4096);
     assert(deserializeJson(result, agent.baseConfig_) == DeserializationError::Ok);
     assert(result["base_setup_method"] == "FIXED_LLA" && result["survey_in_duration"] == 300);
+    assert(result["auto_cors_source_mode"] == "nearest" && result["coords"]["altitude_reference"] == "ELLIPSOID");
     assert(result["accuracy"] == 5 && result["survey_in_accuracy"] == 5 && result["coords"]["accuracy"] == 5);
     assert(result["gnss_options"]["msm_level"] == "7" && result["coords"]["lat"] == 21.25);
     assert(result["gnss_options"]["constellations"]["qzss"] == true);
