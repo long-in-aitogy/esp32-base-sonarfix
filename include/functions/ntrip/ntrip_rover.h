@@ -14,5 +14,6 @@ bool ntripRoverSessionStarted();
 bool ntripRoverActive();
 uint32_t ntripRoverBytesReceived();
 uint32_t ntripRoverPacketsReceived();
+const char *ntripRoverLastError();
 
 #endif

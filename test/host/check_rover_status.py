@@ -12,10 +12,12 @@ harness = r'''
 #include <cassert>
 #include <cstdint>
 #include <vector>
+#include <string>
 using std::min;
 struct Session {
     bool active = true, authenticated = true;
     uint32_t bytesReceived = 0, packetsReceived = 0;
+    const char *lastError = "CORS rover connection lost";
 } session;
 Session &roverSession() { return session; }
 struct Client {
@@ -34,8 +36,15 @@ Client &clientFor(int) { return client; }
 void sendRoverGgaIfAvailable(Client &) {}
 struct {
     std::vector<uint8_t> output;
-    void write(const uint8_t *data, size_t size) { output.insert(output.end(), data, data + size); }
+    bool shortWrite = false;
+    size_t write(const uint8_t *data, size_t size) {
+        const size_t written = shortWrite ? size / 2 : size;
+        output.insert(output.end(), data, data + written);
+        return written;
+    }
 } Serial1;
+struct Logger { template <typename... T> void printf(const char *, T...) {} };
+[[maybe_unused]] Logger Serial;
 constexpr int MUTEX_TIMEOUT_MS = 1500, pdTRUE = 1;
 int rtcmBufferMutex = 1, releases = 0;
 bool lockAvailable = true;
@@ -56,9 +65,14 @@ int main() {
     assert(loopNtripRover() == 200 && releases == 4);
     client.input.assign(504, 0xD3); lockAvailable = false;
     assert(loopNtripRover() == 200 && client.input.size() == 504 && releases == 4);
-    lockAvailable = true; client.connected_ = false;
+    lockAvailable = true;
+    Serial1.shortWrite = true;
+    assert(loopNtripRover() == 504 && releases == 5);
+    assert(std::string(session.lastError) == "GNSS UART did not accept all CORS bytes");
+    assert(session.bytesReceived == 504 + 1 + 200 + 512 + 504 && session.packetsReceived == 5);
+    client.connected_ = false;
     assert(loopNtripRover() == 504 && !session.active && !session.authenticated);
-    assert(loopNtripRover() == 504 && releases == 4);
+    assert(loopNtripRover() == 504 && releases == 5);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='rover-status-') as directory:

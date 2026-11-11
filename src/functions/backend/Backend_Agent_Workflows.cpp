@@ -528,7 +528,7 @@ bool BackendAgent::waitForAutoBaseFix(const uint32_t timeoutSeconds,
         }
         if (loopNtripRoverLocked() == 504)
         {
-            failureReason = "CORS rover connection lost";
+            failureReason = ntripRoverLastError();
             return false;
         }
         const uint32_t now = millis();
@@ -581,7 +581,7 @@ bool BackendAgent::collectAutoBaseSamples(const int configuredSamples,
         }
         if (loopNtripRoverLocked() == 504)
         {
-            failureReason = "CORS rover connection lost while averaging";
+            failureReason = ntripRoverLastError();
             return false;
         }
         const uint32_t now = millis();
@@ -1015,7 +1015,7 @@ bool BackendAgent::waitForReferenceFix(const uint32_t timeoutSeconds, String &fa
         }
         if (loopNtripRoverLocked() == 504)
         {
-            failureReason = "CORS reference connection lost";
+            failureReason = ntripRoverLastError();
             return false;
         }
         const uint32_t now = millis();
@@ -1060,7 +1060,7 @@ bool BackendAgent::collectReferenceSamples(const uint16_t requestedSamples,
         }
         if (loopNtripRoverLocked() == 504)
         {
-            failureReason = "CORS reference connection lost while averaging";
+            failureReason = ntripRoverLastError();
             return false;
         }
         const uint32_t now = millis();

@@ -30,6 +30,7 @@ namespace
         uint32_t lastGgaMs = 0;
         uint32_t bytesReceived = 0;
         uint32_t packetsReceived = 0;
+        const char *lastError = "CORS rover connection lost";
     };
 
     RoverSession &roverSession()
@@ -80,6 +81,7 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
     // Close that client before opening a receive-only correction stream.
     roverSession().bytesReceived = 0;
     roverSession().packetsReceived = 0;
+    roverSession().lastError = "CORS rover connection lost";
     roverSession().active = true;
     roverSession().authenticated = false;
     roverSession().lastGgaMs = 0;
@@ -158,9 +160,17 @@ int loopNtripRover()
     const auto bytesRead = client.read(buffer.data(), bytesToRead);
     if (bytesRead > 0)
     {
-        Serial1.write(buffer.data(), static_cast<size_t>(bytesRead));
+        const size_t written = Serial1.write(buffer.data(), static_cast<size_t>(bytesRead));
         roverSession().bytesReceived += static_cast<uint32_t>(bytesRead);
         ++roverSession().packetsReceived;
+        if (written != static_cast<size_t>(bytesRead))
+        {
+            roverSession().lastError = "GNSS UART did not accept all CORS bytes";
+            Serial.printf("[NTRIP ROVER][ERROR] UART accepted %u/%u bytes\n",
+                          static_cast<unsigned>(written), static_cast<unsigned>(bytesRead));
+            xSemaphoreGive(rtcmBufferMutex);
+            return 504;
+        }
     }
     xSemaphoreGive(rtcmBufferMutex);
     // Return status, not byte count: a valid 504-byte read is not a disconnect.
@@ -195,3 +205,5 @@ bool ntripRoverActive()
 uint32_t ntripRoverBytesReceived() { return roverSession().bytesReceived; }
 /** @brief Implements ntripRoverPacketsReceived. */
 uint32_t ntripRoverPacketsReceived() { return roverSession().packetsReceived; }
+
+const char *ntripRoverLastError() { return roverSession().lastError; }
