@@ -115,7 +115,7 @@ void BackendAgentWebsocket::disconnect(bool permanent)
     {
         client_->stop();
     }
-    rx_.clear();
+    std::vector<uint8_t>().swap(rx_);
     connected_ = false;
     nextAttemptMs_ = millis() + (permanent ? 60000UL : 10000UL);
     if (owner_)
@@ -320,6 +320,8 @@ void BackendAgentWebsocket::parseFrames()
             owner_->handleWebsocketText(payload);
         }
     }
+    if (rx_.empty() && rx_.capacity() > 4096)
+        std::vector<uint8_t>().swap(rx_);
 }
 
 void BackendAgentWebsocket::sendControl(uint8_t opcode, const uint8_t *payload, size_t length)
