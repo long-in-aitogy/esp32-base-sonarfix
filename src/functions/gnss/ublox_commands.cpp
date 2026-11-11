@@ -275,19 +275,59 @@ namespace UbloxCommands
         return key;
     }
 
+    size_t valsetValueSize(uint8_t type)
+    {
+        switch (type)
+        {
+        case 1: // L
+        case 2: // U1/I1/E1
+            return 1;
+        case 3: // U2/I2/E2
+            return 2;
+        case 4: // U4/I4/E4/R4
+            return 4;
+        case 5: // U8/I8/R8
+            return 8;
+        default:
+            return 0;
+        }
+    }
+
 /** @brief Implements remapValsetEntries. */
     inline bool remapValsetEntries(uint8_t *packet, size_t payloadLength)
     {
-        if ((payloadLength - 4) % 5 != 0)
-            return false;
-        for (size_t i = 10; i + 5 <= payloadLength + 6; i += 5)
+        const size_t end = payloadLength + 6;
+        bool baseMode = true;
+        // Validate the complete sequence before changing any keys or values.
+        for (size_t i = 10; i < end;)
+        {
+            if (end - i < 4)
+                return false;
+            const uint8_t type = packet[i + 3] >> 4;
+            const size_t valueSize = valsetValueSize(type);
+            if (valueSize == 0 || end - i < 4 + valueSize)
+                return false;
+            if (packet[i] == 0x01 && packet[i + 1] == 0x00 && packet[i + 2] == 0x03 && packet[i + 3] == 0x20)
+                baseMode = packet[i + 4] != 0;
+            i += 4 + valueSize;
+        }
+        for (size_t i = 10; i < end;)
         {
             uint32_t key = 0;
             for (uint8_t b = 0; b < 4; ++b)
                 key |= static_cast<uint32_t>(packet[i + b]) << (8 * b);
+            const uint8_t type = packet[i + 3] >> 4;
+            const size_t valueSize = valsetValueSize(type);
+            if (baseMode && (key == 0x4003000FU || key == 0x40030011U))
+            {
+                const uint32_t accuracy = static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000);
+                for (uint8_t b = 0; b < 4; ++b)
+                    packet[i + 4 + b] = static_cast<uint8_t>(accuracy >> (8 * b));
+            }
             key = remapValsetKey(key);
             for (uint8_t b = 0; b < 4; ++b)
                 packet[i + b] = static_cast<uint8_t>(key >> (8 * b));
+            i += 4 + valueSize;
         }
         return true;
     }
@@ -302,6 +342,14 @@ namespace UbloxCommands
         {
             if (!remapValsetEntries(packet, payloadLength))
                 return false;
+        }
+        else if (packet[2] == 0x06 && packet[3] == 0x71 && payloadLength == 40
+                 && packet[6] == 0 && (packet[8] == 1 || packet[8] == 2))
+        {
+            const size_t offset = packet[8] == 1 ? 34 : 26;
+            const uint32_t accuracy = static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000);
+            for (uint8_t i = 0; i < 4; ++i)
+                packet[offset + i] = static_cast<uint8_t>(accuracy >> (8 * i));
         }
         else if (packet[2] == 0x06 && packet[3] == 0x01 && payloadLength == 8)
         {
@@ -337,13 +385,13 @@ namespace UbloxCommands
     }
 
 /** @brief Implements buildBaseSurveyInCommand. */
-    CommandList buildBaseSurveyInCommand(uint32_t duration, float accuracy, const GnssOptions &options)
+    CommandList buildBaseSurveyInCommand(uint32_t duration, [[maybe_unused]] float accuracy, const GnssOptions &options)
     {
         CommandList commands;
         Command message = buildTmode3Message();
         message[8] = 1;
         writeU32(message, 30, duration);
-        writeU32(message, 34, static_cast<uint32_t>(accuracy * 10000));
+        writeU32(message, 34, static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000));
         finishTmode3Checksum(message);
         commands.push_back(message);
         commands.push_back(buildOutputConfigCommand(options));
@@ -353,7 +401,7 @@ namespace UbloxCommands
     }
 
 /** @brief Implements buildBaseFixedLlaCommand. */
-    CommandList buildBaseFixedLlaCommand(double lat, double lon, double alt, float accuracy, const GnssOptions &options)
+    CommandList buildBaseFixedLlaCommand(double lat, double lon, double alt, [[maybe_unused]] float accuracy, const GnssOptions &options)
     {
         CommandList commands;
         Command message = buildTmode3Message();
@@ -367,7 +415,7 @@ namespace UbloxCommands
             writeU32(message, offsets[i], static_cast<uint32_t>(whole));
             message[22 + i] = static_cast<uint8_t>(static_cast<int8_t>((values[i] - whole) * 100));
         }
-        const auto accuracyValue = static_cast<uint32_t>(accuracy * 10000);
+        const auto accuracyValue = static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000);
         writeU32(message, 26, accuracyValue);
         finishTmode3Checksum(message);
         commands.push_back(message);

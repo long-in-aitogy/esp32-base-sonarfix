@@ -60,6 +60,53 @@ void checkUbloxModes(const CommandList &survey, const CommandList &fixed, const 
     const auto all = buildBaseAllRtcmOutputCommand("UART1", true, GnssSensorType::Ublox);
     assert(all.size() == 2);
     assert(survey[0][8] == 1 && fixed[0][8] == 2 && fixed[0][9] == 1);
+    const auto readAccuracy = [](const Command &packet, size_t offset)
+    {
+        return uint32_t(packet[offset]) | uint32_t(packet[offset + 1]) << 8 |
+               uint32_t(packet[offset + 2]) << 16 | uint32_t(packet[offset + 3]) << 24;
+    };
+    assert(readAccuracy(survey[0], 34) == 50000 && readAccuracy(fixed[0], 26) == 50000);
+    for (const auto &item : {std::pair<Command, size_t>{survey[0], 34}, {fixed[0], 26}})
+    {
+        auto incoming = item.first;
+        incoming[item.second] = 0x30; incoming[item.second + 1] = 0x75; // 3 m
+        incoming[item.second + 2] = incoming[item.second + 3] = 0;
+        routeUbloxOutput(incoming.data(), incoming.size());
+        assert(readAccuracy(incoming, item.second) == 50000);
+        checkPackets(incoming);
+    }
+    // Modern VALSET carries mixed-width keys, including both accuracy fields.
+    Command valset = {0xB5, 0x62, 0x06, 0x8A, 0x19, 0x00, 0, 7, 0, 0,
+                      0x01, 0x00, 0x03, 0x20, 0x01,
+                      0x0F, 0x00, 0x03, 0x40, 0x64, 0, 0, 0,
+                      0x11, 0x00, 0x03, 0x40, 0x30, 0x75, 0, 0, 0, 0};
+    const Command extra = {0x12, 0x34, 0x56, 0x30, 0xAA, 0xBB,
+                           0x34, 0x56, 0x78, 0x50, 1, 2, 3, 4, 5, 6, 7, 8};
+    valset.insert(valset.end() - 2, extra.begin(), extra.end());
+    valset[4] += extra.size();
+    routeUbloxOutput(valset.data(), valset.size());
+    assert(readAccuracy(valset, 19) == 50000 && readAccuracy(valset, 27) == 50000);
+    assert(std::equal(extra.begin(), extra.end(), valset.begin() + 31));
+    checkPackets(valset);
+    auto roverValset = valset;
+    roverValset[14] = 0; // MODE=Rover: leave the unused accuracy values alone.
+    roverValset[19] = 0x30; roverValset[20] = 0x75;
+    roverValset[21] = roverValset[22] = 0;
+    routeUbloxOutput(roverValset.data(), roverValset.size());
+    assert(readAccuracy(roverValset, 19) == 30000);
+    checkPackets(roverValset);
+    // Complete frame with a truncated last VALSET value: no partial mutation.
+    Command malformed = {0xB5, 0x62, 0x06, 0x8A, 13, 0, 0, 7, 0, 0,
+                         0x01, 0x00, 0x03, 0x20, 1,
+                         0x11, 0x00, 0x03, 0x40, 0, 0};
+    const auto before = malformed;
+    routeUbloxOutput(malformed.data(), malformed.size());
+    assert(malformed == before);
+    auto roverMode = rover[1];
+    auto roverBefore = roverMode;
+    routeUbloxOutput(roverMode.data(), roverMode.size());
+    assert(roverMode == roverBefore);
+
     assert(survey[0][30] == 44 && survey[0][31] == 1);
     assert(rover[1][8] == 0);
     for (const size_t packet : {8U, 9U})

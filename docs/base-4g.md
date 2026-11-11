@@ -59,6 +59,14 @@ trong `Backend_Agent_Commands.cpp`, payload trạng thái trong `Backend_Agent_S
 workflow Auto Base/đối chiếu trong `Backend_Agent_Workflows.cpp`, phép chiếu tọa độ
 trong `Backend_Agent_Projection.cpp`. Các phần này dùng chung lớp `BackendAgent`.
 
+## Accuracy cấu hình Base
+
+Firmware cố định accuracy cấu hình Survey-In và Fixed LLA ở 5 m, kể cả khi
+cấu hình từ backend chứa giá trị khác. Với u-blox, firmware đặt giá trị này
+trong CFG-TMODE3 hoặc CFG-VALSET; accuracy đo thực tế vẫn được báo từ receiver.
+Lệnh ASCII Survey-In/Fixed LLA của Unicore hiện không truyền tham số accuracy,
+nên không thể xác nhận ngưỡng 5 m được cài trên receiver Unicore qua lệnh đó.
+
 ## Kết nối phần cứng
 
 - ESP32 TDM240x: RX GNSS GPIO18, TX GNSS GPIO19; UART GNSS 115200 baud.

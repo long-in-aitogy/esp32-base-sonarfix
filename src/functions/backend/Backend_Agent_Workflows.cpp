@@ -358,7 +358,7 @@ bool BackendAgent::applyBaseCoordinates(const double latitude, const double long
     GnssCmdBuilder::GnssOptions options;
     options.ports = {"UART1"};
     return writeGnssCommands(GnssCmdBuilder::buildBaseFixedLlaCommand(
-        latitude, longitude, altitude, 0.01f,
+        latitude, longitude, altitude, GnssCmdBuilder::BASE_ACCURACY_METERS,
         sensorType_ == "Ublox" ? GnssCmdBuilder::GnssSensorType::Ublox
                                : GnssCmdBuilder::GnssSensorType::Unicore,
         options));
@@ -395,7 +395,7 @@ bool BackendAgent::restoreWorkflowBase(JsonObjectConst base)
     if (method == "SURVEY_IN")
     {
         const double duration = base["survey_in_duration"].isNull() ? 120 : coordinateNumber(base["survey_in_duration"]);
-        const double accuracy = base["survey_in_accuracy"].isNull() ? 5 : coordinateNumber(base["survey_in_accuracy"]);
+        const double accuracy = GnssCmdBuilder::BASE_ACCURACY_METERS;
         const double maxDuration = sensorType_ == "Unicorecomm" ? 3600 : 604800;
         if (!std::isfinite(duration) || duration < 1 || duration > maxDuration || std::floor(duration) != duration
             || !std::isfinite(accuracy) || accuracy < 0.001 || accuracy > 10000)
@@ -759,9 +759,27 @@ bool BackendAgent::completeAutoBaseSetup(
     coordinates["lat"] = result.latitude;
     coordinates["lon"] = result.longitude;
     coordinates["alt"] = result.altitude;
+    coordinates["accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
     baseConfig["altitude_reference"] = "ELLIPSOID";
-    baseConfig["accuracy"] = 0.01;
-    baseConfig["base_setup_method"] = "AUTO_CORS";
+    baseConfig["accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
+    if (!baseConfig["survey_in_accuracy"].isUnbound())
+        baseConfig["survey_in_accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
+    baseConfig["base_setup_method"] = "FIXED_LLA";
+    baseConfig["coordinate_source"] = "AUTO_CORS";
+    baseConfig["mode"] = "BASE";
+    if (!baseConfig["gnss_options"].is<JsonObject>())
+        baseConfig.createNestedObject("gnss_options");
+    JsonObject options = baseConfig["gnss_options"].as<JsonObject>();
+    options["output_mode"] = "rtcm_only";
+    if (options["msm_level"].isNull())
+        options["msm_level"] = "4";
+    if (!options["constellations"].is<JsonObject>())
+        options.createNestedObject("constellations");
+    JsonObject constellations = options["constellations"].as<JsonObject>();
+    if (constellations["qzss"].isNull())
+        constellations["qzss"] = false;
+    if (constellations["sbas"].isNull())
+        constellations["sbas"] = false;
     baseConfig["auto_configured"] = true;
     baseConfig["fixed_samples_only"] = true;
     baseConfig["itrf_vn2000_transform_applied"] = transformed;

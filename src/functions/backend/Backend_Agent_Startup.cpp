@@ -63,7 +63,7 @@ bool BackendAgent::prepareStartupConfig(DynamicJsonDocument &config, JsonObject 
 
     base["base_setup_method"] = "SURVEY_IN";
     base["survey_in_duration"] = AUTO_SURVEY_IN_SECONDS;
-    base["survey_in_accuracy"] = 5;
+    base["survey_in_accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
     base["mode"] = "BASE";
     JsonObject options = base.createNestedObject("gnss_options");
     options["output_mode"] = "rtcm_only";
@@ -103,7 +103,7 @@ bool BackendAgent::buildStartupCommands(JsonObjectConst base,
     if (!restoreFixed)
     {
         const auto duration = AUTO_SURVEY_IN_SECONDS;
-        const auto accuracy = configNumber(base["survey_in_accuracy"], 5.0);
+        const auto accuracy = GnssCmdBuilder::BASE_ACCURACY_METERS;
         if (const auto maxDuration = detected == GnssSensorType::Unicore ? 3600U : 604800U;
             !std::isfinite(duration) || std::floor(duration) != duration || duration < 1 || duration > maxDuration || !std::isfinite(accuracy) || accuracy < 0.001 || accuracy > 10000)
         {
@@ -123,7 +123,7 @@ bool BackendAgent::buildStartupCommands(JsonObjectConst base,
     const auto lat = configNumber(coords["lat"], NAN);
     const auto lon = configNumber(coords["lon"], NAN);
     const auto alt = configNumber(coords["alt"], NAN);
-    const auto accuracy = configNumber(base["accuracy"], 0.01);
+    const auto accuracy = GnssCmdBuilder::BASE_ACCURACY_METERS;
     if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(alt) || std::abs(lat) > 90 || std::abs(lon) > 180 || alt < -12000 || alt > 100000 || !std::isfinite(accuracy) || accuracy < 0.0001 || accuracy > 10000)
     {
         error = "Saved Fixed LLA coordinates or accuracy are invalid";

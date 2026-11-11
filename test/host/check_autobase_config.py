@@ -10,6 +10,7 @@ update = source[start:end]
 harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include "functions/gnss/gnss_cmd_builder.h"
 #include <cassert>
 constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
 struct Position { double latitude = 21.25, longitude = 105.75, altitude = 10.5, northing = 1, easting = 2; };
@@ -21,9 +22,11 @@ struct BackendAgent {
     bool stopNtripRoverLocked() { ++stops; return true; }
     bool restoreWorkflowBase(JsonObjectConst config) {
         ++writes;
-        assert(config["base_setup_method"] == "AUTO_CORS");
+        assert(config["base_setup_method"] == "FIXED_LLA");
+        assert(config["mode"] == "BASE" && config["coordinate_source"] == "AUTO_CORS");
+        assert(config["gnss_options"]["output_mode"] == "rtcm_only");
         assert(config["coords"]["lat"] == 21.25 && config["coords"]["alt"] == 10.5);
-        assert(config["accuracy"] == 0.01);
+        assert(config["accuracy"] == 5);
         return restoreOk;
     }
     bool saveStatePreferences() { ++saves; return saveOk && saves != failSave; }
@@ -43,7 +46,7 @@ checks = r'''
 };
 int main() {
     BackendAgent agent;
-    agent.baseConfig_ = R"({"base_setup_method":"SURVEY_IN","survey_in_duration":300,"accuracy":5,"gnss_options":{"msm_level":"7"},"coords":{"lat":1,"lon":2,"alt":3}})";
+    agent.baseConfig_ = R"({"base_setup_method":"SURVEY_IN","survey_in_duration":300,"survey_in_accuracy":3,"accuracy":5,"gnss_options":{"msm_level":"7","output_mode":"diagnostics","constellations":{"glo":false,"qzss":true}},"coords":{"lat":1,"lon":2,"alt":3}})";
     const String previous = agent.baseConfig_;
     String error;
     agent.restoreOk = false;
@@ -66,8 +69,19 @@ int main() {
     assert(agent.apply(error) && agent.publishes == 1 && agent.published == "base_config_state");
     DynamicJsonDocument result(4096);
     assert(deserializeJson(result, agent.baseConfig_) == DeserializationError::Ok);
-    assert(result["base_setup_method"] == "AUTO_CORS" && result["survey_in_duration"] == 300);
+    assert(result["base_setup_method"] == "FIXED_LLA" && result["survey_in_duration"] == 300);
+    assert(result["accuracy"] == 5 && result["survey_in_accuracy"] == 5 && result["coords"]["accuracy"] == 5);
     assert(result["gnss_options"]["msm_level"] == "7" && result["coords"]["lat"] == 21.25);
+    assert(result["gnss_options"]["constellations"]["qzss"] == true);
+    assert(result["gnss_options"]["constellations"]["glo"] == false);
+    assert(result["gnss_options"]["constellations"]["sbas"] == false);
+    BackendAgent defaults;
+    defaults.baseConfig_ = "{}";
+    assert(defaults.apply(error));
+    result.clear();
+    assert(deserializeJson(result, defaults.baseConfig_) == DeserializationError::Ok);
+    assert(result["gnss_options"]["msm_level"] == "4");
+    assert(result["gnss_options"]["constellations"]["qzss"] == false);
     agent.baseConfig_ = "{bad"; error.clear();
     const int writes = agent.writes, stops = agent.stops;
     assert(!agent.apply(error) && agent.publishes == 1 && agent.baseConfig_ == "{bad");
@@ -78,7 +92,7 @@ with tempfile.TemporaryDirectory(prefix='autobase-config-') as directory:
     path = Path(directory)
     (path / 'check.cpp').write_text(harness + update + checks)
     subprocess.run(['c++', '-std=c++17', '-fsanitize=address,undefined',
-                    '-I' + str(root / 'test/host'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
+                    '-I' + str(root / 'test/host'), '-I' + str(root / 'include'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     subprocess.run([str(path / 'check')], check=True)
 print('PASS: Auto Base checks receiver before saving, preserves options and handles restore failures')

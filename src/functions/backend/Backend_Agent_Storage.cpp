@@ -16,6 +16,30 @@ namespace BackendAgentInternal
     Preferences backendPrefs;
     bool useDedicatedBackendPrefs = false;
 
+    bool enforceBaseAccuracy(JsonObject base)
+    {
+        const bool survey = base["base_setup_method"] == "SURVEY_IN";
+        const bool fixed = base["base_setup_method"] == "FIXED_LLA" || base["base_setup_method"] == "AUTO_CORS";
+        bool changed = false;
+        if ((survey || !base["survey_in_accuracy"].isUnbound()) && base["survey_in_accuracy"] != GnssCmdBuilder::BASE_ACCURACY_METERS)
+        {
+            base["survey_in_accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
+            changed = true;
+        }
+        if ((fixed || !base["accuracy"].isUnbound()) && base["accuracy"] != GnssCmdBuilder::BASE_ACCURACY_METERS)
+        {
+            base["accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
+            changed = true;
+        }
+        JsonObject coords = base["coords"].as<JsonObject>();
+        if (!coords.isNull() && (fixed || !coords["accuracy"].isUnbound()) && coords["accuracy"] != GnssCmdBuilder::BASE_ACCURACY_METERS)
+        {
+            coords["accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
+            changed = true;
+        }
+        return changed;
+    }
+
     Preferences &backendPreferences()
     {
         return useDedicatedBackendPrefs ? backendPrefs : prefs;
@@ -133,12 +157,34 @@ void BackendAgent::loadPreferences()
     stationLock_.restore(statePrefs.getBool("REMOTE_LOCK", false),
                          statePrefs.getUChar("LOCK_SERVERS", 0));
     baseConfig_ = statePrefs.getString("BASE_JSON", "{}");
+    DynamicJsonDocument storedBase(CONFIG_DOCUMENT_SIZE);
+    bool baseAccuracyChanged = false;
+    if (deserializeJson(storedBase, baseConfig_) == DeserializationError::Ok && storedBase.is<JsonObject>())
+    {
+        baseAccuracyChanged = enforceBaseAccuracy(storedBase.as<JsonObject>());
+        if (baseAccuracyChanged && !storedBase.overflowed())
+        {
+            baseConfig_.clear();
+            serializeJson(storedBase, baseConfig_);
+        }
+        else if (storedBase.overflowed())
+            baseAccuracyChanged = false;
+    }
     serviceConfig_ = statePrefs.getString("SERVICE_JSON", "{}");
     licenseToken_ = statePrefs.getString("LICENSE_KEY", "");
     lastCommandResult_ = statePrefs.getString("CMD_RESULT", "{}");
     autoBaseProgress_ = statePrefs.getString("PROGRESS_JSON", "{}");
     surveyInResult_ = statePrefs.isKey("SURVEY_RESULT") ? statePrefs.getString("SURVEY_RESULT") : "{}";
     statePrefs.end();
+    if (baseAccuracyChanged)
+    {
+        const bool opened = beginBackendPreferences(false);
+        const bool saved = opened && backendPreferences().putString("BASE_JSON", baseConfig_) == baseConfig_.length();
+        if (opened)
+            backendPreferences().end();
+        if (!saved)
+            Serial.println("[BACKEND][NVS] Could not save Base accuracy.");
+    }
     prefs.begin("myPrefs", true);
     const auto bootCounter = static_cast<uint32_t>(prefs.getInt("RSTRT_COUNT", 0));
     prefs.end();

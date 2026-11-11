@@ -279,7 +279,7 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
         }
         if (sensorType == "Unicorecomm")
             length = routeUnicoreOutput(decoded.data(), length, GNSS_UNICORE_PORT);
-        else if (sensorType == "Ublox")
+        else if (sensorType == "Ublox" || (sensorType.isEmpty() && sensorType_ == "Ublox"))
             GnssCmdBuilder::routeUbloxOutput(decoded.data(), length);
         const auto unicore = sensorType == "Unicorecomm" || (sensorType.isEmpty() && sensorType_ == "Unicorecomm");
         if (unicore)
@@ -509,6 +509,13 @@ bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload,
         JsonObject base = baseDoc.as<JsonObject>();
         if (!originalConfig["mode"].isUnbound())
             base["mode"] = originalConfig["mode"];
+        enforceBaseAccuracy(base);
+        if (baseDoc.overflowed())
+        {
+            error = "Base configuration exceeds memory capacity";
+            detail = error;
+            return false;
+        }
         baseConfig_.clear();
         serializeJson(baseDoc, baseConfig_);
         publishConfigState("base_config_state");

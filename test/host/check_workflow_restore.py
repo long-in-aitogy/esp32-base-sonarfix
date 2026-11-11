@@ -52,7 +52,7 @@ int main() {
     DynamicJsonDocument base(2048);
     base["base_setup_method"] = "SURVEY_IN";
     base["survey_in_duration"] = 120;
-    base["survey_in_accuracy"] = 5;
+    base["survey_in_accuracy"] = 3;
     BackendAgent agent;
     agent.receiverBaseReadback_ = R"({"mode_kind":"survey_in"})";
     assert(agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
@@ -79,7 +79,7 @@ int main() {
     agent.receiverBaseReadback_ = R"({"mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","lat":21.25,"lon":105.75,"alt":10.5}})";
     assert(agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
     assert(restoredLatitude == 21.25 && restoredLongitude == 105.75 && restoredAltitude == 10.5);
-    assert(restoredAccuracy == 0.5 && !restoredOptions.glo && restoredOptions.msmLevel == GnssCmdBuilder::MsmLevel::Msm7);
+    assert(restoredAccuracy == 5 && !restoredOptions.glo && restoredOptions.msmLevel == GnssCmdBuilder::MsmLevel::Msm7);
     agent.receiverBaseReadback_ = R"({"mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","lat":22.0,"lon":105.75,"alt":10.5}})";
     assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
     agent.sensorType_ = "Unicorecomm";
