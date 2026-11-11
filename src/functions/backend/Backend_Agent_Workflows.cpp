@@ -757,6 +757,11 @@ bool BackendAgent::completeAutoBaseSetup(
     {
         transformed = transformToVn2000(rawLatitude, rawLongitude, rawAltitude,
                                         centralMeridianDeg, scale, result);
+        if (!transformed)
+        {
+            failureReason = "VN2000 conversion failed; no candidate coordinates were installed";
+            return false;
+        }
     }
 
     setAgentState("auto_setup_base");

@@ -216,7 +216,7 @@ bool BackendAgent::transformToVn2000(const double latitude, const double longitu
                                      const double altitude, const double centralMeridianDeg,
                                      const double scale, ProjectedPosition &result)
 {
-    if (!std::isfinite(latitude) || !std::isfinite(longitude) || !std::isfinite(altitude) || latitude < -90.0 || latitude > 90.0 || longitude < -180.0 || longitude > 180.0 || centralMeridianDeg < 100.0 || centralMeridianDeg > 112.0 || scale < 0.9990 || scale > 1.0010)
+    if (!std::isfinite(latitude) || !std::isfinite(longitude) || !std::isfinite(altitude) || !std::isfinite(centralMeridianDeg) || !std::isfinite(scale) || latitude < -90.0 || latitude > 90.0 || longitude < -180.0 || longitude > 180.0 || centralMeridianDeg < 100.0 || centralMeridianDeg > 112.0 || scale < 0.9990 || scale > 1.0010)
     {
         return false;
     }
