@@ -68,6 +68,7 @@ bool BackendAgent::refreshUbloxReadback(String &error)
     }
     receiverBaseReadback_.clear();
     serializeJson(doc, receiverBaseReadback_);
+    reconcileBaseStartupReadback();
     receiverBaseReadbackMs_ = millis();
     markStatusDirty();
     return success;
@@ -170,6 +171,7 @@ bool BackendAgent::refreshUnicoreReadback(String &error)
     }
     receiverBaseReadback_.clear();
     serializeJson(readbackDoc, receiverBaseReadback_);
+    reconcileBaseStartupReadback();
     receiverBaseReadbackMs_ = millis();
     markStatusDirty();
     return success;

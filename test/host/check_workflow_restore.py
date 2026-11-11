@@ -19,6 +19,7 @@ harness = r'''
 #include <cstdlib>
 #include <cstring>
 #include "functions/gnss/gnss_cmd_builder.h"
+constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
 uint32_t restoredDuration;
 float restoredAccuracy;
 GnssCmdBuilder::GnssOptions restoredOptions;
@@ -36,7 +37,7 @@ struct BackendAgent {
     bool surveyInMonitoring_ = false;
     bool buildStartupCommands(JsonObjectConst, GnssCmdBuilder::GnssSensorType, bool, GnssCmdBuilder::CommandList &, StartupPosition &, String &);
     bool verifyStartupReadback(GnssCmdBuilder::GnssSensorType, bool, const StartupPosition &, String &);
-    String sensorType_ = "Ublox", baseStartupState_, baseStartupError_, receiverBaseReadback_;
+    String sensorType_ = "Ublox", baseStartupState_, baseStartupError_, receiverBaseReadback_, baseConfig_;
     bool surveyInResultPending_ = false, writeOk = true, readOk = true;
     int writes = 0;
     GnssCmdBuilder::CommandList lastCommands;
@@ -45,6 +46,7 @@ struct BackendAgent {
     bool refreshReceiverReadback(String &error) { error = "read failed"; return readOk; }
     void markStatusDirty() {}
     bool restoreWorkflowBase(JsonObjectConst);
+    void reconcileBaseStartupReadback();
 };
 '''
 checks = r'''
@@ -95,6 +97,27 @@ int main() {
     base.clear(); writes = agent.writes;
     assert(agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
     assert(agent.baseStartupState_ == "awaiting_configuration" && agent.writes == writes);
+    BackendAgent retry;
+    retry.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":21.25,"lon":105.75,"alt":10.5}})";
+    retry.baseStartupState_ = "error";
+    retry.baseStartupError_ = "Receiver has not confirmed the saved fixed position";
+    retry.receiverBaseReadback_ = R"({"mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","lat":21.26,"lon":105.75,"alt":10.5}})";
+    retry.reconcileBaseStartupReadback();
+    assert(retry.baseStartupState_ == "error"); // A different fixed position cannot enable output.
+    retry.receiverBaseReadback_ = R"({"mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","lat":21.25,"lon":105.75,"alt":10.5}})";
+    retry.baseStartupError_ = "Could not save Base configuration";
+    retry.reconcileBaseStartupReadback();
+    assert(retry.baseStartupState_ == "error"); // Persistence failures never self-clear.
+    retry.baseStartupError_ = "Receiver has not confirmed the saved fixed position";
+    retry.reconcileBaseStartupReadback();
+    assert(retry.baseStartupState_ == "fixed_restored" && retry.baseStartupError_.isEmpty());
+    retry.sensorType_ = "Unicorecomm";
+    retry.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","altitude_reference":"ELLIPSOID","coords":{"lat":21.25,"lon":105.75,"alt":10.5}})";
+    retry.baseStartupState_ = "error";
+    retry.baseStartupError_ = "Receiver has not confirmed the saved fixed position";
+    retry.receiverBaseReadback_ = R"({"mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","raw":"#BESTPOSA;SOL_COMPUTED,FIXEDPOS,21.25,105.75,9.5,1.0,WGS84,"}})";
+    retry.reconcileBaseStartupReadback();
+    assert(retry.baseStartupState_ == "fixed_restored" && retry.baseStartupError_.isEmpty());
 }
 '''
 with tempfile.TemporaryDirectory(prefix='workflow-restore-') as directory:

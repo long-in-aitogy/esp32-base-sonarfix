@@ -205,6 +205,39 @@ bool BackendAgent::verifyStartupReadback(GnssCmdBuilder::GnssSensorType detected
     return true;
 }
 
+void BackendAgent::reconcileBaseStartupReadback()
+{
+    // Only retry delayed position confirmation, never command or persistence errors.
+    if (baseStartupState_ != "error" || baseStartupError_ != "Receiver has not confirmed the saved fixed position")
+        return;
+
+    DynamicJsonDocument config(CONFIG_DOCUMENT_SIZE);
+    if (deserializeJson(config, baseConfig_) != DeserializationError::Ok || config["base_setup_method"] != "FIXED_LLA")
+        return;
+    JsonObjectConst base = config.as<JsonObjectConst>();
+    JsonObjectConst coords = base["coords"].as<JsonObjectConst>();
+    if (coords.isNull())
+        coords = base;
+    StartupPosition expected;
+    expected.latitude = configNumber(coords["lat"], NAN);
+    expected.longitude = configNumber(coords["lon"], NAN);
+    expected.altitude = configNumber(coords["alt"], NAN);
+    const auto chip = GnssCmdBuilder::sensorTypeFromString(sensorType_);
+    if (chip == GnssCmdBuilder::GnssSensorType::Invalid || !std::isfinite(expected.latitude)
+        || !std::isfinite(expected.longitude) || !std::isfinite(expected.altitude))
+        return;
+    const String reference = base["altitude_reference"] | "LEGACY";
+    if (chip == GnssCmdBuilder::GnssSensorType::Unicore && reference != "ELLIPSOID" && reference != "LEGACY")
+        return;
+    expected.ellipsoid = chip == GnssCmdBuilder::GnssSensorType::Ublox || reference == "ELLIPSOID";
+    String error;
+    if (!verifyStartupReadback(chip, true, expected, error))
+        return;
+    baseStartupState_ = "fixed_restored";
+    baseStartupError_.clear();
+    markStatusDirty();
+}
+
 bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
 {
     using namespace GnssCmdBuilder;

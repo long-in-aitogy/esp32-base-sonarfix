@@ -201,6 +201,7 @@ private:
     bool stopNtripRoverLocked();
     bool applyBaseCoordinates(double latitude, double longitude, double altitude, JsonObjectConst base);
     bool restoreWorkflowBase(JsonObjectConst base);
+    void reconcileBaseStartupReadback();
     bool refreshReceiverReadback(String &error);
     bool refreshUbloxReadback(String &error);
     void updateUbloxSurveyState(const UbxBaseStatus &status);
