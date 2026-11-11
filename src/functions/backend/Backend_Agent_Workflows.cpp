@@ -760,6 +760,7 @@ bool BackendAgent::completeAutoBaseSetup(
     coordinates["lon"] = result.longitude;
     coordinates["alt"] = result.altitude;
     baseConfig["altitude_reference"] = "ELLIPSOID";
+    baseConfig["accuracy"] = 0.01;
     baseConfig["base_setup_method"] = "AUTO_CORS";
     baseConfig["auto_configured"] = true;
     baseConfig["fixed_samples_only"] = true;
@@ -785,9 +786,9 @@ bool BackendAgent::completeAutoBaseSetup(
         failureReason = "cannot acquire transport lock to stop CORS rover session";
         return false;
     }
-    if (!applyBaseCoordinates(result.latitude, result.longitude, result.altitude))
+    if (!restoreWorkflowBase(baseConfig.as<JsonObjectConst>()))
     {
-        failureReason = "cannot configure GNSS base mode";
+        failureReason = "receiver did not confirm automatically measured Fixed LLA";
         return false;
     }
 

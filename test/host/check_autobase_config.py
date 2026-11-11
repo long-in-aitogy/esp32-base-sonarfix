@@ -15,11 +15,17 @@ constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
 struct Position { double latitude = 21.25, longitude = 105.75, altitude = 10.5, northing = 1, easting = 2; };
 struct BackendAgent {
     String baseConfig_, published;
-    bool saveOk = true, restartOk = true;
+    bool saveOk = true, restartOk = true, restoreOk = true;
     int saves = 0, failSave = 0;
     int publishes = 0, stops = 0, writes = 0;
     bool stopNtripRoverLocked() { ++stops; return true; }
-    bool applyBaseCoordinates(double, double, double) { ++writes; return true; }
+    bool restoreWorkflowBase(JsonObjectConst config) {
+        ++writes;
+        assert(config["base_setup_method"] == "AUTO_CORS");
+        assert(config["coords"]["lat"] == 21.25 && config["coords"]["alt"] == 10.5);
+        assert(config["accuracy"] == 0.01);
+        return restoreOk;
+    }
     bool saveStatePreferences() { ++saves; return saveOk && saves != failSave; }
     bool restartConfiguredNtrip() { return restartOk; }
     void publishConfigState(const char *kind) { ++publishes; published = kind; }
@@ -37,10 +43,13 @@ checks = r'''
 };
 int main() {
     BackendAgent agent;
-    agent.baseConfig_ = R"({"base_setup_method":"SURVEY_IN","survey_in_duration":300,"gnss_options":{"msm_level":"7"},"coords":{"lat":1,"lon":2,"alt":3}})";
+    agent.baseConfig_ = R"({"base_setup_method":"SURVEY_IN","survey_in_duration":300,"accuracy":5,"gnss_options":{"msm_level":"7"},"coords":{"lat":1,"lon":2,"alt":3}})";
     const String previous = agent.baseConfig_;
     String error;
-    agent.saveOk = false;
+    agent.restoreOk = false;
+    assert(!agent.apply(error) && agent.baseConfig_ == previous && agent.saves == 0 && agent.publishes == 0);
+    assert(error == "receiver did not confirm automatically measured Fixed LLA");
+    agent.restoreOk = true; agent.saveOk = false;
     assert(!agent.apply(error) && agent.baseConfig_ == previous && agent.publishes == 0);
     assert(error == "could not save automatically applied Fixed LLA");
     agent.saveOk = true; agent.restartOk = false;
@@ -72,4 +81,4 @@ with tempfile.TemporaryDirectory(prefix='autobase-config-') as directory:
                     '-I' + str(root / 'test/host'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     subprocess.run([str(path / 'check')], check=True)
-print('PASS: Auto Base preserves saved options, publishes after save, and handles persistence errors')
+print('PASS: Auto Base checks receiver before saving, preserves options and handles restore failures')
