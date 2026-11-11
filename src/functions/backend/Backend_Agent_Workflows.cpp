@@ -749,18 +749,12 @@ bool BackendAgent::completeAutoBaseSetup(
     serializeJson(baseProgress, baseProgressJson);
     setWorkflowProgress("set_base", 4, 4, baseProgressJson);
 
-    if (!stopNtripRoverLocked())
-    {
-        failureReason = "cannot acquire transport lock to stop CORS rover session";
-        return false;
-    }
-    if (!applyBaseCoordinates(result.latitude, result.longitude, result.altitude))
-    {
-        failureReason = "cannot configure GNSS base mode";
-        return false;
-    }
-
     DynamicJsonDocument baseConfig(CONFIG_DOCUMENT_SIZE);
+    if (deserializeJson(baseConfig, baseConfig_) != DeserializationError::Ok || !baseConfig.is<JsonObject>())
+    {
+        failureReason = "cannot read previous Base configuration";
+        return false;
+    }
     JsonObject coordinates = baseConfig.createNestedObject("coords");
     coordinates["lat"] = result.latitude;
     coordinates["lon"] = result.longitude;
@@ -781,9 +775,32 @@ bool BackendAgent::completeAutoBaseSetup(
     raw["lat"] = rawLatitude;
     raw["lon"] = rawLongitude;
     raw["alt"] = rawAltitude;
+    if (baseConfig.overflowed())
+    {
+        failureReason = "Auto Base configuration exceeds memory capacity";
+        return false;
+    }
+    if (!stopNtripRoverLocked())
+    {
+        failureReason = "cannot acquire transport lock to stop CORS rover session";
+        return false;
+    }
+    if (!applyBaseCoordinates(result.latitude, result.longitude, result.altitude))
+    {
+        failureReason = "cannot configure GNSS base mode";
+        return false;
+    }
+
+    const String previousConfig = baseConfig_;
     baseConfig_.clear();
     serializeJson(baseConfig, baseConfig_);
-    saveStatePreferences();
+    if (!saveStatePreferences())
+    {
+        baseConfig_ = previousConfig;
+        failureReason = "could not save automatically applied Fixed LLA";
+        return false;
+    }
+    publishConfigState("base_config_state");
     const auto transportRestored = restartConfiguredNtrip();
     setAgentState(normalAgentState());
     resultJson = buildAutoBaseResult(
