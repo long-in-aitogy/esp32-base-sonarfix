@@ -13,24 +13,28 @@
 #include "functions/gnss/Ubx_Reply.h"
 #include "functions/gnss/Unicore_Reply.h"
 #include <cstdio>
+#include <cstdlib>
 
 using namespace BackendAgentInternal;
 
 extern SemaphoreHandle_t tcpStreamMutex;
 extern SemaphoreHandle_t rtcmBufferMutex;
 
-namespace {
-double coordinateNumber(JsonVariantConst value) {
-    if (value.isNull()) return NAN;
-    if (value.is<const char *>()) {
-        const char *text = value.as<const char *>();
-        char *end = nullptr;
-        const double number = strtod(text, &end);
-        return end != text && *end == '\0' && std::isfinite(number) ? number : NAN;
+namespace
+{
+    double coordinateNumber(JsonVariantConst value)
+    {
+        if (value.isNull())
+            return NAN;
+        if (value.is<const char *>())
+        {
+            const char *text = value.as<const char *>();
+            char *end = nullptr;
+            const double number = std::strtod(text, &end);
+            return end != text && *end == '\0' && std::isfinite(number) ? number : NAN;
+        }
+        return value.is<double>() ? value.as<double>() : NAN;
     }
-    return value.is<double>() ? value.as<double>() : NAN;
-}
-
 } // namespace
 
 void BackendAgent::setWorkflowProgress(const String &phase, const uint8_t step,
@@ -360,9 +364,11 @@ bool BackendAgent::applyBaseCoordinates(const double latitude, const double long
         options));
 }
 
-bool BackendAgent::restoreWorkflowBase(JsonObjectConst base) {
+bool BackendAgent::restoreWorkflowBase(JsonObjectConst base)
+{
     using namespace GnssCmdBuilder;
-    const auto fail = [&](const String &error) {
+    const auto fail = [&](const String &error)
+    {
         baseStartupState_ = "error";
         baseStartupError_ = error;
         markStatusDirty();
@@ -371,17 +377,23 @@ bool BackendAgent::restoreWorkflowBase(JsonObjectConst base) {
     };
     const String method = base["base_setup_method"] | String();
     JsonObjectConst coords = base["coords"].as<JsonObjectConst>();
-    if (coords.isNull()) coords = base;
+    if (coords.isNull())
+        coords = base;
     const double lat = coordinateNumber(coords["lat"]);
     const double lon = coordinateNumber(coords["lon"]);
     const double alt = coordinateNumber(coords["alt"]);
-    if (method.isEmpty() && !std::isfinite(lat) && !std::isfinite(lon) && !std::isfinite(alt)) {
+    if (method.isEmpty() && !std::isfinite(lat) && !std::isfinite(lon) && !std::isfinite(alt))
+    {
         // An unconfigured receiver may remain Rover for review, but cannot publish a Base stream.
         baseStartupState_ = "awaiting_configuration";
         markStatusDirty();
         return true;
     }
-    if (method == "SURVEY_IN") {
+    const auto chip = GnssCmdBuilder::sensorTypeFromString(sensorType_);
+    StartupPosition expected;
+    String error;
+    if (method == "SURVEY_IN")
+    {
         const double duration = base["survey_in_duration"].isNull() ? 120 : coordinateNumber(base["survey_in_duration"]);
         const double accuracy = base["survey_in_accuracy"].isNull() ? 5 : coordinateNumber(base["survey_in_accuracy"]);
         const double maxDuration = sensorType_ == "Unicorecomm" ? 3600 : 604800;
@@ -396,24 +408,27 @@ bool BackendAgent::restoreWorkflowBase(JsonObjectConst base) {
         const String level = output["msm_level"].isNull() ? "both" : output["msm_level"].as<String>();
         options.msmLevel = level == "7" ? MsmLevel::Msm7 : level == "4" ? MsmLevel::Msm4 : MsmLevel::Both;
         const JsonObjectConst systems = output["constellations"];
-        options.gps = systems["gps"] | true; options.glo = systems["glo"] | true;
-        options.gal = systems["gal"] | true; options.bds = systems["bds"] | true;
-        options.qzss = systems["qzss"] | true; options.sbas = systems["sbas"] | true;
-        const auto chip = sensorType_ == "Unicorecomm" ? GnssSensorType::Unicore
-            : sensorType_ == "Ublox" ? GnssSensorType::Ublox : GnssSensorType::Invalid;
+        options.gps = systems["gps"] | true;
+        options.glo = systems["glo"] | true;
+        options.gal = systems["gal"] | true;
+        options.bds = systems["bds"] | true;
+        options.qzss = systems["qzss"] | true;
+        options.sbas = systems["sbas"] | true;
         if (!writeGnssCommands(buildBaseSurveyInCommand(static_cast<uint32_t>(duration), accuracy, chip, options)))
             return fail("receiver rejected Survey-In restore");
         surveyInResultPending_ = true;
-    } else if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(alt)
-               || !applyBaseCoordinates(lat, lon, alt)) {
-        return fail("cannot restore saved Base coordinates");
     }
-    String error;
-    if (!refreshReceiverReadback(error)) return fail(error);
-    DynamicJsonDocument readback(2048);
-    if (deserializeJson(readback, receiverBaseReadback_) != DeserializationError::Ok
-        || String(readback["mode_kind"] | "") != (method == "SURVEY_IN" ? "survey_in" : "base"))
-        return fail("receiver mode does not match restored Base");
+    else
+    {
+        CommandList commands;
+        if (!buildStartupCommands(base, chip, true, commands, expected, error))
+            return fail(error);
+        if (!writeGnssCommands(commands))
+            return fail("receiver rejected Fixed LLA restore");
+    }
+    if (!refreshReceiverReadback(error)
+        || !verifyStartupReadback(chip, method != "SURVEY_IN", expected, error))
+        return fail(error);
     baseStartupState_ = "configured";
     baseStartupError_.clear();
     markStatusDirty();
@@ -795,10 +810,20 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         payload, host, port, username, password, mountpoint, ntripVersion,
         timeoutSeconds, fixedStreakRequired);
 
+    if (!validConfig)
+    {
+        setAgentState(normalAgentState());
+        setWorkflowProgress("failed", 0, 4, R"({"reason":"missing or invalid CORS connection fields"})");
+        saveStatePreferences();
+        return false;
+    }
+
     DynamicJsonDocument previousBase(CONFIG_DOCUMENT_SIZE);
     deserializeJson(previousBase, baseConfig_);
     // Startup may use a different duration from the saved UI preference.
-    if (previousBase["base_setup_method"] == "SURVEY_IN")
+    if (previousBase.size() == 0 && surveyInTargetSeconds_ > 0)
+        previousBase["base_setup_method"] = "SURVEY_IN";
+    if (previousBase["base_setup_method"] == "SURVEY_IN" && surveyInTargetSeconds_ > 0)
         previousBase["survey_in_duration"] = surveyInTargetSeconds_;
 
     auto finish = [&](const bool success, const bool cancelled, const String &reason)
@@ -821,12 +846,6 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         Serial.printf("[AUTO BASE] KET QUA: %s; %s\n", success && cleanupSucceeded ? "THANH CONG" : unfinishedResult, reason.c_str());
         saveStatePreferences();
     };
-
-    if (!validConfig)
-    {
-        finish(false, false, "missing or invalid CORS connection fields");
-        return false;
-    }
 
     setAgentState("auto_setup_rover");
     setWorkflowProgress("set_rover", 1, 4);
@@ -1059,9 +1078,19 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload)
         restoreLatitude, restoreLongitude, restoreAltitude, host, port, username, password,
         mountpoint, timeoutSeconds, requestedSamples);
 
+    if (!validConfig)
+    {
+        setAgentState(normalAgentState());
+        setWorkflowProgress("reference_check_failed", 0, 4, R"({"reason":"missing or invalid reference/CORS configuration"})");
+        saveStatePreferences();
+        return false;
+    }
+
     DynamicJsonDocument storedBase(CONFIG_DOCUMENT_SIZE);
     deserializeJson(storedBase, baseConfig_);
-    if (storedBase["base_setup_method"] == "SURVEY_IN")
+    if (storedBase.size() == 0 && surveyInTargetSeconds_ > 0)
+        storedBase["base_setup_method"] = "SURVEY_IN";
+    if (storedBase["base_setup_method"] == "SURVEY_IN" && surveyInTargetSeconds_ > 0)
         storedBase["survey_in_duration"] = surveyInTargetSeconds_;
 
     auto cleanup = [&]()
@@ -1091,12 +1120,6 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload)
         setWorkflowProgress(stage, 4, 4, serialized);
         saveStatePreferences();
     };
-
-    if (!validConfig)
-    {
-        finish(false, false, "missing or invalid reference/CORS configuration");
-        return false;
-    }
 
     setAgentState("reference_check_rover");
     setWorkflowProgress("reference_check_set_rover", 1, 4);

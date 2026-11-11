@@ -217,7 +217,7 @@ private:
         double altitude = 0.0;
         bool ellipsoid = false;
     };
-    bool buildStartupCommands(JsonObject base, GnssCmdBuilder::GnssSensorType detected,
+    bool buildStartupCommands(JsonObjectConst base, GnssCmdBuilder::GnssSensorType detected,
                               bool restoreFixed, GnssCmdBuilder::CommandList &commands,
                               StartupPosition &position, String &error);
     bool verifyStartupReadback(GnssCmdBuilder::GnssSensorType detected, bool restoreFixed,

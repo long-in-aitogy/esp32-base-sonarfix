@@ -72,7 +72,7 @@ bool BackendAgent::prepareStartupConfig(DynamicJsonDocument &config, JsonObject 
     return true;
 }
 
-bool BackendAgent::buildStartupCommands(JsonObject base,
+bool BackendAgent::buildStartupCommands(JsonObjectConst base,
                                         GnssCmdBuilder::GnssSensorType detected,
                                         bool restoreFixed,
                                         GnssCmdBuilder::CommandList &commands,
@@ -104,7 +104,7 @@ bool BackendAgent::buildStartupCommands(JsonObject base,
     {
         const auto duration = AUTO_SURVEY_IN_SECONDS;
         const auto accuracy = configNumber(base["survey_in_accuracy"], 5.0);
-        if (const auto maxDuration = detected == GnssSensorType::Unicore ? 3600 : 604800;
+        if (const auto maxDuration = detected == GnssSensorType::Unicore ? 3600U : 604800U;
             !std::isfinite(duration) || std::floor(duration) != duration || duration < 1 || duration > maxDuration || !std::isfinite(accuracy) || accuracy < 0.001 || accuracy > 10000)
         {
             error = "Saved Survey-In parameters are invalid";
@@ -174,9 +174,9 @@ bool BackendAgent::verifyStartupReadback(GnssCmdBuilder::GnssSensorType detected
         error = "Receiver has not confirmed the saved fixed position";
         return false;
     }
-    auto lat = 0;
-    auto lon = 0;
-    auto height = 0;
+    double lat = 0.0;
+    double lon = 0.0;
+    double height = 0.0;
     if (detected == GnssCmdBuilder::GnssSensorType::Ublox)
     {
         lat = position["lat"].as<double>();

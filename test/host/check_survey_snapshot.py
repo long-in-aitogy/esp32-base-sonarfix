@@ -15,9 +15,9 @@ for method, name, end in (
     block = body[start:body.index(end, start)]
     blocks.append('''{
         String baseConfig_ = R"({"base_setup_method":"SURVEY_IN","survey_in_duration":1800})";
-        for (uint32_t surveyInTargetSeconds_ : {120U, 300U}) {
+        for (uint32_t surveyInTargetSeconds_ : {0U, 120U, 300U}) {
 ''' + block + f'''
-            assert({name}["survey_in_duration"] == surveyInTargetSeconds_);
+            assert({name}["survey_in_duration"] == (surveyInTargetSeconds_ ? surveyInTargetSeconds_ : 1800U));
             assert(baseConfig_.find("1800") != String::npos);
         }}
     }}''')
