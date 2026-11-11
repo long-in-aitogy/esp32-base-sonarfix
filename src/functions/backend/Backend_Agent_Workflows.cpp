@@ -501,7 +501,8 @@ bool BackendAgent::prepareAutoBaseConfig(JsonObject payload, String &host, uint1
 
 bool BackendAgent::startAutoBaseRover(const String &host, const uint16_t port,
                                       const String &username, const String &password,
-                                      const String &mountpoint, const uint8_t ntripVersion, String &error)
+                                      const String &mountpoint, const uint8_t ntripVersion, String &error,
+                                      String *selectedMountpoint)
 {
     if (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
     {
@@ -509,7 +510,8 @@ bool BackendAgent::startAutoBaseRover(const String &host, const uint16_t port,
         return false;
     }
     stopNtrip();
-    const auto started = startNtripRover(host, port, username, password, mountpoint, ntripVersion);
+    const auto started = startNtripRover(host, port, username, password, mountpoint, ntripVersion,
+                                         selectedMountpoint, selectedMountpoint ? serialNumber_ : String());
     if (!started)
         error = ntripRoverLastError();
     xSemaphoreGive(tcpStreamMutex);
@@ -518,7 +520,7 @@ bool BackendAgent::startAutoBaseRover(const String &host, const uint16_t port,
 
 bool BackendAgent::waitForAutoBaseFix(const uint32_t timeoutSeconds,
                                       const uint8_t fixedStreakRequired, bool &cancelled,
-                                      String &failureReason)
+                                      String &failureReason, const String &sourceMountpoint)
 {
     const uint32_t waitStartedMs = millis();
     uint32_t nextSecondMs = waitStartedMs;
@@ -545,6 +547,7 @@ bool BackendAgent::waitForAutoBaseFix(const uint32_t timeoutSeconds,
             fixedStreak = usable ? static_cast<uint8_t>(fixedStreak + 1) : 0;
             const auto fixed = fixedStreak >= fixedStreakRequired;
             DynamicJsonDocument details(1024);
+            details["source_mountpoint"] = sourceMountpoint;
             details["timeout"] = timeoutSeconds;
             details["elapsed"] = (now - waitStartedMs) / 1000UL;
             details["fix_status"] = snapshot.fixStatus.data();
@@ -566,7 +569,8 @@ bool BackendAgent::collectAutoBaseSamples(const int configuredSamples,
                                           std::vector<double> &latitudes,
                                           std::vector<double> &longitudes,
                                           std::vector<double> &altitudes,
-                                          bool &cancelled, String &failureReason)
+                                          bool &cancelled, String &failureReason,
+                                          const String &sourceMountpoint)
 {
     constexpr uint16_t samplesNeeded = 60;
     constexpr uint32_t averagingSeconds = 60;
@@ -603,6 +607,7 @@ bool BackendAgent::collectAutoBaseSamples(const int configuredSamples,
                 altitudes.push_back(snapshot.altitude);
             }
             DynamicJsonDocument details(1200);
+            details["source_mountpoint"] = sourceMountpoint;
             details["samples_collected"] = latitudes.size();
             details["samples_target"] = samplesNeeded;
             details["averaging_seconds"] = averagingSeconds;
@@ -881,6 +886,8 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         return false;
     }
 
+    const bool autoNearest = payload["source_mode"] == "nearest";
+    String selectedMountpoint;
     DynamicJsonDocument previousBase(CONFIG_DOCUMENT_SIZE);
     deserializeJson(previousBase, baseConfig_);
     // Startup may use a different duration from the saved UI preference.
@@ -897,6 +904,8 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         const bool cleanupSucceeded = baseRestored && transportRestored;
         setAgentState(normalAgentState());
         DynamicJsonDocument details(1024);
+        if (!selectedMountpoint.isEmpty())
+            details["source_mountpoint"] = selectedMountpoint;
         if (!reason.isEmpty())
             details["reason"] = reason;
         if (!transportRestored)
@@ -918,17 +927,75 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         return false;
     }
 
-    String failureReason;
-    if (!startAutoBaseRover(host, port, username, password, mountpoint, ntripVersion, failureReason))
+    if (autoNearest)
     {
-        finish(false, false, failureReason);
+        setWorkflowProgress("wait_gga", 1, 4);
+        const uint32_t started = millis();
+        bool hasPosition = false;
+        while (!workflowCancelRequested_ && millis() - started < timeoutSeconds * 1000UL)
+        {
+            const auto position = getGnssTelemetrySnapshot();
+            if (position.lastGgaMs != 0 && millis() - position.lastGgaMs < 3000UL
+                && std::isfinite(position.latitude) && std::abs(position.latitude) <= 90
+                && std::isfinite(position.longitude) && std::abs(position.longitude) <= 180
+                && (position.latitude != 0 || position.longitude != 0))
+            {
+                hasPosition = true;
+                break;
+            }
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+        if (!hasPosition || workflowCancelRequested_)
+        {
+            finish(false, workflowCancelRequested_, "no valid GGA position for AutoNearest");
+            return false;
+        }
+    }
+
+    String failureReason;
+    if (!startAutoBaseRover(host, port, username, password, mountpoint, ntripVersion, failureReason,
+                            autoNearest ? &selectedMountpoint : nullptr))
+    {
+        if (autoNearest && failureReason == "ERROR - NO STATION WITHIN 20 KM" && !workflowCancelRequested_)
+        {
+            DynamicJsonDocument survey(CONFIG_DOCUMENT_SIZE);
+            survey.set(previousBase.as<JsonObjectConst>());
+            survey["base_setup_method"] = "SURVEY_IN";
+            survey["accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
+            survey["survey_in_accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
+            survey.remove("coords");
+            survey.remove("coordinate_source");
+            survey.remove("conversion_report");
+            if (restoreWorkflowBase(survey.as<JsonObjectConst>()) && restartConfiguredNtrip())
+            {
+                const String oldConfig = baseConfig_;
+                baseConfig_.clear();
+                serializeJson(survey, baseConfig_);
+                if (saveStatePreferences())
+                {
+                    setAgentState(normalAgentState());
+                    setWorkflowProgress("completed", 4, 4,
+                        R"({"mode":"survey_in","auto_applied":true,"receiver_write_completed":true,"reason":"no_fixed_station_within_20_km"})");
+                    saveStatePreferences();
+                    publishConfigState("base_config_state");
+                    return true;
+                }
+                baseConfig_ = oldConfig;
+                finish(false, false, "cannot save Survey-In fallback");
+                return false;
+            }
+            finish(false, false, "cannot start Survey-In fallback");
+            return false;
+        }
+        finish(false, workflowCancelRequested_, failureReason);
         return false;
     }
+    const String sourceMountpoint = autoNearest ? selectedMountpoint : mountpoint;
 
     setAgentState("auto_setup_wait_fix");
     setWorkflowProgress("wait_fix", 2, 4);
     auto cancelled = false;
-    if (!waitForAutoBaseFix(timeoutSeconds, fixedStreakRequired, cancelled, failureReason))
+    if (!waitForAutoBaseFix(timeoutSeconds, fixedStreakRequired, cancelled, failureReason, sourceMountpoint))
     {
         finish(false, cancelled, failureReason);
         return false;
@@ -941,7 +1008,7 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
     std::vector<double> longitudes;
     std::vector<double> altitudes;
     if (!collectAutoBaseSamples(configuredSamples, latitudes, longitudes, altitudes,
-                                cancelled, failureReason))
+                                cancelled, failureReason, sourceMountpoint))
     {
         finish(false, cancelled, failureReason);
         return false;
@@ -953,6 +1020,13 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
     {
         finish(false, false, failureReason);
         return false;
+    }
+    DynamicJsonDocument result(2048);
+    if (deserializeJson(result, resultJson) == DeserializationError::Ok)
+    {
+        result["source_mountpoint"] = sourceMountpoint;
+        resultJson.clear();
+        serializeJson(result, resultJson);
     }
     setWorkflowProgress("completed", 4, 4, resultJson);
     saveStatePreferences();

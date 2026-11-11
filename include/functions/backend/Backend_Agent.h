@@ -164,13 +164,13 @@ private:
                                uint8_t &fixedStreakRequired);
     bool startAutoBaseRover(const String &host, uint16_t port, const String &username,
                             const String &password, const String &mountpoint,
-                            uint8_t ntripVersion, String &error);
+                            uint8_t ntripVersion, String &error, String *selectedMountpoint = nullptr);
     bool waitForAutoBaseFix(uint32_t timeoutSeconds, uint8_t fixedStreakRequired,
-                            bool &cancelled, String &failureReason);
+                            bool &cancelled, String &failureReason, const String &sourceMountpoint);
     bool collectAutoBaseSamples(int configuredSamples, std::vector<double> &latitudes,
                                 std::vector<double> &longitudes,
                                 std::vector<double> &altitudes, bool &cancelled,
-                                String &failureReason);
+                                String &failureReason, const String &sourceMountpoint);
     bool resolveAutoBaseProjection(JsonObject payload, double rawLongitude,
                                    double &centralMeridianDeg, double &scale,
                                    String &provinceName, String &provinceCode,

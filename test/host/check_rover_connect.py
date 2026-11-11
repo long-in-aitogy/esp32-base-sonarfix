@@ -132,10 +132,17 @@ int pdMS_TO_TICKS(int ms) { return ms; }
 int xSemaphoreTake(int, int) { return lockOk; }
 void xSemaphoreGive(int) { ++releases; }
 void stopNtrip() { ++stops; }
-bool startNtripRover(const String &, uint16_t, const String &, const String &, const String &, uint8_t) { return startOk; }
+String passedReceiver;
+String *passedSelection = nullptr;
+bool startNtripRover(const String &, uint16_t, const String &, const String &, const String &, uint8_t, String *selection = nullptr, const String &receiver = String()) {
+    passedSelection = selection; passedReceiver = receiver;
+    if (selection && startOk) *selection = "station";
+    return startOk;
+}
 const char *ntripRoverLastError() { return "ERROR - NO STATION WITHIN 20 KM"; }
 struct BackendAgent {
-    bool startAutoBaseRover(const String &, uint16_t, const String &, const String &, const String &, uint8_t, String &);
+    String serialNumber_ = "esp-test";
+    bool startAutoBaseRover(const String &, uint16_t, const String &, const String &, const String &, uint8_t, String &, String * = nullptr);
     bool startReferenceRover(const String &, uint16_t, const String &, const String &, const String &, String &);
 };
 '''
@@ -154,7 +161,10 @@ int main() {
     assert(error == "ERROR - NO STATION WITHIN 20 KM" && releases == 2 && stops == 2);
     startOk = true;
     assert(agent.startAutoBaseRover("host", 2101, "user", "password", "mount", 1, error));
-    assert(releases == 3 && stops == 3);
+    assert(releases == 3 && stops == 3 && passedSelection == nullptr && passedReceiver.isEmpty());
+    String selected;
+    assert(agent.startAutoBaseRover("host", 2101, "user", "password", "nearest", 1, error, &selected));
+    assert(selected == "station" && passedSelection == &selected && passedReceiver == "esp-test");
 }
 '''
 with tempfile.TemporaryDirectory(prefix='rover-connect-wrapper-') as directory:
