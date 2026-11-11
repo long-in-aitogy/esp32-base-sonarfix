@@ -72,8 +72,8 @@ void BackendAgent::appendStatusFields(JsonDocument &doc, const String &status,
     doc["is_synced"] = true;
     doc["is_lte"] = isGsmConnection();
     JsonObject rtcmStats = doc.createNestedObject("rtcm_stats");
-    rtcmStats["frames"] = gnss.rtcmFrames;
-    rtcmStats["bytes_read"] = gnss.bytesRead;
+    rtcmStats["frames"] = gnss.traffic.rtcmFrames;
+    rtcmStats["bytes_read"] = gnss.traffic.bytesRead;
     rtcmStats["decoder"] = false;
     copyJsonObject(doc, "base_config", baseConfig_);
     copyJsonObject(doc, "service_config", serviceConfig_);
@@ -229,10 +229,10 @@ void BackendAgent::appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapsh
 {
     JsonObject nmeaHealth = doc.createNestedObject("nmea_health");
     JsonObject typeCounts = nmeaHealth.createNestedObject("type_counts");
-    typeCounts["GGA"] = gnss.ggaCount;
-    typeCounts["GSA"] = gnss.gsaCount;
-    typeCounts["GSV"] = gnss.gsvCount;
-    typeCounts["GST"] = gnss.gstCount;
+    typeCounts["GGA"] = gnss.traffic.ggaCount;
+    typeCounts["GSA"] = gnss.traffic.gsaCount;
+    typeCounts["GSV"] = gnss.traffic.gsvCount;
+    typeCounts["GST"] = gnss.traffic.gstCount;
     nmeaHealth["gsv_snr_samples"] = gnss.snrSamples;
     if (gnss.lastGsvMs > 0 && nowMs - gnss.lastGsvMs <= 15000UL)
     {
@@ -262,14 +262,14 @@ void BackendAgent::appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapsh
     else if (gnss.hdop > 0)
         doc["hacc"] = gnss.hdop;
     JsonObject stats = doc.createNestedObject("gnss_stats");
-    stats["rtcm_packets"] = gnss.rtcmFrames;
-    stats["nmea_packets"] = gnss.nmeaSentences;
-    stats["bytes_read"] = gnss.bytesRead;
+    stats["rtcm_packets"] = gnss.traffic.rtcmFrames;
+    stats["nmea_packets"] = gnss.traffic.nmeaSentences;
+    stats["bytes_read"] = gnss.traffic.bytesRead;
     stats["seconds_since_data"] = gnss.hasData ? (nowMs - gnss.lastDataMs) / 1000UL : 0;
     JsonObject parser = stats.createNestedObject("parser_debug");
-    parser["rtcm_valid_packets"] = gnss.rtcmFrames;
+    parser["rtcm_valid_packets"] = gnss.traffic.rtcmFrames;
     parser["rtcm_decoder"] = false;
-    parser["nmea_valid_packets"] = gnss.nmeaSentences;
+    parser["nmea_valid_packets"] = gnss.traffic.nmeaSentences;
 }
 
 void BackendAgent::appendNtripStatus(JsonDocument &doc, const JsonObjectConst &service,

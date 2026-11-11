@@ -1,6 +1,7 @@
 #define NTRIP_HANDLER_IP_CODE
 
 #include "functions/ntrip/ntrip_base.h"
+#include "functions/ntrip/ntrip_rover.h"
 #include "functions/ntrip/unicore_bootstrap_cmds.h"
 
 #include "Prog_Config.h"
@@ -169,9 +170,9 @@ namespace
 /** @brief Implements connectEndpoint. */
 bool connectEndpoint(uint8_t index)
 {
-  if (index >= NTRIP_SERVER_COUNT || !endpoints[index].enabled || !streamActive(index))
+  if (index >= NTRIP_SERVER_COUNT || !endpointFor(index).enabled || !streamActive(index))
     return false;
-  NtripEndpoint &endpoint = endpoints[index];
+  NtripEndpoint &endpoint = endpointFor(index);
   Client &client = clientFor(index);
   endpoint.lastReconnectMs = millis();
   client.stop();
@@ -424,7 +425,7 @@ int connectNTRIP()
 /** @brief Implements loopNTRIP. */
 int loopNTRIP(String &rtcmData)
 {
-  if (roverSessionActive)
+  if (ntripRoverSessionStarted())
     return 504;
 
   auto returnCode = NTRIP_MODE;
@@ -433,7 +434,7 @@ int loopNTRIP(String &rtcmData)
 
   for (uint8_t index = 0; index < NTRIP_SERVER_COUNT; ++index)
   {
-    NtripEndpoint &endpoint = endpoints[index];
+    NtripEndpoint &endpoint = endpointFor(index);
     Client &client = clientFor(index);
     if (!endpoint.enabled || !streamActive(index))
     {
@@ -470,9 +471,7 @@ void stopNtrip()
 {
   for (uint8_t index = 0; index < NTRIP_SERVER_COUNT; ++index)
     stopEndpoint(index);
-  roverSessionActive = false;
-  roverSessionAuthenticated = false;
-  roverLastGgaMs = 0;
+  clearNtripRoverSession();
 }
 
 /** @brief Implements isNtripConnected. */
@@ -487,7 +486,7 @@ bool ntripServerConnected(uint8_t serverId)
   if (serverId < 1 || serverId > NTRIP_SERVER_COUNT)
     return false;
   const uint8_t index = serverId - 1;
-  return endpoints[index].authenticated && clientFor(index).connected();
+  return endpointFor(index).authenticated && clientFor(index).connected();
 }
 
 /** @brief Implements ntripServerBps. */
@@ -495,8 +494,8 @@ uint32_t ntripServerBps(uint8_t serverId)
 {
   if (serverId < 1 || serverId > NTRIP_SERVER_COUNT)
     return 0;
-  updateBps(endpoints[serverId - 1]);
-  return endpoints[serverId - 1].bytesPerSecond;
+  updateBps(endpointFor(serverId - 1));
+  return endpointFor(serverId - 1).bytesPerSecond;
 }
 
 /** @brief Implements ntripServerError. */
@@ -504,5 +503,5 @@ String ntripServerError(uint8_t serverId)
 {
   if (serverId < 1 || serverId > NTRIP_SERVER_COUNT)
     return String();
-  return endpoints[serverId - 1].lastError;
+  return endpointFor(serverId - 1).lastError;
 }

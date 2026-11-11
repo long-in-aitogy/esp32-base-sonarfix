@@ -11,6 +11,7 @@
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
+#include <memory>
 #include <vector>
 
 class BackendAgentWebsocket;
@@ -21,6 +22,8 @@ struct GnssTelemetrySnapshot;
 class BackendAgent
 {
 public:
+    BackendAgent();
+    ~BackendAgent();
     void begin();
     bool initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected);
     void loop();
@@ -72,7 +75,7 @@ private:
     String autoBaseProgress_ = "{}";
     String baseConfig_ = "{}";
     String serviceConfig_ = "{}";
-    String receiverBaseReadback_ = "{\"state\":\"not_read\",\"chip\":\"Unicorecomm\",\"mode_kind\":\"unknown\"}";
+    String receiverBaseReadback_ = R"({"state":"not_read","chip":"Unicorecomm","mode_kind":"unknown"})";
     String surveyInResult_ = "{}";
     String baseStartupState_ = "pending";
     String baseStartupError_;
@@ -115,7 +118,7 @@ private:
 
     QueueHandle_t nmeaQueue_ = nullptr;
     QueueHandle_t rtcmQueue_ = nullptr;
-    BackendAgentWebsocket *websocket_ = nullptr;
+    std::unique_ptr<BackendAgentWebsocket> websocket_;
     TaskHandle_t workflowTask_ = nullptr;
     String workflowKind_;
     String workflowPayload_;
@@ -132,7 +135,7 @@ private:
     void refreshWebsocket();
     void loopWebsocket();
     void drainDataQueues();
-    inline void retryUnknownChipProbe();
+    void retryUnknownChipProbe();
     void evaluateControlPlaneFailover();
     bool startWorkflow(const String &kind, const String &payload);
     void runWorkflow();
@@ -184,7 +187,7 @@ private:
                                      String &host, uint16_t &port, String &username,
                                      String &password, String &mountpoint,
                                      uint32_t &timeoutSeconds, uint16_t &requestedSamples);
-    inline bool startReferenceRover(const String &host, uint16_t port, const String &username,
+    bool startReferenceRover(const String &host, uint16_t port, const String &username,
                                     const String &password, const String &mountpoint);
     bool waitForReferenceFix(uint32_t timeoutSeconds, String &failureReason);
     bool collectReferenceSamples(uint16_t requestedSamples, std::vector<double> &latitudes,
@@ -201,25 +204,36 @@ private:
     bool refreshUbloxReadback(String &error);
     void updateUbloxSurveyState(const UbxBaseStatus &status);
     void logUbloxReadback(const UbxBaseStatus &status);
-    void appendUbloxPosition(DynamicJsonDocument &doc, const UbxBaseStatus &status,
+    void appendUbloxPosition(JsonDocument &doc, const UbxBaseStatus &status,
                              const String &mode);
     bool refreshUnicoreReadback(String &error);
     bool prepareStartupConfig(DynamicJsonDocument &config, JsonObject &base,
                               bool &saved, String &method, String &error);
     bool readStartupReceiverMode(GnssCmdBuilder::GnssSensorType detected, String &error);
+    struct StartupPosition {
+        double latitude = 0.0;
+        double longitude = 0.0;
+        double altitude = 0.0;
+        bool ellipsoid = false;
+    };
     bool buildStartupCommands(JsonObject base, GnssCmdBuilder::GnssSensorType detected,
                               bool restoreFixed, GnssCmdBuilder::CommandList &commands,
-                              double &fixedLatitude, double &fixedLongitude,
-                              double &fixedAltitude, bool &ellipsoid, String &error);
+                              StartupPosition &position, String &error);
     bool verifyStartupReadback(GnssCmdBuilder::GnssSensorType detected, bool restoreFixed,
-                               double fixedLatitude, double fixedLongitude,
-                               double fixedAltitude, bool ellipsoid, String &error);
+                               const StartupPosition &expected, String &error);
     void saveSurveyResult(JsonObjectConst bestPosition, const String &mode);
     void pollGnssStatus();
+    struct ProjectedPosition {
+        double latitude;
+        double longitude;
+        double altitude;
+        double northing = 0.0;
+        double easting = 0.0;
+    };
     bool transformToVn2000(double latitude, double longitude, double altitude,
-                           double centralMeridianDeg, double scale,
-                           double &localLatitude, double &localLongitude,
-                           double &localAltitude, double &northing, double &easting);
+                           double centralMeridianDeg, double scale, ProjectedPosition &result);
+    static bool transformItrfToVn2000(double latitude, double longitude, double altitude,
+                                     double centralMeridianDeg, double scale, ProjectedPosition &result);
     bool getProvinceProjection(const String &code, double &centralMeridianDeg,
                                double &scale, String &name) const;
     void markStatusDirty() { statusDirty_ = true; }

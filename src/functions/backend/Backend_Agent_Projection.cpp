@@ -1,4 +1,5 @@
 #include "functions/backend/Backend_Agent.h"
+#include <array>
 #include <cmath>
 
     // Transform receiver coordinates to VN2000; RTCM payloads are not inspected.
@@ -17,7 +18,7 @@
         double scale;
     };
 
-    constexpr ProvinceProjection VN2000_PROVINCES[] = {
+    constexpr std::array<ProvinceProjection, 34> VN2000_PROVINCES = {{
         {"AG_KG", "An Giang + Kien Giang", 104.75, 0.9999},
         {"BN_BG", "Bac Ninh + Bac Giang", 107.0, 0.9999},
         {"CM_BL", "Ca Mau + Bac Lieu", 104.5, 0.9999},
@@ -52,7 +53,7 @@
         {"HUE", "Hue", 107.0, 0.9999},
         {"TQUANG_HGIANG", "Tuyen Quang + Ha Giang", 106.0, 0.9999},
         {"VLONG_BTRE_TVINH", "Vinh Long + Ben Tre + Tra Vinh", 105.5, 0.9999},
-    };
+    }};
 
     struct EcefCoordinate
     {
@@ -148,53 +149,52 @@
         (void)height;
     }
 
-    bool transformItrfToVn2000(double latitudeDeg, double longitudeDeg, double height,
-                               double centralMeridianDeg, double scale,
-                               double &localLatitude, double &localLongitude,
-                               double &localAltitude, double &northing,
-                               double &easting)
-    {
-        const EcefCoordinate source = llhToEcef(latitudeDeg, longitudeDeg, height);
-        const auto omega = 0.00928836 * ARCSEC_TO_RAD;
-        const auto phi = -0.01975479 * ARCSEC_TO_RAD;
-        const auto epsilon = 0.00427372 * ARCSEC_TO_RAD;
-        const auto k = 0.999999747093722;
-        const EcefCoordinate transformed = {
-            191.90441429 + k * (source.x + epsilon * source.y - phi * source.z),
-            39.30318279 + k * (-epsilon * source.x + source.y + omega * source.z),
-            111.45032835 + k * (phi * source.x - omega * source.y + source.z),
-        };
-
-        auto latitudeRad = 0.0;
-        auto longitudeRad = 0.0;
-        auto transformedHeight = 0.0;
-        ecefToLlh(transformed, latitudeRad, longitudeRad, transformedHeight);
-        const auto centralMeridianRad = centralMeridianDeg * 3.14159265358979323846 / 180.0;
-        blhToUtm(centralMeridianRad, scale, latitudeRad, longitudeRad,
-                 transformedHeight, northing, easting);
-        utmToBlh(centralMeridianRad, scale, northing, easting, transformedHeight,
-                 latitudeRad, longitudeRad);
-
-        const EcefCoordinate vn2000 = llhToEcef(
-            latitudeRad * 180.0 / 3.14159265358979323846,
-            longitudeRad * 180.0 / 3.14159265358979323846,
-            transformedHeight);
-        const auto reverseOmega = -0.00928836 * ARCSEC_TO_RAD;
-        const auto reversePhi = 0.01975479 * ARCSEC_TO_RAD;
-        const auto reverseEpsilon = -0.00427372 * ARCSEC_TO_RAD;
-        const auto reverseK = 1.000000252906278;
-        const EcefCoordinate local = {
-            -191.90441429 + reverseK * (vn2000.x + reverseEpsilon * vn2000.y - reversePhi * vn2000.z),
-            -39.30318279 + reverseK * (-reverseEpsilon * vn2000.x + vn2000.y + reverseOmega * vn2000.z),
-            -111.45032835 + reverseK * (reversePhi * vn2000.x - reverseOmega * vn2000.y + vn2000.z),
-        };
-        ecefToLlh(local, latitudeRad, longitudeRad, localAltitude);
-        localLatitude = latitudeRad * 180.0 / 3.14159265358979323846;
-        localLongitude = longitudeRad * 180.0 / 3.14159265358979323846;
-        return std::isfinite(localLatitude) && std::isfinite(localLongitude) && std::isfinite(localAltitude) && -90.0 <= localLatitude && localLatitude <= 90.0 && -180.0 <= localLongitude && localLongitude <= 180.0;
-    }
-
 } // namespace
+
+bool BackendAgent::transformItrfToVn2000(double latitudeDeg, double longitudeDeg, double height,
+                                        double centralMeridianDeg, double scale,
+                                        ProjectedPosition &result)
+{
+    const EcefCoordinate source = llhToEcef(latitudeDeg, longitudeDeg, height);
+    const auto omega = 0.00928836 * ARCSEC_TO_RAD;
+    const auto phi = -0.01975479 * ARCSEC_TO_RAD;
+    const auto epsilon = 0.00427372 * ARCSEC_TO_RAD;
+    const auto k = 0.999999747093722;
+    const EcefCoordinate transformed = {
+        191.90441429 + k * (source.x + epsilon * source.y - phi * source.z),
+        39.30318279 + k * (-epsilon * source.x + source.y + omega * source.z),
+        111.45032835 + k * (phi * source.x - omega * source.y + source.z),
+    };
+
+    auto latitudeRad = 0.0;
+    auto longitudeRad = 0.0;
+    auto transformedHeight = 0.0;
+    ecefToLlh(transformed, latitudeRad, longitudeRad, transformedHeight);
+    const auto centralMeridianRad = centralMeridianDeg * 3.14159265358979323846 / 180.0;
+    blhToUtm(centralMeridianRad, scale, latitudeRad, longitudeRad,
+             transformedHeight, result.northing, result.easting);
+    utmToBlh(centralMeridianRad, scale, result.northing, result.easting, transformedHeight,
+             latitudeRad, longitudeRad);
+
+    const EcefCoordinate vn2000 = llhToEcef(
+        latitudeRad * 180.0 / 3.14159265358979323846,
+        longitudeRad * 180.0 / 3.14159265358979323846,
+        transformedHeight);
+    const auto reverseOmega = -0.00928836 * ARCSEC_TO_RAD;
+    const auto reversePhi = 0.01975479 * ARCSEC_TO_RAD;
+    const auto reverseEpsilon = -0.00427372 * ARCSEC_TO_RAD;
+    const auto reverseK = 1.000000252906278;
+    const EcefCoordinate local = {
+        -191.90441429 + reverseK * (vn2000.x + reverseEpsilon * vn2000.y - reversePhi * vn2000.z),
+        -39.30318279 + reverseK * (-reverseEpsilon * vn2000.x + vn2000.y + reverseOmega * vn2000.z),
+        -111.45032835 + reverseK * (reversePhi * vn2000.x - reverseOmega * vn2000.y + vn2000.z),
+    };
+    ecefToLlh(local, latitudeRad, longitudeRad, result.altitude);
+    result.latitude = latitudeRad * 180.0 / 3.14159265358979323846;
+    result.longitude = longitudeRad * 180.0 / 3.14159265358979323846;
+    return std::isfinite(result.latitude) && std::isfinite(result.longitude) && std::isfinite(result.altitude) && -90.0 <= result.latitude && result.latitude <= 90.0 && -180.0 <= result.longitude && result.longitude <= 180.0;
+}
+
 
 bool BackendAgent::getProvinceProjection(const String &code, double &centralMeridianDeg,
                                          double &scale, String &name) const
@@ -214,15 +214,12 @@ bool BackendAgent::getProvinceProjection(const String &code, double &centralMeri
 
 bool BackendAgent::transformToVn2000(const double latitude, const double longitude,
                                      const double altitude, const double centralMeridianDeg,
-                                     const double scale, double &localLatitude,
-                                     double &localLongitude, double &localAltitude,
-                                     double &northing, double &easting)
+                                     const double scale, ProjectedPosition &result)
 {
     if (!std::isfinite(latitude) || !std::isfinite(longitude) || !std::isfinite(altitude) || latitude < -90.0 || latitude > 90.0 || longitude < -180.0 || longitude > 180.0 || centralMeridianDeg < 100.0 || centralMeridianDeg > 112.0 || scale < 0.9990 || scale > 1.0010)
     {
         return false;
     }
     return transformItrfToVn2000(latitude, longitude, altitude, centralMeridianDeg,
-                                 scale, localLatitude, localLongitude, localAltitude,
-                                 northing, easting);
+                                 scale, result);
 }

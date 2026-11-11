@@ -21,18 +21,36 @@ extern TinyGsm modem;
 
 using namespace ntrip_common;
 
+namespace
+{
+    struct RoverSession
+    {
+        bool active = false;
+        bool authenticated = false;
+        uint32_t lastGgaMs = 0;
+        uint32_t bytesReceived = 0;
+        uint32_t packetsReceived = 0;
+    };
+
+    RoverSession &roverSession()
+    {
+        static RoverSession session;
+        return session;
+    }
+}
+
 /** @brief Implements sendRoverGgaIfAvailable. */
 void sendRoverGgaIfAvailable(Client &client, const bool force = false)
 {
-    if (!force && millis() - roverLastGgaMs < 5000UL)
+    if (!force && millis() - roverSession().lastGgaMs < 5000UL)
         return;
     const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
     if (snapshot.lastGga[0] == '\0' || snapshot.lastGgaMs == 0 || millis() - snapshot.lastGgaMs > 3000UL)
     {
-        if (force || millis() - roverLastGgaMs >= 5000UL)
+        if (force || millis() - roverSession().lastGgaMs >= 5000UL)
         {
             Serial.println("[NTRIP ROVER] Chua co GGA moi tu UART GNSS; chua gui GGA len caster");
-            roverLastGgaMs = millis();
+            roverSession().lastGgaMs = millis();
         }
         return;
     }
@@ -40,11 +58,11 @@ void sendRoverGgaIfAvailable(Client &client, const bool force = false)
     if (client.print(outbound) != outbound.length())
     {
         Serial.println("[NTRIP ROVER] Loi ghi GGA len socket caster");
-        roverLastGgaMs = millis();
+        roverSession().lastGgaMs = millis();
         return;
     }
     Serial.printf("[NTRIP ROVER] GGA -> caster: %s\n", snapshot.lastGga.data());
-    roverLastGgaMs = millis();
+    roverSession().lastGgaMs = millis();
 }
 
 /** @brief Implements startNtripRover. */
@@ -60,17 +78,17 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
 
     // The temporary rover reuses source server 1's client and modem mux 0.
     // Close that client before opening a receive-only correction stream.
-    roverBytesReceived = 0;
-    roverPacketsReceived = 0;
-    roverSessionActive = true;
-    roverSessionAuthenticated = false;
-    roverLastGgaMs = 0;
+    roverSession().bytesReceived = 0;
+    roverSession().packetsReceived = 0;
+    roverSession().active = true;
+    roverSession().authenticated = false;
+    roverSession().lastGgaMs = 0;
     Client &client = clientFor(0);
     client.stop();
     client.setTimeout(3000);
     if (!client.connect(host.c_str(), port))
     {
-        roverSessionActive = false;
+        roverSession().active = false;
         return false;
     }
 
@@ -105,10 +123,10 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
     if (!waitForNtripResponse(client))
     {
         client.stop();
-        roverSessionActive = false;
+        roverSession().active = false;
         return false;
     }
-    roverSessionAuthenticated = true;
+    roverSession().authenticated = true;
     sendRoverGgaIfAvailable(client, true);
     Serial.println("[NTRIP ROVER] Da ket noi CORS " + host + ":" + String(port) + "/" + mountpoint);
     return true;
@@ -117,13 +135,13 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
 /** @brief Implements loopNtripRover. */
 int loopNtripRover()
 {
-    if (!roverSessionActive || !roverSessionAuthenticated)
+    if (!roverSession().active || !roverSession().authenticated)
         return 504;
     Client &client = clientFor(0);
     if (!client.connected())
     {
-        roverSessionActive = false;
-        roverSessionAuthenticated = false;
+        roverSession().active = false;
+        roverSession().authenticated = false;
         return 504;
     }
     sendRoverGgaIfAvailable(client);
@@ -141,8 +159,8 @@ int loopNtripRover()
     if (bytesRead > 0)
     {
         Serial1.write(buffer.data(), static_cast<size_t>(bytesRead));
-        roverBytesReceived += static_cast<uint32_t>(bytesRead);
-        ++roverPacketsReceived;
+        roverSession().bytesReceived += static_cast<uint32_t>(bytesRead);
+        ++roverSession().packetsReceived;
     }
     xSemaphoreGive(rtcmBufferMutex);
     return bytesRead > 0 ? bytesRead : 200;
@@ -151,20 +169,28 @@ int loopNtripRover()
 /** @brief Implements stopNtripRover. */
 void stopNtripRover()
 {
-    if (roverSessionActive)
+    if (roverSession().active)
         clientFor(0).stop();
-    roverSessionActive = false;
-    roverSessionAuthenticated = false;
-    roverLastGgaMs = 0;
+    clearNtripRoverSession();
 }
+
+void clearNtripRoverSession()
+{
+    auto &session = roverSession();
+    session.active = false;
+    session.authenticated = false;
+    session.lastGgaMs = 0;
+}
+
+bool ntripRoverSessionStarted() { return roverSession().active; }
 
 /** @brief Implements ntripRoverActive. */
 bool ntripRoverActive()
 {
-    return roverSessionActive && roverSessionAuthenticated;
+    return roverSession().active && roverSession().authenticated;
 }
 
 /** @brief Implements ntripRoverBytesReceived. */
-uint32_t ntripRoverBytesReceived() { return roverBytesReceived; }
+uint32_t ntripRoverBytesReceived() { return roverSession().bytesReceived; }
 /** @brief Implements ntripRoverPacketsReceived. */
-uint32_t ntripRoverPacketsReceived() { return roverPacketsReceived; }
+uint32_t ntripRoverPacketsReceived() { return roverSession().packetsReceived; }

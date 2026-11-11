@@ -60,7 +60,10 @@ public:
 struct HostSerial
 {
     template <class... Args>
-    void printf(const char *, Args...) {}
+    void printf(const char *, Args...) const
+    {
+        // Host checks discard firmware diagnostics.
+    }
     void println(const char *) {}
 };
 inline HostSerial Serial;

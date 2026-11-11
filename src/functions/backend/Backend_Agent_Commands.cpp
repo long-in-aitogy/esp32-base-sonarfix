@@ -204,7 +204,7 @@ void BackendAgent::applyServiceStreamCommand(JsonObject payload)
 
 bool BackendAgent::applyLockCommand(JsonObjectConst payload, String &error)
 {
-    if (!payload.containsKey("locked_servers"))
+    if (payload["locked_servers"].isUnbound())
     {
         requestWorkflowStop();
         stationLock_.all = true;
@@ -219,9 +219,9 @@ bool BackendAgent::applyLockCommand(JsonObjectConst payload, String &error)
         return false;
     }
 
-    int serverIds[2] = {};
-    auto count = 0;
-    uint8_t seen = 0;
+    std::array<int, 2> serverIds{};
+    size_t count = 0;
+    std::array<bool, 2> seen{};
     for (JsonVariantConst id : ids)
     {
         if (!id.is<int>() || id.as<int>() < 1 || id.as<int>() > 2)
@@ -230,14 +230,13 @@ bool BackendAgent::applyLockCommand(JsonObjectConst payload, String &error)
             return false;
         }
         const auto serverId = id.as<int>();
-        const auto bit = static_cast<uint8_t>(1U << (serverId - 1));
-        if ((seen & bit) == 0 && count < 2)
+        if (!seen[serverId - 1])
         {
             serverIds[count++] = serverId;
-            seen = static_cast<uint8_t>(seen | bit);
+            seen[serverId - 1] = true;
         }
     }
-    if (!stationLock_.setScoped(serverIds, count))
+    if (!stationLock_.setScoped(serverIds.data(), count))
     {
         error = "payload.locked_servers must contain only server IDs 1 or 2";
         return false;
@@ -257,7 +256,7 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
         error = "too many raw commands";
         return false;
     }
-    uint8_t decoded[3072] = {};
+    std::array<uint8_t, 3072> decoded{};
     for (JsonVariant item : commands)
     {
         const auto encoded = item.as<String>();
@@ -266,32 +265,32 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
             error = "invalid raw command item";
             return false;
         }
-        auto length = decodeBase64(encoded, decoded, sizeof(decoded));
+        auto length = decodeBase64(encoded, decoded.data(), decoded.size());
         if (length == 0)
         {
             error = "raw command is not valid base64";
             return false;
         }
         uint32_t delayMs = 0;
-        if (delayMarker(decoded, length, delayMs))
+        if (delayMarker(decoded.data(), length, delayMs))
         {
             delay(delayMs);
             continue;
         }
         if (sensorType == "Unicorecomm")
-            length = routeUnicoreOutput(decoded, length, GNSS_UNICORE_PORT);
+            length = routeUnicoreOutput(decoded.data(), length, GNSS_UNICORE_PORT);
         else if (sensorType == "Ublox")
-            GnssCmdBuilder::routeUbloxOutput(decoded, length);
+            GnssCmdBuilder::routeUbloxOutput(decoded.data(), length);
         const auto unicore = sensorType == "Unicorecomm" || (sensorType.isEmpty() && sensorType_ == "Unicorecomm");
         if (unicore)
         {
-            if (!writeUnicoreCommand(decoded, length, error))
+            if (!writeUnicoreCommand(decoded.data(), length, error))
                 return false;
             continue;
         }
         if (rtcmBufferMutex && xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE)
         {
-            Serial1.write(decoded, length);
+            Serial1.write(decoded.data(), length);
             Serial1.flush();
             xSemaphoreGive(rtcmBufferMutex);
         }
@@ -495,12 +494,12 @@ bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload,
         lastReceiverPollMs_ = 0;
         setAgentState(normalAgentState());
     }
-    if (!originalConfig.isNull() && originalConfig.containsKey("params"))
+    if (!originalConfig.isNull() && !originalConfig["params"].isUnbound())
     {
         DynamicJsonDocument baseDoc(CONFIG_DOCUMENT_SIZE);
         baseDoc.set(originalConfig["params"]);
         JsonObject base = baseDoc.as<JsonObject>();
-        if (originalConfig.containsKey("mode"))
+        if (!originalConfig["mode"].isUnbound())
             base["mode"] = originalConfig["mode"];
         baseConfig_.clear();
         serializeJson(baseDoc, baseConfig_);
@@ -600,11 +599,7 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
     const auto rawLatitude = rawCoordinates["lat"] | NAN;
     const auto rawLongitude = rawCoordinates["lon"] | NAN;
     const auto rawAltitude = rawCoordinates["alt"] | NAN;
-    double localLatitude = rawLatitude;
-    double localLongitude = rawLongitude;
-    double localAltitude = rawAltitude;
-    double northing = 0.0;
-    double easting = 0.0;
+    ProjectedPosition result{rawLatitude, rawLongitude, rawAltitude};
     if (province.isEmpty())
     {
         error = "missing payload.province_code";
@@ -615,31 +610,31 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
         error = "invalid province_code";
         return false;
     }
-    const auto validCoordinates = baseParsed && std::isfinite(rawLatitude) && std::isfinite(rawLongitude) && std::isfinite(rawAltitude) && transformToVn2000(rawLatitude, rawLongitude, rawAltitude, centralMeridianDeg, scale, localLatitude, localLongitude, localAltitude, northing, easting);
-    if (!validCoordinates)
+    if (const auto validCoordinates = baseParsed && std::isfinite(rawLatitude) && std::isfinite(rawLongitude) && std::isfinite(rawAltitude) && transformToVn2000(rawLatitude, rawLongitude, rawAltitude, centralMeridianDeg, scale, result);
+        !validCoordinates)
     {
         error = "base coordinates are missing or cannot be transformed";
         return false;
     }
-    if (!applyBaseCoordinates(localLatitude, localLongitude, localAltitude))
+    if (!applyBaseCoordinates(result.latitude, result.longitude, result.altitude))
     {
         error = "cannot apply transformed coordinates to GNSS";
         return false;
     }
     JsonObject coordinates = base["coords"].as<JsonObject>();
     if (coordinates.isNull())
-        coordinates = base.createNestedObject("coords");
-    coordinates["lat"] = localLatitude;
-    coordinates["lon"] = localLongitude;
-    coordinates["alt"] = localAltitude;
+        coordinates = base["coords"].to<JsonObject>();
+    coordinates["lat"] = result.latitude;
+    coordinates["lon"] = result.longitude;
+    coordinates["alt"] = result.altitude;
     base["itrf_vn2000_transform_applied"] = true;
     base["central_meridian_deg"] = centralMeridianDeg;
     base["k0"] = scale;
     base["province_code"] = province;
     base["province_name"] = provinceName;
     base["projection_source"] = "manual_province_override";
-    base["vn2000_northing"] = northing;
-    base["vn2000_easting"] = easting;
+    base["vn2000_northing"] = result.northing;
+    base["vn2000_easting"] = result.easting;
     baseConfig_.clear();
     serializeJson(baseDoc, baseConfig_);
     saveStatePreferences();
@@ -688,7 +683,7 @@ bool BackendAgent::executeBasicCommand(const String &command, JsonObject payload
 bool BackendAgent::executeStreamCommand(JsonObject payload, String &error,
                                         String &detail)
 {
-    if (!payload.containsKey("active"))
+    if (payload["active"].isUnbound())
     {
         error = "missing payload.active";
         return false;

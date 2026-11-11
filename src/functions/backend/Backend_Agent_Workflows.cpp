@@ -5,6 +5,7 @@
 #include "functions/ntrip/ntrip_rover.h"
 #include "functions/ntrip/RTCM_Receiver.h"
 #include "functions/backend/Base_Sample.h"
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <vector>
@@ -74,6 +75,7 @@ void BackendAgent::requestWorkflowStop()
         workflowCancelRequested_ = true;
 }
 
+// FreeRTOS TaskFunction_t requires void*. startWorkflow passes this as the context.
 void BackendAgent::workflowTaskThunk(void *parameter)
 {
     auto *agent = static_cast<BackendAgent *>(parameter);
@@ -350,7 +352,7 @@ void BackendAgent::runWorkflow()
     if (deserializeJson(document, workflowPayload_) != DeserializationError::Ok || !document.is<JsonObject>())
     {
         setAgentState(normalAgentState());
-        setWorkflowProgress("failed", 0, 4, "{\"reason\":\"invalid workflow payload\"}");
+        setWorkflowProgress("failed", 0, 4, R"({"reason":"invalid workflow payload"})");
         saveStatePreferences();
         return;
     }
@@ -368,7 +370,7 @@ void BackendAgent::runWorkflow()
     else
     {
         setAgentState(normalAgentState());
-        setWorkflowProgress("failed", 0, 4, "{\"reason\":\"unknown workflow\"}");
+        setWorkflowProgress("failed", 0, 4, R"({"reason":"unknown workflow"})");
         saveStatePreferences();
     }
 }
@@ -529,8 +531,7 @@ bool BackendAgent::resolveAutoBaseProjection(JsonObject payload, const double ra
     scale = 0.9999;
     provinceName = "Khong xac dinh (fallback theo kinh do)";
     provinceCode = "UNKNOWN";
-    const auto requestedProvince = payload["province_code"] | String();
-    if (!requestedProvince.isEmpty())
+    if (const auto requestedProvince = payload["province_code"] | String(); !requestedProvince.isEmpty())
     {
         if (!getProvinceProjection(requestedProvince, centralMeridianDeg, scale, provinceName))
         {
@@ -541,7 +542,7 @@ bool BackendAgent::resolveAutoBaseProjection(JsonObject payload, const double ra
     }
     else if (payload["l0_deg"].isNull())
     {
-        static constexpr double candidates[] = {
+        static constexpr std::array candidates = {
             103.0,
             104.0,
             104.5,
@@ -633,23 +634,18 @@ bool BackendAgent::completeAutoBaseSetup(
     }
 
     auto transformed = false;
-    auto finalLatitude = rawLatitude;
-    auto finalLongitude = rawLongitude;
-    auto finalAltitude = rawAltitude;
-    double northing = 0.0;
-    double easting = 0.0;
+    ProjectedPosition result{rawLatitude, rawLongitude, rawAltitude};
     if (payload["enable_itrf_vn2000_transform"] | true)
     {
         transformed = transformToVn2000(rawLatitude, rawLongitude, rawAltitude,
-                                        centralMeridianDeg, scale, finalLatitude,
-                                        finalLongitude, finalAltitude, northing, easting);
+                                        centralMeridianDeg, scale, result);
     }
 
     setAgentState("auto_setup_base");
     DynamicJsonDocument baseProgress(2048);
-    baseProgress["averaged_coord"]["lat"] = finalLatitude;
-    baseProgress["averaged_coord"]["lon"] = finalLongitude;
-    baseProgress["averaged_coord"]["alt"] = finalAltitude;
+    baseProgress["averaged_coord"]["lat"] = result.latitude;
+    baseProgress["averaged_coord"]["lon"] = result.longitude;
+    baseProgress["averaged_coord"]["alt"] = result.altitude;
     baseProgress["sample_count"] = latitudes.size();
     baseProgress["transform_applied"] = transformed;
     const auto requestedProvince = payload["province_code"] | String();
@@ -668,7 +664,7 @@ bool BackendAgent::completeAutoBaseSetup(
         failureReason = "cannot acquire transport lock to stop CORS rover session";
         return false;
     }
-    if (!applyBaseCoordinates(finalLatitude, finalLongitude, finalAltitude))
+    if (!applyBaseCoordinates(result.latitude, result.longitude, result.altitude))
     {
         failureReason = "cannot configure GNSS base mode";
         return false;
@@ -676,9 +672,9 @@ bool BackendAgent::completeAutoBaseSetup(
 
     DynamicJsonDocument baseConfig(CONFIG_DOCUMENT_SIZE);
     JsonObject coordinates = baseConfig.createNestedObject("coords");
-    coordinates["lat"] = finalLatitude;
-    coordinates["lon"] = finalLongitude;
-    coordinates["alt"] = finalAltitude;
+    coordinates["lat"] = result.latitude;
+    coordinates["lon"] = result.longitude;
+    coordinates["alt"] = result.altitude;
     baseConfig["altitude_reference"] = "ELLIPSOID";
     baseConfig["base_setup_method"] = "AUTO_CORS";
     baseConfig["auto_configured"] = true;
@@ -689,8 +685,8 @@ bool BackendAgent::completeAutoBaseSetup(
     baseConfig["projection_source"] = projectionSource;
     baseConfig["province_code"] = provinceCode;
     baseConfig["province_name"] = provinceName;
-    baseConfig["vn2000_northing"] = northing;
-    baseConfig["vn2000_easting"] = easting;
+    baseConfig["vn2000_northing"] = result.northing;
+    baseConfig["vn2000_easting"] = result.easting;
     JsonObject raw = baseConfig.createNestedObject("auto_base_raw_itrf_llh");
     raw["lat"] = rawLatitude;
     raw["lon"] = rawLongitude;
@@ -701,12 +697,12 @@ bool BackendAgent::completeAutoBaseSetup(
     const auto transportRestored = restartConfiguredNtrip();
     setAgentState(normalAgentState());
     resultJson = buildAutoBaseResult(
-        finalLatitude, finalLongitude, finalAltitude, rawLatitude, rawLongitude, rawAltitude,
+        result.latitude, result.longitude, result.altitude, rawLatitude, rawLongitude, rawAltitude,
         transformed, transportRestored, latitudes.size(), projectionSource,
         provinceCode, provinceName, centralMeridianDeg, scale);
     Serial.printf("[AUTO BASE] KET QUA: THANH CONG; samples=%u; lat=%.10f; lon=%.10f; alt=%.4f\n",
-                  static_cast<unsigned>(latitudes.size()), finalLatitude, finalLongitude,
-                  finalAltitude);
+                  static_cast<unsigned>(latitudes.size()), result.latitude, result.longitude,
+                  result.altitude);
     return true;
 }
 
@@ -737,11 +733,10 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
             details["cleanup_error"] = "could not restore configured NTRIP transport";
         String serialized;
         serializeJson(details, serialized);
-        setWorkflowProgress(
-            success ? "completed" : (cancelled ? "stopped" : "failed"),
-            success ? 4 : 2, 4, serialized);
-        Serial.printf("[AUTO BASE] KET QUA: %s; %s\n",
-                      success ? "THANH CONG" : (cancelled ? "DA DUNG" : "THAT BAI"), reason.c_str());
+        const char *unfinishedStage = cancelled ? "stopped" : "failed";
+        const char *unfinishedResult = cancelled ? "DA DUNG" : "THAT BAI";
+        setWorkflowProgress(success ? "completed" : unfinishedStage, success ? 4 : 2, 4, serialized);
+        Serial.printf("[AUTO BASE] KET QUA: %s; %s\n", success ? "THANH CONG" : unfinishedResult, reason.c_str());
         saveStatePreferences();
     };
 
@@ -834,7 +829,7 @@ bool BackendAgent::prepareReferenceCheckConfig(
     return baseParsed && !reference.isNull() && std::isfinite(referenceLatitude) && std::isfinite(referenceLongitude) && std::isfinite(referenceAltitude) && referenceLatitude >= -90.0 && referenceLatitude <= 90.0 && referenceLongitude >= -180.0 && referenceLongitude <= 180.0 && std::isfinite(restoreLatitude) && std::isfinite(restoreLongitude) && std::isfinite(restoreAltitude) && !host.isEmpty() && !username.isEmpty() && !password.isEmpty() && !mountpoint.isEmpty() && port != 0 && port <= 65535;
 }
 
-inline bool BackendAgent::startReferenceRover(const String &host, const uint16_t port,
+bool BackendAgent::startReferenceRover(const String &host, const uint16_t port,
                                               const String &username, const String &password,
                                               const String &mountpoint)
 {
@@ -984,8 +979,7 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload)
 
     auto cleanup = [&]()
     {
-        const auto roverStopped = stopNtripRoverLocked();
-        if (!roverStopped)
+        if (!stopNtripRoverLocked())
             return false;
         auto baseRestored = true;
         if (std::isfinite(restoreLatitude) && std::isfinite(restoreLongitude) && std::isfinite(restoreAltitude))
@@ -1008,9 +1002,10 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload)
             details["cleanup_error"] = "could not safely restore base/NTRIP state";
         String serialized;
         serializeJson(details, serialized);
-        setWorkflowProgress(
-            completed ? "reference_check_completed" : (stopped ? "stopped" : "reference_check_failed"),
-            4, 4, serialized);
+        const char *stage = stopped ? "stopped" : "reference_check_failed";
+        if (completed)
+            stage = "reference_check_completed";
+        setWorkflowProgress(stage, 4, 4, serialized);
         saveStatePreferences();
     };
 
@@ -1082,7 +1077,7 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload)
     {
         setAgentState(normalAgentState());
         setWorkflowProgress("reference_check_failed", 4, 4,
-                            "{\"reason\":\"could not safely restore base/NTRIP state\"}");
+                            R"({"reason":"could not safely restore base/NTRIP state"})");
         saveStatePreferences();
         return false;
     }

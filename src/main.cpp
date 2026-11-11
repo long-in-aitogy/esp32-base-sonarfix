@@ -55,7 +55,7 @@ static uint32_t lastSimProbeMs = 0;
 static uint8_t simRecoverySuccesses = 0;
 
 __attribute__((noreturn)) void taskNtrip([[maybe_unused]] void *parameter);
-__attribute__((noreturn)) void healthCheckTask([[maybe_unused]] void *parameter);
+__attribute__((noreturn)) void healthCheckTask(void *parameter);
 __attribute__((noreturn)) void taskMQTT([[maybe_unused]] void *parameter);
 __attribute__((noreturn)) void taskSerialCommand([[maybe_unused]] void *parameter);
 
@@ -269,36 +269,40 @@ __attribute__((noreturn)) void taskNtrip([[maybe_unused]] void *parameter)
         vTaskDelay(pdMS_TO_TICKS(200));
     }
 }
-__attribute__((noreturn)) void healthCheckTask([[maybe_unused]] void *const parameter)
+String collectDeviceHealth(RtcmState &rtcmState)
 {
-    auto *const rtcmState = static_cast<RtcmState *>(parameter);
-    // Read the shared GNSS snapshot under its mutex before checking network health.
-    String healthPayload = "";
-    uint32_t loopStartTime = 0;
+    if (xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+        return {};
+
+    const bool gnssDataOk = rtcmState.hasGnssReception
+        && millis() - rtcmState.lastGnssReceptionMs <= GNSS_DATA_TIMEOUT_MS;
+    const RtcmMessageCounts messageCounts = rtcmState.messageCounts;
+    rtcmState.messageCounts = {};
+    xSemaphoreGive(rtcmBufferMutex);
+
+    // Both modem RSSI and client connected() checks issue AT commands.
+    if (xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+        return {};
+
+    int32_t signalQualityDbm = -1;
+    if (isGsmConnection())
+        signalQualityDbm = modem.getSignalQuality();
+    const String payload = formDeviceHealthString(signalQualityDbm, gnssDataOk,
+                                                  messageCounts.values.data());
+    xSemaphoreGive(tcpStreamMutex);
+    return payload;
+}
+
+__attribute__((noreturn)) void healthCheckTask(void *parameter)
+{
+    auto &rtcmState = *static_cast<RtcmState *>(parameter);
     while (true)
     {
-        loopStartTime = millis();
-        healthPayload = "";
-        int32_t signalQualityDbm = -1;
-        if (xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)))
-        {
-            const auto gnssDataOk = rtcmState->hasGnssReception && millis() - rtcmState->lastGnssReceptionMs <= GNSS_DATA_TIMEOUT_MS;
-            const RtcmMessageCounts messageCounts = rtcmState->messageCounts;
-            rtcmState->messageCounts = {};
-            xSemaphoreGive(rtcmBufferMutex);
-            // Both modem RSSI and client connected() checks issue AT commands.
-            if (xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)))
-            {
-                if (isGsmConnection())
-                    signalQualityDbm = modem.getSignalQuality();
-                healthPayload = formDeviceHealthString(signalQualityDbm, gnssDataOk,
-                                                       messageCounts.values.data());
-                xSemaphoreGive(tcpStreamMutex);
-            }
-        }
-        if (!healthPayload.isEmpty())
-            publishHealth(healthPayload);
-        const uint32_t elapsed = millis() - loopStartTime;
+        const uint32_t started = millis();
+        const String payload = collectDeviceHealth(rtcmState);
+        if (!payload.isEmpty())
+            publishHealth(payload);
+        const uint32_t elapsed = millis() - started;
         vTaskDelay(pdMS_TO_TICKS(elapsed < HEALTH_INTERVAL ? HEALTH_INTERVAL - elapsed : 1));
     }
 }

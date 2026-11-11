@@ -2,9 +2,12 @@
 #include "functions/backend/Backend_Agent_Internal.h"
 #include "functions/gnss/Unicore_Readback.h"
 #include "functions/gnss/Ublox_Readback.h"
+#include <array>
+#include <cinttypes>
 #include <cstdio>
+#include <cstring>
 
-    using namespace BackendAgentInternal;
+using namespace BackendAgentInternal;
 
 void BackendAgent::saveSurveyResult(JsonObjectConst bestPosition, const String &mode)
 {
@@ -93,10 +96,10 @@ void BackendAgent::logUbloxReadback(const UbxBaseStatus &status)
                   status.hasPosition ? "valid" : "unavailable");
 }
 
-void BackendAgent::appendUbloxPosition(DynamicJsonDocument &doc,
+void BackendAgent::appendUbloxPosition(JsonDocument &doc,
                                        const UbxBaseStatus &status, const String &mode)
 {
-    JsonObject position = doc.createNestedObject("bestpos");
+    JsonObject position = doc["bestpos"].to<JsonObject>();
     position["state"] = status.hasPosition ? "ok" : "unavailable";
     if (!status.hasPosition)
         return;
@@ -104,13 +107,13 @@ void BackendAgent::appendUbloxPosition(DynamicJsonDocument &doc,
     position["position_type"] = surveyInReadbackReady_ ? "FIXEDPOS" : "SURVEY-IN-ESTIMATE";
     position["datum"] = "WGS84";
     position["altitude_reference"] = "ELLIPSOID";
-    char value[32];
-    snprintf(value, sizeof(value), "%.11f", status.latitude);
-    position["lat"] = value;
-    snprintf(value, sizeof(value), "%.11f", status.longitude);
-    position["lon"] = value;
-    snprintf(value, sizeof(value), "%.4f", status.height);
-    position["alt"] = value;
+    std::array<char, 32> value{};
+    snprintf(value.data(), value.size(), "%.11f", status.latitude);
+    position["lat"] = String(value.data());
+    snprintf(value.data(), value.size(), "%.11f", status.longitude);
+    position["lon"] = String(value.data());
+    snprintf(value.data(), value.size(), "%.4f", status.height);
+    position["alt"] = String(value.data());
     if (surveyInReadbackReady_)
         saveSurveyResult(position, mode);
 }
@@ -124,11 +127,12 @@ bool BackendAgent::refreshUnicoreReadback(String &error)
     readbackDoc["chip"] = "Unicorecomm";
     readbackDoc["revision"] = ++receiverBaseReadbackRevision_;
     readbackDoc["mode_raw"] = mode;
-    readbackDoc["mode_kind"] = success ? UnicoreReadback::modeKind(mode) : "unknown";
+    const char *modeKind = success ? UnicoreReadback::modeKind(mode) : "unknown";
+    readbackDoc["mode_kind"] = modeKind;
     readbackDoc["query"] = "MODE";
     if (success)
     {
-        if (String(UnicoreReadback::modeKind(mode)) == "survey_in")
+        if (std::strcmp(modeKind, "survey_in") == 0)
         {
             if (!surveyInMonitoring_)
             {
@@ -136,15 +140,15 @@ bool BackendAgent::refreshUnicoreReadback(String &error)
                 surveyInStartedMs_ = 0;
                 surveyInTargetSeconds_ = 0;
             }
-            auto target = 0;
-            if (std::sscanf(mode.c_str(), "MODE BASE TIME %lu", &target) == 1)
+            uint32_t target = 0;
+            if (std::sscanf(mode.c_str(), "MODE BASE TIME %" SCNu32, &target) == 1)
                 surveyInTargetSeconds_ = target;
         }
         else
         {
             surveyInMonitoring_ = false;
         }
-        JsonObject bestPosition = readbackDoc.createNestedObject("bestpos");
+        JsonObject bestPosition = readbackDoc["bestpos"].to<JsonObject>();
         String positionError;
         if (!UnicoreReadback::readBestPosition(bestPosition, positionError))
         {

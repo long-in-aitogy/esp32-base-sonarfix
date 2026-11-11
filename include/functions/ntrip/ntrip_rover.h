@@ -8,6 +8,8 @@ bool startNtripRover(const String &host, uint16_t port, const String &username,
                      uint8_t version = 1);
 int loopNtripRover();
 void stopNtripRover();
+void clearNtripRoverSession();
+bool ntripRoverSessionStarted();
 bool ntripRoverActive();
 uint32_t ntripRoverBytesReceived();
 uint32_t ntripRoverPacketsReceived();

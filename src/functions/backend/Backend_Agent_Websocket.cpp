@@ -1,6 +1,7 @@
 #include "functions/backend/Backend_Agent_Websocket.h"
 #include "functions/backend/Backend_Agent.h"
 
+#include <array>
 #include <cstddef>
 #include <cstring>
 #if !defined(NATIVE_BUILD)
@@ -9,31 +10,36 @@
 
 namespace
 {
+    uint8_t maskByte(uint8_t value, uint8_t mask)
+    {
+        return std::to_integer<uint8_t>(std::byte{value} ^ std::byte{mask});
+    }
+
     String websocketNonce()
     {
         static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        uint8_t nonce[16] = {};
-        for (size_t i = 0; i < sizeof(nonce); i += sizeof(uint32_t))
+        std::array<uint8_t, 16> nonce = {};
+        for (size_t i = 0; i < nonce.size(); i += sizeof(uint32_t))
         {
 #if !defined(NATIVE_BUILD)
             const uint32_t randomValue = esp_random();
 #else
             const uint32_t randomValue = static_cast<uint32_t>(random(0x7FFFFFFF)) ^ micros();
 #endif
-            memcpy(nonce + i, &randomValue, sizeof(randomValue));
+            memcpy(nonce.data() + i, &randomValue, sizeof(randomValue));
         }
         String encoded;
         encoded.reserve(24);
-        for (size_t i = 0; i < sizeof(nonce); i += 3)
+        for (size_t i = 0; i < nonce.size(); i += 3)
         {
             const uint32_t a = nonce[i];
-            const uint32_t b = i + 1 < sizeof(nonce) ? nonce[i + 1] : 0;
-            const uint32_t c = i + 2 < sizeof(nonce) ? nonce[i + 2] : 0;
+            const uint32_t b = i + 1 < nonce.size() ? nonce[i + 1] : 0;
+            const uint32_t c = i + 2 < nonce.size() ? nonce[i + 2] : 0;
             const uint32_t value = (a << 16) | (b << 8) | c;
             encoded += alphabet[(value >> 18) & 0x3F];
             encoded += alphabet[(value >> 12) & 0x3F];
-            encoded += i + 1 < sizeof(nonce) ? alphabet[(value >> 6) & 0x3F] : '=';
-            encoded += i + 2 < sizeof(nonce) ? alphabet[value & 0x3F] : '=';
+            encoded += i + 1 < nonce.size() ? alphabet[(value >> 6) & 0x3F] : '=';
+            encoded += i + 2 < nonce.size() ? alphabet[value & 0x3F] : '=';
         }
         return encoded;
     }
@@ -74,20 +80,20 @@ void BackendAgentWebsocket::loop()
 
     if (millis() - lastPingMs_ >= 30000UL)
     {
-        static constexpr uint8_t ping[] = {'p', 'i'};
-        sendControl(0x9, ping, sizeof(ping));
+        static constexpr std::array<uint8_t, 2> ping = {'p', 'i'};
+        sendControl(0x9, ping.data(), ping.size());
         lastPingMs_ = millis();
     }
 
-    uint8_t chunk[256];
+    std::array<uint8_t, 256> chunk;
     while (client_->available() > 0)
     {
-        const auto count = client_->read(chunk, sizeof(chunk));
+        const auto count = client_->read(chunk.data(), chunk.size());
         if (count <= 0)
         {
             break;
         }
-        rx_.insert(rx_.end(), chunk, chunk + count);
+        rx_.insert(rx_.end(), chunk.begin(), chunk.begin() + count);
         if (rx_.size() > 32768)
         {
             rx_.clear();
@@ -122,8 +128,8 @@ bool BackendAgentWebsocket::sendText(const String &text)
         return false;
     }
 
-    const auto length = text.length();
-    uint8_t header[10] = {};
+    const size_t length = text.length();
+    std::array<uint8_t, 10> header = {};
     auto headerLength = 2;
     header[0] = 0x81; // FIN + text frame
     if (length < 126)
@@ -142,7 +148,7 @@ bool BackendAgentWebsocket::sendText(const String &text)
         header[1] = 0x80 | 127;
         for (uint8_t i = 0; i < 8; ++i)
         {
-            header[2 + i] = static_cast<uint8_t>((length >> (56 - (i * 8))) & 0xFF);
+            header[2 + i] = static_cast<uint8_t>((static_cast<uint64_t>(length) >> (56 - (i * 8))) & 0xFF);
         }
         headerLength = 10;
     }
@@ -152,28 +158,28 @@ bool BackendAgentWebsocket::sendText(const String &text)
 #else
     const uint32_t mask = static_cast<uint32_t>(random(0x7FFFFFFF)) ^ micros();
 #endif
-    const uint8_t maskBytes[4] = {
+    const std::array<uint8_t, 4> maskBytes = {
         static_cast<uint8_t>((mask >> 24) & 0xFF),
         static_cast<uint8_t>((mask >> 16) & 0xFF),
         static_cast<uint8_t>((mask >> 8) & 0xFF),
         static_cast<uint8_t>(mask & 0xFF),
     };
 
-    if (client_->write(header, headerLength) != headerLength || client_->write(maskBytes, sizeof(maskBytes)) != sizeof(maskBytes))
+    if (client_->write(header.data(), headerLength) != headerLength || client_->write(maskBytes.data(), maskBytes.size()) != maskBytes.size())
     {
         disconnect(false);
         return false;
     }
 
-    uint8_t maskedChunk[256] = {};
-    for (size_t offset = 0; offset < length; offset += sizeof(maskedChunk))
+    std::array<uint8_t, 256> maskedChunk = {};
+    for (size_t offset = 0; offset < length; offset += maskedChunk.size())
     {
-        const auto chunkLength = min(sizeof(maskedChunk), length - offset);
+        const auto chunkLength = min(maskedChunk.size(), length - offset);
         for (size_t i = 0; i < chunkLength; ++i)
         {
-            maskedChunk[i] = static_cast<uint8_t>(text[offset + i]) ^ maskBytes[(offset + i) & 3];
+            maskedChunk[i] = maskByte(static_cast<uint8_t>(text[offset + i]), maskBytes[(offset + i) % maskBytes.size()]);
         }
-        if (client_->write(maskedChunk, chunkLength) != chunkLength)
+        if (client_->write(maskedChunk.data(), chunkLength) != chunkLength)
         {
             disconnect(false);
             return false;
@@ -200,16 +206,13 @@ void BackendAgentWebsocket::connectNow()
     const uint32_t deadline = millis() + 5000UL;
     while (millis() < deadline && response.length() < 4096)
     {
-        while (client_->available() > 0)
+        while (client_->available() > 0 && response.length() < 4096
+               && !response.endsWith("\r\n\r\n"))
         {
-            const auto byte = client_->read();
+            const int byte = client_->read();
             if (byte < 0)
                 break;
             response += static_cast<char>(byte);
-            if (response.endsWith("\r\n\r\n"))
-            {
-                break;
-            }
         }
         if (response.endsWith("\r\n\r\n"))
         {
@@ -237,9 +240,9 @@ void BackendAgentWebsocket::connectNow()
 bool BackendAgentWebsocket::readFrame(uint8_t &opcode, String &payload)
 {
     const uint8_t first = rx_[0];
-    const uint8_t second = rx_[1];
-    const auto masked = (second & 0x80) != 0;
-    uint64_t payloadLength = second & 0x7F;
+    const std::byte second{rx_[1]};
+    const bool masked = (second & std::byte{0x80}) != std::byte{0};
+    uint64_t payloadLength = std::to_integer<uint8_t>(second & std::byte{0x7F});
     auto headerLength = 2;
 
     if (payloadLength == 126)
@@ -269,9 +272,9 @@ bool BackendAgentWebsocket::readFrame(uint8_t &opcode, String &payload)
     if (rx_.size() < headerLength + payloadLength)
         return false;
 
-    uint8_t mask[4] = {};
+    std::array<uint8_t, 4> mask = {};
     if (masked)
-        memcpy(mask, rx_.data() + headerLength - 4, sizeof(mask));
+        memcpy(mask.data(), rx_.data() + headerLength - 4, mask.size());
     opcode = std::to_integer<uint8_t>(
         static_cast<std::byte>(first) & static_cast<std::byte>(0x0F));
     payload.reserve(static_cast<size_t>(payloadLength));
@@ -279,7 +282,7 @@ bool BackendAgentWebsocket::readFrame(uint8_t &opcode, String &payload)
     {
         uint8_t byte = rx_[headerLength + i];
         if (masked)
-            byte ^= mask[i & 3];
+            byte = maskByte(byte, mask[i % mask.size()]);
         payload += static_cast<char>(byte);
     }
     rx_.erase(rx_.begin(), rx_.begin() + headerLength + payloadLength);
@@ -320,23 +323,23 @@ void BackendAgentWebsocket::sendControl(uint8_t opcode, const uint8_t *payload, 
 #else
     const uint32_t mask = static_cast<uint32_t>(random(0x7FFFFFFF)) ^ micros();
 #endif
-    const uint8_t maskBytes[4] = {
+    const std::array<uint8_t, 4> maskBytes = {
         static_cast<uint8_t>((mask >> 24) & 0xFF),
         static_cast<uint8_t>((mask >> 16) & 0xFF),
         static_cast<uint8_t>((mask >> 8) & 0xFF),
         static_cast<uint8_t>(mask & 0xFF),
     };
-    const uint8_t header[2] = {
+    const std::array<uint8_t, 2> header = {
         static_cast<uint8_t>(0x80 | opcode),
         static_cast<uint8_t>(0x80 | length),
     };
-    client_->write(header, sizeof(header));
-    client_->write(maskBytes, sizeof(maskBytes));
+    client_->write(header.data(), header.size());
+    client_->write(maskBytes.data(), maskBytes.size());
     if (payload && length > 0)
     {
         for (size_t i = 0; i < length; ++i)
         {
-            const uint8_t byte = payload[i] ^ maskBytes[i & 3];
+            const uint8_t byte = maskByte(payload[i], maskBytes[i % maskBytes.size()]);
             client_->write(&byte, 1);
         }
     }
