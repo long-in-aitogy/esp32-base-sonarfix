@@ -485,7 +485,9 @@ bool BackendAgent::prepareAutoBaseConfig(JsonObject payload, String &host, uint1
                                          uint8_t &fixedStreakRequired)
 {
     host = payload["ip"] | String();
-    port = static_cast<uint16_t>(payload["port"] | 0);
+    host.trim();
+    const int requestedPort = payload["port"] | 0;
+    port = requestedPort > 0 && requestedPort <= 65535 ? static_cast<uint16_t>(requestedPort) : 0;
     username = payload["user"] | String();
     password = payload["password"] | String();
     mountpoint = payload["mountpoint"] | String();
@@ -494,7 +496,7 @@ bool BackendAgent::prepareAutoBaseConfig(JsonObject payload, String &host, uint1
         static_cast<uint32_t>(payload["timeout"] | 3600UL), 30UL, 86400UL);
     fixedStreakRequired = static_cast<uint8_t>(constrain(
         static_cast<int>(payload["fixed_streak_seconds"] | 5), 1, 60));
-    return !host.isEmpty() && !username.isEmpty() && !password.isEmpty() && !mountpoint.isEmpty() && port != 0 && port <= 65535;
+    return !host.isEmpty() && !username.isEmpty() && !password.isEmpty() && !mountpoint.isEmpty() && port != 0;
 }
 
 bool BackendAgent::startAutoBaseRover(const String &host, const uint16_t port,
@@ -979,7 +981,9 @@ bool BackendAgent::prepareReferenceCheckConfig(
     restoreLongitude = storedCoordinates["lon"] | NAN;
     restoreAltitude = storedCoordinates["alt"] | NAN;
     host = payload["ip"] | String();
-    port = static_cast<uint16_t>(payload["port"] | 0);
+    host.trim();
+    const int requestedPort = payload["port"] | 0;
+    port = requestedPort > 0 && requestedPort <= 65535 ? static_cast<uint16_t>(requestedPort) : 0;
     username = payload["user"] | String();
     password = payload["password"] | String();
     mountpoint = payload["mountpoint"] | String();
@@ -988,7 +992,7 @@ bool BackendAgent::prepareReferenceCheckConfig(
     requestedSamples = static_cast<uint16_t>(constrain(
         static_cast<int>(payload["samples"] | 60), 5, 120));
 
-    return baseParsed && !reference.isNull() && std::isfinite(referenceLatitude) && std::isfinite(referenceLongitude) && std::isfinite(referenceAltitude) && referenceLatitude >= -90.0 && referenceLatitude <= 90.0 && referenceLongitude >= -180.0 && referenceLongitude <= 180.0 && (storedBaseObject["base_setup_method"] == "SURVEY_IN" || (std::isfinite(restoreLatitude) && std::isfinite(restoreLongitude) && std::isfinite(restoreAltitude))) && !host.isEmpty() && !username.isEmpty() && !password.isEmpty() && !mountpoint.isEmpty() && port != 0 && port <= 65535;
+    return baseParsed && !reference.isNull() && std::isfinite(referenceLatitude) && std::isfinite(referenceLongitude) && std::isfinite(referenceAltitude) && referenceLatitude >= -90.0 && referenceLatitude <= 90.0 && referenceLongitude >= -180.0 && referenceLongitude <= 180.0 && (storedBaseObject["base_setup_method"] == "SURVEY_IN" || (std::isfinite(restoreLatitude) && std::isfinite(restoreLongitude) && std::isfinite(restoreAltitude))) && !host.isEmpty() && !username.isEmpty() && !password.isEmpty() && !mountpoint.isEmpty() && port != 0;
 }
 
 bool BackendAgent::startReferenceRover(const String &host, const uint16_t port,
