@@ -94,3 +94,25 @@ bool UbloxReadback::readBaseStatus(UbxBaseStatus &status, String &error)
     }
     return true;
 }
+
+bool UbloxReadback::readNavigation(UbxNavigation &status, String &error)
+{
+    UbxReply reply;
+    if (!query(0x01, 0x07, reply, error))
+        return false;
+    if (status.decode(reply.frame.data() + 6, reply.length - 8))
+        return true;
+    error = "Invalid NAV-PVT response";
+    return false;
+}
+
+bool UbloxReadback::readDop(UbxDop &status, String &error)
+{
+    UbxReply reply;
+    if (!query(0x01, 0x04, reply, error))
+        return false;
+    if (status.decode(reply.frame.data() + 6, reply.length - 8))
+        return true;
+    error = "Invalid NAV-DOP response";
+    return false;
+}

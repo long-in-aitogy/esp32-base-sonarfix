@@ -6,6 +6,7 @@
 #include "functions/backend/Station_Lock.h"
 #include "functions/gnss/gnss_cmd_builder.h"
 #include "functions/gnss/Ubx_Base_Status.h"
+#include "functions/gnss/Ubx_Navigation.h"
 #include "functions/gnss/Unicore_Reply.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
@@ -108,6 +109,10 @@ private:
     uint32_t receiverBaseReadbackMs_ = 0;
     uint32_t receiverBaseReadbackRevision_ = 0;
     uint32_t lastReceiverPollMs_ = 0;
+    UbxNavigation navigation_;
+    UbxDop dop_;
+    uint32_t navigationMs_ = 0;
+    uint32_t dopMs_ = 0;
     bool surveyInResultPending_ = false;
     bool surveyInReadbackReady_ = false;
     bool surveyInReadbackHasPosition_ = false;

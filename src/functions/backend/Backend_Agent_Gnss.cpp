@@ -196,6 +196,23 @@ void BackendAgent::pollGnssStatus()
     {
         String error;
         refreshReceiverReadback(error);
+        if (sensorType_ == "Ublox")
+        {
+            UbxNavigation navigation;
+            if (UbloxReadback::readNavigation(navigation, error))
+            {
+                navigation_ = navigation;
+                navigationMs_ = millis();
+                markStatusDirty();
+            }
+            UbxDop dop;
+            if (UbloxReadback::readDop(dop, error))
+            {
+                dop_ = dop;
+                dopMs_ = millis();
+                markStatusDirty();
+            }
+        }
     }
 
     // MODE/BESTNAV are read-only receiver logs; do not request NMEA output.

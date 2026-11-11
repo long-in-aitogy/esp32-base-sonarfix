@@ -257,10 +257,40 @@ void BackendAgent::appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapsh
     doc["rtk_fix_status"] = gnss.fixStatus.data();
     if (gnss.satellites > 0)
         doc["satellite_count"] = gnss.satellites;
-    if (gnss.gstHacc > 0 && gnss.lastGstMs > 0 && nowMs - gnss.lastGstMs <= 15000UL)
-        doc["hacc"] = gnss.gstHacc;
-    else if (gnss.hdop > 0)
-        doc["hacc"] = gnss.hdop;
+    if (sensorType_ == "Ublox" && dopMs_ > 0 && nowMs - dopMs_ <= 45000UL)
+    {
+        JsonObject dop = doc.createNestedObject("gnss_dop");
+        dop["source"] = "ubx_nav_dop";
+        dop["age_seconds"] = (nowMs - dopMs_) / 1000.0;
+        dop["hdop"] = dop_.hdop * 0.01;
+        dop["pdop"] = dop_.pdop * 0.01;
+    }
+    if (sensorType_ == "Ublox" && navigationMs_ > 0 && nowMs - navigationMs_ <= 45000UL)
+    {
+        JsonObject quality = doc.createNestedObject("gnss_quality");
+        quality["source"] = "ubx_nav_pvt";
+        quality["age_seconds"] = (nowMs - navigationMs_) / 1000.0;
+        quality["fix_valid"] = navigation_.valid;
+        quality["fix_type"] = navigation_.fixType;
+        quality["satellites"] = navigation_.satellites;
+        quality["pdop"] = navigation_.pdop * 0.01;
+        quality["hacc_m"] = nullptr;
+        doc["satellite_count"] = navigation_.satellites;
+        if (navigation_.valid)
+        {
+            quality["hacc_m"] = navigation_.haccMm * 0.001;
+            doc["hacc"] = navigation_.haccMm;
+        }
+    }
+    else if (gnss.gstHacc > 0 && gnss.lastGstMs > 0 && nowMs - gnss.lastGstMs <= 15000UL)
+    {
+        // The legacy hacc field is in mm; gnss_quality.hacc_m is in metres.
+        doc["hacc"] = gnss.gstHacc * 1000.0;
+        JsonObject quality = doc.createNestedObject("gnss_quality");
+        quality["source"] = "nmea_gst";
+        quality["age_seconds"] = (nowMs - gnss.lastGstMs) / 1000.0;
+        quality["hacc_m"] = gnss.gstHacc;
+    }
     JsonObject stats = doc.createNestedObject("gnss_stats");
     stats["rtcm_packets"] = gnss.traffic.rtcmFrames;
     stats["nmea_packets"] = gnss.traffic.nmeaSentences;
