@@ -5,7 +5,7 @@ import tempfile
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_text()
 start = source.index('    DynamicJsonDocument baseConfig(CONFIG_DOCUMENT_SIZE);', source.index('bool BackendAgent::completeAutoBaseSetup('))
-end = source.index('    const auto transportRestored = restartConfiguredNtrip();', start)
+end = source.index('    setAgentState(normalAgentState());', start)
 update = source[start:end]
 harness = r'''
 #include <Arduino.h>
@@ -15,11 +15,13 @@ constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
 struct Position { double latitude = 21.25, longitude = 105.75, altitude = 10.5, northing = 1, easting = 2; };
 struct BackendAgent {
     String baseConfig_, published;
-    bool saveOk = true;
+    bool saveOk = true, restartOk = true;
+    int saves = 0, failSave = 0;
     int publishes = 0, stops = 0, writes = 0;
     bool stopNtripRoverLocked() { ++stops; return true; }
     bool applyBaseCoordinates(double, double, double) { ++writes; return true; }
-    bool saveStatePreferences() { return saveOk; }
+    bool saveStatePreferences() { ++saves; return saveOk && saves != failSave; }
+    bool restartConfiguredNtrip() { return restartOk; }
     void publishConfigState(const char *kind) { ++publishes; published = kind; }
     bool apply(String &failureReason) {
         Position result;
@@ -41,7 +43,17 @@ int main() {
     agent.saveOk = false;
     assert(!agent.apply(error) && agent.baseConfig_ == previous && agent.publishes == 0);
     assert(error == "could not save automatically applied Fixed LLA");
-    agent.saveOk = true;
+    agent.saveOk = true; agent.restartOk = false;
+    const int saves = agent.saves;
+    assert(!agent.apply(error) && agent.baseConfig_ == previous && agent.publishes == 0);
+    assert(agent.saves == saves + 2 && error == "could not restore configured NTRIP after applying Fixed LLA");
+    BackendAgent rollbackFailure;
+    rollbackFailure.baseConfig_ = previous;
+    rollbackFailure.restartOk = false;
+    rollbackFailure.failSave = 2;
+    assert(!rollbackFailure.apply(error) && rollbackFailure.baseConfig_ == previous && rollbackFailure.publishes == 0);
+    assert(error == "could not save previous Base configuration after NTRIP restore failed");
+    agent.restartOk = true;
     assert(agent.apply(error) && agent.publishes == 1 && agent.published == "base_config_state");
     DynamicJsonDocument result(4096);
     assert(deserializeJson(result, agent.baseConfig_) == DeserializationError::Ok);

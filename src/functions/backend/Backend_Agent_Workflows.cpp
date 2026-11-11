@@ -800,8 +800,16 @@ bool BackendAgent::completeAutoBaseSetup(
         failureReason = "could not save automatically applied Fixed LLA";
         return false;
     }
-    publishConfigState("base_config_state");
     const auto transportRestored = restartConfiguredNtrip();
+    if (!transportRestored)
+    {
+        baseConfig_ = previousConfig;
+        failureReason = saveStatePreferences()
+            ? "could not restore configured NTRIP after applying Fixed LLA"
+            : "could not save previous Base configuration after NTRIP restore failed";
+        return false;
+    }
+    publishConfigState("base_config_state");
     setAgentState(normalAgentState());
     resultJson = buildAutoBaseResult(
         result.latitude, result.longitude, result.altitude, rawLatitude, rawLongitude, rawAltitude,
