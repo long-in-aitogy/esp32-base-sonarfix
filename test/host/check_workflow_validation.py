@@ -15,7 +15,10 @@ harness = r'''
 #include <cmath>
 #include <cassert>
 constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
+double coordinateNumber(JsonVariantConst value) { return value.isNull() ? NAN : value.as<double>(); }
 struct BackendAgent {
+    String baseStartupState_;
+    void markStatusDirty() {}
     String baseConfig_ = R"({"base_setup_method":"SURVEY_IN","survey_in_duration":1800})";
     uint32_t surveyInTargetSeconds_ = 120;
     bool valid = false, stopOk = true, restoreOk = true;

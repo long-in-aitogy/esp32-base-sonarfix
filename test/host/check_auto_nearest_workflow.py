@@ -21,7 +21,10 @@ int pdMS_TO_TICKS(int ms) { return ms; }
 void vTaskDelay(int ms) { now += ms; }
 struct Position { uint32_t lastGgaMs = 9999; double latitude = 21, longitude = 105; } position;
 Position getGnssTelemetrySnapshot() { return position; }
+double coordinateNumber(JsonVariantConst value) { return value.isNull() ? NAN : value.as<double>(); }
 struct BackendAgent {
+    String baseStartupState_;
+    void markStatusDirty() {}
     String baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":21,"lon":105,"alt":4}})";
     uint32_t surveyInTargetSeconds_ = 0;
     bool workflowCancelRequested_ = false, connectOk = true, saveOk = true, restoreOk = true;
@@ -67,6 +70,10 @@ int main() {
     assert(!saveFailed.runAutoBaseWorkflow(payload) && saveFailed.restores == 2 && saveFailed.stage == "failed");
     position.latitude = 0; position.longitude = 0;
     BackendAgent noPosition; assert(!noPosition.runAutoBaseWorkflow(payload) && noPosition.connections == 0 && noPosition.stage == "failed");
+    BackendAgent cancelled; cancelled.baseConfig_ = R"({"base_setup_method":"AUTO_CORS","auto_cors_source_mode":"nearest"})";
+    cancelled.workflowCancelRequested_ = true;
+    assert(!cancelled.runAutoBaseWorkflow(payload) && cancelled.stage == "stopped");
+    assert(cancelled.baseStartupState_ == "awaiting_configuration" && cancelled.connections == 0);
     payload["source_mode"] = "manual";
     BackendAgent manual; assert(manual.runAutoBaseWorkflow(payload) && !manual.selectedRequested && manual.fixSource == "nearest");
 }

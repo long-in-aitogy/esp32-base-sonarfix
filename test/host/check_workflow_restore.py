@@ -39,7 +39,9 @@ struct BackendAgent {
     bool verifyStartupReadback(GnssCmdBuilder::GnssSensorType, bool, const StartupPosition &, String &);
     String sensorType_ = "Ublox", baseStartupState_, baseStartupError_, receiverBaseReadback_, baseConfig_;
     bool surveyInResultPending_ = false, writeOk = true, readOk = true;
-    int writes = 0;
+    int writes = 0, roverCalls = 0;
+    bool roverOk = true;
+    bool applyRoverMode() { ++roverCalls; return roverOk; }
     GnssCmdBuilder::CommandList lastCommands;
     bool writeGnssCommands(const GnssCmdBuilder::CommandList &commands) { ++writes; lastCommands = commands; return writeOk; }
     bool applyBaseCoordinates(double, double, double) { ++writes; return writeOk; }
@@ -96,7 +98,16 @@ int main() {
     assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>()) && agent.writes == writes);
     base.clear(); writes = agent.writes;
     assert(agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
-    assert(agent.baseStartupState_ == "awaiting_configuration" && agent.writes == writes);
+    assert(agent.baseStartupState_ == "awaiting_configuration" && agent.writes == writes && agent.roverCalls == 1);
+    base["base_setup_method"] = "AUTO_CORS"; base["auto_cors_source_mode"] = "nearest";
+    assert(agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
+    assert(agent.baseStartupState_ == "awaiting_auto_base" && agent.roverCalls == 2);
+    agent.roverOk = false;
+    assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
+    assert(agent.baseStartupState_ == "error" && agent.baseStartupError_ == "cannot restore unconfigured receiver to Rover mode");
+    agent.roverOk = true;
+    base["coords"]["lat"] = 21;
+    assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>())); // Partial coordinates are never treated as unconfigured.
     BackendAgent retry;
     retry.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":21.25,"lon":105.75,"alt":10.5}})";
     retry.baseStartupState_ = "error";

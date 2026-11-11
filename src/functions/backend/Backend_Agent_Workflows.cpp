@@ -396,10 +396,14 @@ bool BackendAgent::restoreWorkflowBase(JsonObjectConst base)
     const double lat = coordinateNumber(coords["lat"]);
     const double lon = coordinateNumber(coords["lon"]);
     const double alt = coordinateNumber(coords["alt"]);
-    if (method.isEmpty() && !std::isfinite(lat) && !std::isfinite(lon) && !std::isfinite(alt))
+    if ((method.isEmpty() || method == "AUTO_CORS")
+        && !std::isfinite(lat) && !std::isfinite(lon) && !std::isfinite(alt))
     {
-        // An unconfigured receiver may remain Rover for review, but cannot publish a Base stream.
-        baseStartupState_ = "awaiting_configuration";
+        if (!applyRoverMode())
+            return fail("cannot restore unconfigured receiver to Rover mode");
+        baseStartupState_ = method == "AUTO_CORS" && base["auto_cors_source_mode"] == "nearest"
+            ? "awaiting_auto_base" : "awaiting_configuration";
+        baseStartupError_.clear();
         markStatusDirty();
         return true;
     }
@@ -902,6 +906,20 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         const bool baseRestored = roverStopped && restoreWorkflowBase(previousBase.as<JsonObjectConst>());
         const bool transportRestored = baseRestored && restartConfiguredNtrip();
         const bool cleanupSucceeded = baseRestored && transportRestored;
+        if (cancelled && cleanupSucceeded && previousBase["base_setup_method"] == "AUTO_CORS"
+            && previousBase["auto_cors_source_mode"] == "nearest")
+        {
+            JsonObjectConst coords = previousBase["coords"].as<JsonObjectConst>();
+            if (coords.isNull())
+                coords = previousBase.as<JsonObjectConst>();
+            if (!std::isfinite(coordinateNumber(coords["lat"]))
+                || !std::isfinite(coordinateNumber(coords["lon"]))
+                || !std::isfinite(coordinateNumber(coords["alt"])))
+            {
+                baseStartupState_ = "awaiting_configuration";
+                markStatusDirty();
+            }
+        }
         setAgentState(normalAgentState());
         DynamicJsonDocument details(1024);
         if (!selectedMountpoint.isEmpty())
