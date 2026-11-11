@@ -10,6 +10,7 @@ wait = common[common.index('    bool waitForNtripResponse('):common.index('\n} /
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
 shim = shim.replace('    void trim()', '''    bool startsWith(const String &value) const { return compare(0, value.size(), value) == 0; }
     void remove(unsigned start, unsigned count) { erase(start, count); }
+    void remove(unsigned start) { erase(start); }
     int indexOf(const char *s) const { auto p = find(s); return p == npos ? -1 : int(p); }
     String substring(unsigned start, unsigned end) const { return substr(start, end - start); }
     void trim()''').replace('    void println(const char *) {}', '    void println(const char *) {}\n    void println(const String &) {}')
@@ -20,6 +21,8 @@ uint32_t now = 0;
 uint32_t millis() { return now; }
 void delay(uint32_t ms) { now += ms; }
 const char *AGENT_VERSION = "test";
+struct GnssTelemetrySnapshot { std::array<char, 128> lastGga{}; uint32_t lastGgaMs = 0; } snapshot;
+GnssTelemetrySnapshot getGnssTelemetrySnapshot() { return snapshot; }
 struct RoverSession {
     bool active = false, authenticated = false;
     uint32_t bytesReceived = 0, packetsReceived = 0, lastGgaMs = 0;
@@ -64,6 +67,28 @@ int main() {
     client = Client{}; client.reply = "ICY 200 OK\r\n";
     assert(startNtripRover("host", 2101, "user", "secret", "mount", 1));
     assert(session.active && session.authenticated && String(session.lastError) == "CORS rover connection lost");
+    for (uint8_t version : {1, 2}) {
+        client = Client{}; client.reply = "ICY 200 OK\r\n"; now = 10000;
+        std::snprintf(snapshot.lastGga.data(), snapshot.lastGga.size(), "%s", "$GNGGA,valid*00\r\n");
+        snapshot.lastGgaMs = 7000;
+        assert(startNtripRover("host", 2101, "user", "secret", "mount", version));
+        assert(client.request.find("Ntrip-GGA: $GNGGA,valid*00\r\n\r\n") != String::npos);
+        client = Client{}; client.reply = "ICY 200 OK\r\n"; snapshot.lastGgaMs = 6999;
+        assert(startNtripRover("host", 2101, "user", "secret", "mount", version));
+        assert(client.request.find("Ntrip-GGA:") == String::npos); // Stale GGA.
+        client = Client{}; client.reply = "ICY 200 OK\r\n"; snapshot.lastGgaMs = 10000;
+        std::snprintf(snapshot.lastGga.data(), snapshot.lastGga.size(), "%s", "$GNGGA,valid\r\nInjected: value");
+        assert(startNtripRover("host", 2101, "user", "secret", "mount", version));
+        assert(client.request.find("Ntrip-GGA:") == String::npos && client.request.find("Injected:") == String::npos);
+        client = Client{}; client.reply = "ICY 200 OK\r\n"; snapshot.lastGgaMs = 0;
+        assert(startNtripRover("host", 2101, "user", "secret", "mount", version));
+        assert(client.request.find("Ntrip-GGA:") == String::npos);
+        client = Client{}; client.reply = "ICY 200 OK\r\n";
+        std::snprintf(snapshot.lastGga.data(), snapshot.lastGga.size(), "%s", "$GNGGA,valid*00");
+        now = 500; snapshot.lastGgaMs = UINT32_MAX - 999;
+        assert(startNtripRover("host", 2101, "user", "secret", "mount", version));
+        assert(client.request.find("Ntrip-GGA: $GNGGA,valid*00\r\n") != String::npos);
+    }
 }
 '''
 with tempfile.TemporaryDirectory(prefix='rover-connect-') as directory:
