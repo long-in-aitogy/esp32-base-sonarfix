@@ -87,7 +87,8 @@ void BackendAgent::appendAutoBaseProgress(JsonDocument &doc,
     JsonObject progress = doc["auto_base_progress"].as<JsonObject>();
     if (progress.isNull() || progress.size() == 0)
         return;
-    if (progress["phase"] == "completed" && !(progress["fixed_samples_only"] | false))
+    if (progress["phase"] == "completed" && progress["mode"] != "survey_in"
+        && !(progress["fixed_samples_only"] | false))
     {
         progress["phase"] = "unverified";
         progress["reason"] = "Ket qua cu chua duoc xac nhan RTK Fixed; can chay lai Auto Base";
