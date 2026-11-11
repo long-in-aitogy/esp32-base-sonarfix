@@ -2,10 +2,7 @@
 #include "functions/backend/Backend_Agent_Internal.h"
 #include "functions/gnss/Ublox_Readback.h"
 #include "functions/gnss/Unicore_Readback.h"
-#include "functions/gnss/Unicore_Config_Verification.h"
-#include "hardware/Connection_type.h"
-#include "hardware/Sim_handler.h"
-#include "hardware/Wifi_handler.h"
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <cstdio>
@@ -13,56 +10,241 @@
 
 using namespace BackendAgentInternal;
 
-namespace {
+namespace
+{
+    constexpr uint32_t AUTO_SURVEY_IN_SECONDS = 120;
 
-double configNumber(JsonVariantConst value, double fallback) {
-    if (value.isNull()) return fallback;
-    if (value.is<bool>()) return NAN;
-    if (value.is<const char *>()) {
-        const char *text = value.as<const char *>();
-        char *end = nullptr;
-        const double number = std::strtod(text, &end);
-        return end != text && *end == '\0' && std::isfinite(number) ? number : double(NAN);
+    double configNumber(JsonVariantConst value, double fallback)
+    {
+        if (value.isNull())
+            return fallback;
+        if (value.is<bool>())
+            return NAN;
+        if (value.is<const char *>())
+        {
+            const char *text = value.as<const char *>();
+            char *end = nullptr;
+            const auto number = std::strtod(text, &end);
+            return end != text && *end == '\0' && std::isfinite(number) ? number : double(NAN);
+        }
+        return value.is<double>() ? value.as<double>() : double(NAN);
     }
-    return value.is<double>() ? value.as<double>() : double(NAN);
 }
 
-bool confirmSavedFixedPosition(JsonObjectConst base, JsonObjectConst readback, bool ublox, String &error) {
-    const auto reject = [&](const char *message) { error = message; return false; };
-    if (readback["state"] != "ok" || readback["mode_kind"] != "base")
-        return reject("Receiver mode does not match startup configuration");
-    JsonObjectConst coords = base["coords"].as<JsonObjectConst>();
-    if (coords.isNull()) coords = base;
-    const double fixedLatitude = configNumber(coords["lat"], NAN);
-    const double fixedLongitude = configNumber(coords["lon"], NAN);
-    const double fixedAltitude = configNumber(coords["alt"], NAN);
-    if (!std::isfinite(fixedLatitude) || !std::isfinite(fixedLongitude) || !std::isfinite(fixedAltitude))
-        return reject("Saved Fixed LLA coordinates or accuracy are invalid");
-    double lat = 0, lon = 0, height = 0;
-    if (ublox) {
-        const JsonObjectConst position = readback["bestpos"].as<JsonObjectConst>();
-        if (position["state"] != "ok" || position["position_type"] != "FIXEDPOS")
-            return reject("Receiver has not confirmed the saved fixed position");
-        lat = configNumber(position["lat"], NAN);
-        lon = configNumber(position["lon"], NAN);
-        height = configNumber(position["alt"], NAN);
-    } else {
-        const String mode = readback["mode_raw"] | String();
-        if (!UnicoreConfigVerification::parseFixedMode(mode.c_str(), lat, lon, height))
-            return reject("Receiver has not confirmed the saved fixed position");
+bool BackendAgent::readStartupReceiverMode(GnssCmdBuilder::GnssSensorType detected, String &error)
+{
+    if (detected == GnssCmdBuilder::GnssSensorType::Unicore)
+    {
+        String mode;
+        return UnicoreReadback::readMode(mode, error);
     }
-    if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(height)
-        || std::abs(lat-fixedLatitude) > 1e-8 || std::abs(lon-fixedLongitude) > 1e-8
-        || std::abs(height-fixedAltitude) > 0.002)
-        return reject("Receiver fixed coordinates do not match the saved coordinates");
+    UbxBaseStatus status;
+    return UbloxReadback::readBaseStatus(status, error);
+}
+
+bool BackendAgent::prepareStartupConfig(DynamicJsonDocument &config, JsonObject &base,
+                                        bool &saved, String &method, String &error)
+{
+    if (deserializeJson(config, baseConfig_.c_str()) != DeserializationError::Ok || !config.is<JsonObject>())
+    {
+        error = "Saved Base configuration is invalid";
+        return false;
+    }
+    base = config.as<JsonObject>();
+    saved = base.size() > 0;
+    method = base["base_setup_method"] | String();
+    if (saved && method.isEmpty())
+    {
+        error = "Saved Base mode is missing";
+        return false;
+    }
+    if (saved)
+        return true;
+
+    base["base_setup_method"] = "SURVEY_IN";
+    base["survey_in_duration"] = AUTO_SURVEY_IN_SECONDS;
+    base["survey_in_accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
+    base["mode"] = "BASE";
+    JsonObject options = base.createNestedObject("gnss_options");
+    options["output_mode"] = "rtcm_only";
+    options["msm_level"] = "both";
+    method = "SURVEY_IN";
     return true;
 }
+
+bool BackendAgent::buildStartupCommands(JsonObjectConst base,
+                                        GnssCmdBuilder::GnssSensorType detected,
+                                        bool restoreFixed,
+                                        GnssCmdBuilder::CommandList &commands,
+                                        StartupPosition &position,
+                                        String &error)
+{
+    using namespace GnssCmdBuilder;
+    GnssOptions options;
+    options.ports = {"UART1"};
+    const JsonObjectConst output = base["gnss_options"].as<JsonObjectConst>();
+    options.outputMode = String(output["output_mode"] | "rtcm_only") == "rtcm_only"
+                             ? OutputMode::RtcmOnly
+                             : OutputMode::DiagnosticsRtcm;
+    if (const String level = output["msm_level"] | "both"; level == "7")
+        options.msmLevel = MsmLevel::Msm7;
+    else if (level == "4")
+        options.msmLevel = MsmLevel::Msm4;
+    else
+        options.msmLevel = MsmLevel::Both;
+    const JsonObjectConst systems = output["constellations"].as<JsonObjectConst>();
+    options.gps = systems["gps"] | true;
+    options.glo = systems["glo"] | true;
+    options.gal = systems["gal"] | true;
+    options.bds = systems["bds"] | true;
+    options.qzss = systems["qzss"] | true;
+    options.sbas = systems["sbas"] | true;
+    position.ellipsoid = detected == GnssSensorType::Ublox;
+    if (!restoreFixed)
+    {
+        const auto duration = AUTO_SURVEY_IN_SECONDS;
+        const auto accuracy = GnssCmdBuilder::BASE_ACCURACY_METERS;
+        if (const auto maxDuration = detected == GnssSensorType::Unicore ? 3600U : 604800U;
+            !std::isfinite(duration) || std::floor(duration) != duration || duration < 1 || duration > maxDuration || !std::isfinite(accuracy) || accuracy < 0.001 || accuracy > 10000)
+        {
+            error = "Saved Survey-In parameters are invalid";
+            return false;
+        }
+        surveyInTargetSeconds_ = duration;
+        surveyInMonitoring_ = true;
+        surveyInResultPending_ = true;
+        commands = buildBaseSurveyInCommand(static_cast<uint32_t>(duration), accuracy, detected, options);
+        return true;
+    }
+
+    JsonObjectConst coords = base["coords"].as<JsonObjectConst>();
+    if (coords.isNull())
+        coords = base;
+    const auto lat = configNumber(coords["lat"], NAN);
+    const auto lon = configNumber(coords["lon"], NAN);
+    const auto alt = configNumber(coords["alt"], NAN);
+    const auto accuracy = GnssCmdBuilder::BASE_ACCURACY_METERS;
+    if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(alt) || std::abs(lat) > 90 || std::abs(lon) > 180 || alt < -12000 || alt > 100000 || !std::isfinite(accuracy) || accuracy < 0.0001 || accuracy > 10000)
+    {
+        error = "Saved Fixed LLA coordinates or accuracy are invalid";
+        return false;
+    }
+    position.latitude = lat;
+    position.longitude = lon;
+    position.altitude = alt;
+    if (detected == GnssSensorType::Unicore)
+    {
+        const String reference = base["altitude_reference"] | "LEGACY";
+        if (reference != "ELLIPSOID" && reference != "LEGACY")
+        {
+            error = "Unsupported saved altitude reference";
+            return false;
+        }
+        if (reference == "ELLIPSOID")
+        {
+            position.ellipsoid = true;
+            const String zero = "config undulation 0.0\r\n";
+            commands.emplace_back(zero.begin(), zero.end());
+        }
+    }
+    const CommandList fixed = buildBaseFixedLlaCommand(lat, lon, alt, accuracy, detected, options);
+    commands.insert(commands.end(), fixed.begin(), fixed.end());
+    return true;
 }
 
-bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected) {
+bool BackendAgent::verifyStartupReadback(GnssCmdBuilder::GnssSensorType detected,
+                                         bool restoreFixed, const StartupPosition &expected,
+                                         String &error)
+{
+    DynamicJsonDocument readback(2048);
+    deserializeJson(readback, receiverBaseReadback_.c_str());
+
+    if (const String expectedMode = restoreFixed ? "base" : "survey_in";
+        String(readback["mode_kind"] | "") != expectedMode)
+    {
+        error = "Receiver mode does not match startup configuration";
+        return false;
+    }
+    if (!restoreFixed)
+        return true;
+
+    const JsonObjectConst position = readback["bestpos"].as<JsonObjectConst>();
+    if (position["state"] != "ok" || position["position_type"] != "FIXEDPOS")
+    {
+        error = "Receiver has not confirmed the saved fixed position";
+        return false;
+    }
+    double lat = 0.0;
+    double lon = 0.0;
+    double height = 0.0;
+    if (detected == GnssCmdBuilder::GnssSensorType::Ublox)
+    {
+        lat = position["lat"].as<double>();
+        lon = position["lon"].as<double>();
+        height = position["alt"].as<double>();
+    }
+    else
+    {
+        const auto raw = position["raw"] | String();
+        const auto separator = raw.indexOf(';');
+        double undulation = 0.0;
+        if (std::array<char, 16> datum{};
+            separator < 0 || std::sscanf(raw.c_str() + separator + 1, "%*[^,],%*[^,],%lf,%lf,%lf,%lf,%15[^,]", &lat, &lon, &height, &undulation, datum.data()) != 5 || std::strcmp(datum.data(), "WGS84") != 0)
+        {
+            error = "Receiver fixed-coordinate readback is invalid";
+            return false;
+        }
+        if (expected.ellipsoid)
+            height += undulation;
+    }
+    if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(height) || std::abs(lat - expected.latitude) > 1e-8 || std::abs(lon - expected.longitude) > 1e-8 || std::abs(height - expected.altitude) > 0.002)
+    {
+        error = "Receiver fixed coordinates do not match the saved coordinates";
+        return false;
+    }
+    return true;
+}
+
+void BackendAgent::reconcileBaseStartupReadback()
+{
+    // Only retry delayed position confirmation, never command or persistence errors.
+    if (baseStartupState_ != "error" || baseStartupError_ != "Receiver has not confirmed the saved fixed position")
+        return;
+
+    DynamicJsonDocument config(CONFIG_DOCUMENT_SIZE);
+    if (deserializeJson(config, baseConfig_) != DeserializationError::Ok || config["base_setup_method"] != "FIXED_LLA")
+        return;
+    JsonObjectConst base = config.as<JsonObjectConst>();
+    JsonObjectConst coords = base["coords"].as<JsonObjectConst>();
+    if (coords.isNull())
+        coords = base;
+    StartupPosition expected;
+    expected.latitude = configNumber(coords["lat"], NAN);
+    expected.longitude = configNumber(coords["lon"], NAN);
+    expected.altitude = configNumber(coords["alt"], NAN);
+    const auto chip = GnssCmdBuilder::sensorTypeFromString(sensorType_);
+    if (chip == GnssCmdBuilder::GnssSensorType::Invalid || !std::isfinite(expected.latitude)
+        || !std::isfinite(expected.longitude) || !std::isfinite(expected.altitude))
+        return;
+    const String reference = base["altitude_reference"] | "LEGACY";
+    if (chip == GnssCmdBuilder::GnssSensorType::Unicore && reference != "ELLIPSOID" && reference != "LEGACY")
+        return;
+    expected.ellipsoid = chip == GnssCmdBuilder::GnssSensorType::Ublox || reference == "ELLIPSOID";
+    String error;
+    if (!verifyStartupReadback(chip, true, expected, error))
+        return;
+    baseStartupState_ = "fixed_restored";
+    baseStartupError_.clear();
+    markStatusDirty();
+}
+
+bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
+{
     using namespace GnssCmdBuilder;
-    if (baseStartupAttempted_) return baseStartupState_ != "error";
-    if (detected == GnssSensorType::Invalid) {
+    if (baseStartupAttempted_)
+        return baseStartupState_ != "error";
+    if (detected == GnssSensorType::Invalid)
+    {
         sensorType_ = "UNKNOWN";
         baseStartupState_ = "awaiting_receiver";
         markStatusDirty();
@@ -70,7 +252,8 @@ bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
     }
     baseStartupAttempted_ = true;
     sensorType_ = detected == GnssSensorType::Unicore ? "Unicorecomm" : "Ublox";
-    const auto fail = [&](const String &error) {
+    const auto fail = [&](const String &error)
+    {
         baseStartupState_ = "error";
         baseStartupError_ = error;
         Serial.printf("[GNSS][STARTUP][ERROR] %s\n", error.c_str());
@@ -78,78 +261,52 @@ bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
         return false;
     };
     DynamicJsonDocument config(CONFIG_DOCUMENT_SIZE);
-    if (deserializeJson(config, baseConfig_.c_str()) != DeserializationError::Ok || !config.is<JsonObject>())
-        return fail("Saved Base configuration is invalid");
-    JsonObject base = config.as<JsonObject>();
-    if (stationLock_.all) {
+    JsonObject base;
+    auto saved = false;
+    String method;
+    if (String configError;
+        !prepareStartupConfig(config, base, saved, method, configError))
+        return fail(configError);
+    if (stationLock_.all)
+    {
         baseStartupState_ = "locked";
         markStatusDirty();
         return true;
     }
-    // A power cycle can mean the antenna has moved. Always acquire a fresh
-    // position through caster AutoNearest; old Fixed LLA is never a boot policy.
-    base["base_setup_method"] = "AUTO_CORS";
-    base["auto_cors_source_mode"] = "nearest";
-    base["mode"] = "BASE";
-    base.remove("coords");
-    if (!base["gnss_options"].is<JsonObject>()) {
-        JsonObject options = base.createNestedObject("gnss_options");
-        options["output_mode"] = "rtcm_only";
-        options["msm_level"] = "both";
-    }
-    baseConfig_.clear();
-    serializeJson(config, baseConfig_);
-    if (!saveStatePreferences()) return fail("Could not save Auto Base startup mode");
-    baseStartupState_ = "awaiting_auto_base";
-    baseStartupError_.clear();
-    markStatusDirty();
-    Serial.printf("[GNSS][STARTUP] awaiting nearest CORS; chip=%s\n", sensorType_.c_str());
-    return true;
-}
-
-bool BackendAgent::readStartupReceiverMode(GnssCmdBuilder::GnssSensorType detected, String &error) {
-    if (detected == GnssCmdBuilder::GnssSensorType::Unicore) {
-        String mode;
-        return UnicoreReadback::readMode(mode, error);
-    } else {
-        UbxBaseStatus status;
-        return UbloxReadback::readBaseStatus(status, error);
-    }
-}
-
-void BackendAgent::reconcileBaseStartupReadback(JsonObjectConst readback) {
-    // Only recover a pending position confirmation, never command or persistence failures.
-    if (baseStartupState_ != "error"
-        || baseStartupError_ != "Receiver has not confirmed the saved fixed position") return;
-    DynamicJsonDocument config(CONFIG_DOCUMENT_SIZE);
-    if (deserializeJson(config, baseConfig_.c_str()) != DeserializationError::Ok
-        || config["base_setup_method"] != "FIXED_LLA") return;
-    String error;
-    if (!confirmSavedFixedPosition(config.as<JsonObjectConst>(), readback, sensorType_ == "Ublox", error)) return;
-    baseStartupState_ = "fixed_restored";
-    baseStartupError_.clear();
-    markStatusDirty();
-}
-
-void BackendAgent::startBootAutoBaseWhenReady() {
-    if (baseStartupState_ != "awaiting_auto_base" || stationLock_.all
-        || !licenseValid_ || workflowActive()) return;
-    // Backend/MQTT availability is unrelated to the direct caster connection.
-    if (isGsmConnection() ? !modem.isGprsConnected() : WiFi.status() != WL_CONNECTED) return;
-    DynamicJsonDocument request(CONFIG_DOCUMENT_SIZE);
-    request["source_mode"] = "nearest";
-    request["auto_apply"] = true;
-    request["startup_auto"] = true;
-    request["startup_boot_id"] = statusBootId_;
-    request["enable_itrf_vn2000_transform"] = false;
-    request["timeout"] = 3600;
-    request["samples"] = 60;
-    String error, detail;
-    Serial.println("[AUTO BASE][BOOT] Starting local AutoNearest; backend not required.");
-    if (!executeAutoBaseCommand(request.as<JsonObject>(), error, detail)) {
-        baseStartupState_ = "error";
-        baseStartupError_ = error;
-        Serial.printf("[AUTO BASE][BOOT][ERROR] %s\n", error.c_str());
+    if (method == "AUTO_CORS")
+    {
+        baseStartupState_ = "preserved";
         markStatusDirty();
+        return true;
     }
+    if (String queryError; !readStartupReceiverMode(detected, queryError))
+        return fail(queryError.isEmpty() ? String("Receiver mode could not be read") : queryError);
+    const auto restoreFixed = method == "FIXED_LLA";
+    if (!restoreFixed && !method.isEmpty() && method != "SURVEY_IN")
+        return fail("Unsupported saved Base mode");
+    CommandList commands;
+    StartupPosition position;
+    if (String commandError;
+        !buildStartupCommands(base, detected, restoreFixed, commands, position, commandError))
+        return fail(commandError);
+    if (!commands.empty() && !writeGnssCommands(commands))
+        return fail("Receiver rejected startup configuration");
+    if (!saved)
+    {
+        baseConfig_.clear();
+        serializeJson(config, baseConfig_);
+    }
+    if (!saveStatePreferences())
+        return fail("Could not save Base configuration");
+    baseStartupState_ = restoreFixed ? "fixed_restored"
+                                     : "survey_started";
+    lastReceiverPollMs_ = 0;
+    String error;
+    if (!refreshReceiverReadback(error))
+        return fail(error);
+    if (!verifyStartupReadback(detected, restoreFixed, position, error))
+        return fail(error);
+    Serial.printf("[GNSS][STARTUP] %s; chip=%s\n", baseStartupState_.c_str(), sensorType_.c_str());
+    markStatusDirty();
+    return true;
 }

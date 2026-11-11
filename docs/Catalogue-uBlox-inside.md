@@ -411,15 +411,21 @@ Các env debug/test bật PROGRAM_DEBUG/DUMP_AT_COMMANDS nên log có thể ch�
 ## 15. Kiểm tra phần mềm và nghiệm thu nội bộ
 
 ```sh
-pio run -e tdm240x_dev_general
-git diff --check
+c++ -std=c++17 -fsanitize=address,undefined -g -Itest/host -Iinclude \
+  test/host/base_checks.cpp src/functions/gnss/Unicore_Log.cpp src/functions/gnss/gnss_cmd_builder.cpp \
+  src/functions/gnss/ublox_commands.cpp src/functions/gnss/unicore_commands.cpp \
+  -o /tmp/esp32-base-checks
+/tmp/esp32-base-checks
+python3 -B test/host/check_cors.py /path/to/cors /tmp/esp32-base-checks
+python3 -B test/host/check_gnss_stream.py
+python3 -B test/host/check_rover_gga.py
 ```
 
-Đã kiểm tra build env tdm240x_dev_general, bộ tạo lệnh hai protocol/routing với backend, parser khung xen kẽ và GGA mới/cũ. Đây là kiểm tra host/build, không phải thử nghiệm RF hoặc UART trên receiver thật.
+Đã kiểm tra build env tdm240x_dev_general, bộ tạo lệnh hai protocol/routing với backend, parser khung xen kẽ và GGA mới/cũ. Đây là kiểm tra host/build, không phải thử nghiệm RF hoặc UART trên receiver thật. check_status_flash.py mở cổng Serial để quan sát log sau khi nạp; script không upload firmware. Cần thiết bị thật và Serial Monitor đóng, kiểm tra cấu hình DTR/RTS theo board trước khi chạy.
 
 Biên bản thực địa phải ghi: board/model/firmware receiver, nguồn, cổng/baud, anten và chiều cao, hệ tọa độ, mode, thời gian chờ và số mẫu, account/mountpoint đã che thông tin truy cập, tốc độ/tuổi RTCM, kết quả rover tại mốc và tình trạng sau reboot/mất mạng. Chỉ xác nhận đạt sau khi có số liệu và người nghiệm thu.
 
 ## Tài liệu tham chiếu
 
 - [u-blox ZED-F9P Integration Manual](https://content.u-blox.com/sites/default/files/ZED-F9P_IntegrationManual_UBX-18010802.pdf): nguyên tắc survey-in, fixed và cổng receiver; cần chọn đúng phiên bản tài liệu cho thiết bị thực tế.
-- [Hướng dẫn tích hợp CORS](base-4g.md), command handler, bộ tạo lệnh theo chip là cơ sở đối chiếu hành vi firmware.
+- [Hướng dẫn tích hợp CORS](base-4g.md), command handler, bộ tạo lệnh theo chip và các bài kiểm tra host trong cùng bản nguồn là cơ sở kiểm tra hành vi firmware.

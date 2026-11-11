@@ -6,8 +6,15 @@
 #include <cstdint>
 #include <vector>
 
+namespace UbloxCommands
+{
+    void routeUbloxOutput(uint8_t *data, size_t length);
+}
+
 namespace GnssCmdBuilder
 {
+
+    inline constexpr float BASE_ACCURACY_METERS = 5.0f;
 
     using Command = std::vector<uint8_t>;
     using CommandList = std::vector<Command>;
@@ -60,12 +67,16 @@ namespace GnssCmdBuilder
     CommandList buildBaseAllRtcmOutputCommand(const String &port, bool enabled,
                                               GnssSensorType sensorType);
     CommandList buildRoverCommand(GnssSensorType sensorType);
-    void routeUbloxOutput(uint8_t *data, size_t length);
+/** @brief Implements routeUbloxOutput. */
+    inline void routeUbloxOutput(uint8_t *data, size_t length)
+    {
+        UbloxCommands::routeUbloxOutput(data, length);
+    }
     Command commandListToBytes(const CommandList &commands);
 
-    #if PROGRAM_DEBUG
+#if PROGRAM_DEBUG
     String debugCommand(const Command &command);
-    #endif
+#endif
 
 } // namespace GnssCmdBuilder
 

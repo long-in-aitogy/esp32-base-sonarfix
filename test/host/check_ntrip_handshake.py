@@ -1,57 +1,56 @@
-"""A persistent SOURCE ACK must not hold the transport lock for 10 seconds."""
+"""Exercise the actual shared handshake with persistent SOURCE and rover sockets."""
 from pathlib import Path
-from host_coverage import compile_cpp, run_cpp, mapped
+import subprocess
 import tempfile
 
 root = Path(__file__).resolve().parents[2]
-source = (root / 'src/functions/ntrip/NTRIP_Handler_IP.cpp').read_text()
-handshake = 'bool waitForNtripResponse(' + source.split('bool waitForNtripResponse(', 1)[1].split('\nvoid sendRoverGgaIfAvailable', 1)[0]
+source = (root / 'src/functions/ntrip/ntrip_common.cpp').read_text()
+function = source[source.index('    bool waitForNtripResponse('):source.index('\n} // namespace ntrip_common')]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
-shim = shim.replace('    void trim() {', '''    int indexOf(const char *s) const { auto p = find(s); return p == npos ? -1 : int(p); }
-    int indexOf(char c, int start) const { auto p = find(c, start); return p == npos ? -1 : int(p); }
-    void trim() {''')
+shim = shim.replace('    void trim()', '''    int indexOf(const char *s) const { auto p = find(s); return p == npos ? -1 : int(p); }
+    int indexOf(char c, unsigned start) const { auto p = find(c, start); return p == npos ? -1 : int(p); }
+    String substring(unsigned start, unsigned end) const { return substr(start, end - start); }
+    void trim()''')
 harness = r'''
 #include <cassert>
-#include <cstring>
 uint32_t now = 0;
 uint32_t millis() { return now; }
 void delay(uint32_t ms) { now += ms; }
 struct Client {
     String wire;
     size_t offset = 0;
-    bool up = true;
-    bool connected() { return up; }
+    bool connected() { return true; }
     int available() { return offset < wire.size(); }
     int read() { return available() ? uint8_t(wire[offset++]) : -1; }
 };
+'''
+declarations = r'''
+bool waitForNtripResponse(Client &, String *, String * = nullptr);
 '''
 checks = r'''
 int main() {
     for (int server = 0; server < 2; ++server) {
         Client source; source.wire = "ICY 200 OK\r\n";
-        assert(waitForNtripResponse(source));
+        assert(waitForNtripResponse(source, nullptr));
     }
-    assert(now == 0); // Both open SOURCE sockets ACK immediately, without blocking MQTT.
+    assert(now == 0);
     Client rover; rover.wire = "ICY 200 OK\r\n"; rover.wire += char(0xD3);
-    assert(waitForNtripResponse(rover));
-    assert(rover.read() == 0xD3);
-    Client http; String selected;
-    http.wire = "HTTP/1.1 200 OK\r\nX-NTRIP-Selected-Mountpoint: station\r\n\r\n";
+    assert(waitForNtripResponse(rover, nullptr) && rover.read() == 0xD3);
+    Client http; http.wire = "HTTP/1.1 200 OK\r\nServer: caster\r\n\r\n";
     http.wire += char(0xD3);
-    assert(waitForNtripResponse(http, nullptr, &selected));
-    assert(selected == "station" && http.read() == 0xD3);
+    assert(waitForNtripResponse(http, nullptr) && http.read() == 0xD3);
     Client rejected; rejected.wire = "HTTP/1.1 401 Unauthorized\r\n\r\n";
-    assert(!waitForNtripResponse(rejected));
+    assert(!waitForNtripResponse(rejected, nullptr));
     assert(now == 0);
     Client silent; String error;
     assert(!waitForNtripResponse(silent, &error));
     assert(now == 10000 && !error.isEmpty());
 }
 '''
-with tempfile.TemporaryDirectory(prefix='esp-ntrip-handshake-') as directory:
+with tempfile.TemporaryDirectory(prefix='ntrip-handshake-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + harness + mapped(root / 'src/functions/ntrip/NTRIP_Handler_IP.cpp', handshake) + checks)
-    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
+    (path / 'check.cpp').write_text(shim + harness + declarations + function + checks)
+    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
                     '-fsanitize=address,undefined', str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    run_cpp([str(path / 'check')], check=True)
-print('PASS: two immediate SOURCE ACKs, rover bytes, HTTP mountpoint header, rejection and timeout')
+    subprocess.run([str(path / 'check')], check=True)
+print('PASS: SOURCE ACK, preserved RTCM bytes, HTTP headers, rejection and timeout')

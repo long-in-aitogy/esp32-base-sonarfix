@@ -36,37 +36,54 @@ Loại GNSS được cấu hình từ CORS; cùng một firmware hỗ trợ cả
 - `documentation`: Các nhánh riêng để viết tài liệu hướng dẫn sử dụng, cấu hình, v.v. Sau khi hoàn thành phần tài liệu, sẽ được merge vào `develop`. Nhánh này chỉ được phép merge vào `develop` và cũng chỉ được nhận merge từ `develop` để đồng bộ.
 
 ### Tổ chức thư mục:
-
-Mã nguồn và header được chia cùng nhóm chức năng:
-
-```text
-├── src/
-│   ├── main.cpp
-│   ├── helper.cpp
-│   ├── functions/
-│   │   ├── backend/    # Agent, lệnh, trạng thái, lưu trữ, codec, Auto Base
-│   │   ├── gnss/       # Nhận diện chip, tạo lệnh, ACK và readback
-│   │   ├── mqtt/       # Kết nối và trao đổi MQTT
-│   │   └── ntrip/      # Caster, Rover, nhận và chuyển tiếp RTCM
-│   ├── hardware/       # Wi-Fi, SIM và chuyển mạng
-│   └── maths/
-├── include/
-│   ├── functions/      # Header tương ứng: backend, gnss, mqtt, ntrip
-│   ├── hardware/
-│   ├── maths/
-│   ├── Prog_Config.h
-│   └── Top_Lvl_Config.h
-├── test/               # Kiểm tra host và thiết bị
-├── boards/
-├── variants/
-├── docs/
-├── partitions.csv
-└── platformio.ini
 ```
-
-Header của Backend Agent, gồm codec và WebSocket, nằm trong
-`include/functions/backend/`. Cấu trúc thư mục không thay đổi thuật toán,
-giao thức hoặc cấu hình phần cứng.
+├── .pio/           # Thư mục do PlatformIO tạo ra chứa file biên dịch,
+|               thư viện đã cài, v.v. Không chỉnh sửa trực tiếp.
+|               thư mục này không xuất hiện trong repo vì đã được thêm vào .gitignore
+|
+├── boards/
+|   └── heltec_wifi_lora_32_v4.json  # Cấu hình PlatformIO để biên dịch
+|                                     mã nguồn cho Heltec V4
+|                                     (đây là file tuỳ chỉnh do PlatformIO chưa
+|                                     duyệt cấu hình Heltec V4 chính thức)
+|
+├──lib/                             # Thư viện riêng của dự án (hiện chưa cần thiết).
+|                                  Sẽ được biên dịch thành thư viện liên kết tĩnh
+|
+├──include/                         # Header files chứa cấu hình, định nghĩa hằng số,
+|   |                                 khai báo biến, đối tượng và prototype của hàm.
+|   |                                 Ngoại trừ main không có header và một số header
+|   |                                 được khai báo trong đoạn markdown này,
+|   |                                 các file header còn lại được đặt tên và tổ chức hoàn toàn
+|   |                                 giống với tên và vị trí file .cpp tương ứng trong src/
+|   |
+|   ├── Top_Lvl_Config.h            # Cấu hình cấp cao trước khi biên dịch
+|   └── Prog_Config.h               # Cấu hình hoạt động của chương trình
+|
+├──src/                             # Mã nguồn chính của chương trình.
+|    ├── main.cpp                       # Điểm vào chính của chương trình, chứa hàm setup() và loop()
+|    ├── helper.cpp                     # Các hàm phụ trợ để xử lý dữ liệu, kết nối, v.v.
+|    ├── functions/                      # Các hàm được tổ chức theo backend, GNSS, NTRIP và MQTT
+|    |  ├── backend/                      # Agent backend, command handling và workflow
+|    |  ├── gnss/                         # Lệnh, phản hồi và readback GNSS
+|    |  ├── ntrip/                        # NTRIP và RTCM transport
+|    |  └── mqtt/                         # MQTT manager
+|    └──hardware/                       # Thư mục con chứa các hàm liên quan đến phần cứng (wifi, 4g)
+|       ├── WiFi_handler.cpp                     # Hàm xử lý kết nối WiFi
+|       └── Sim_handler.cpp                      # Hàm xử lý kết nối 4G
+|
+├──test/                            # Thư mục dành cho việc viết unit test
+|                                  và sử dụng PlatformIO Test Runner.
+|
+├──variants/                        # Cấu hình biến thể phần cứng (ví dụ: Heltec V4, TDM2402)
+|   |                                được định nghĩa dưới dạng macro trong file header (.h)
+|   |
+|   └── heltec_V4
+|           |
+|           └── pins_arduino.h     # Định nghĩa chân GPIO cho board Heltec V4
+|
+└──platformio.ini                    # File cấu hình chính của PlatformIO, xác định board,
+```
 
 ## Cấu hình chương trình và hệ thống:
 ### Cấu hình cấp cao trước khi biên dịch, được lưu trong `include/Top_Lvl_Config.h`:

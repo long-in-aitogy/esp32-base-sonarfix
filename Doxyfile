@@ -2,7 +2,7 @@
 
 PROJECT_NAME           = "ESP32 GNSS Gateway"
 PROJECT_BRIEF          = "GNSS, NTRIP, MQTT, and hardware integration firmware"
-OUTPUT_DIRECTORY       = docs/doxy/api
+OUTPUT_DIRECTORY       = docs/api
 CREATE_SUBDIRS         = NO
 
 INPUT                  = include src
@@ -40,4 +40,4 @@ GENERATE_RTF           = NO
 
 QUIET                  = YES
 WARNINGS               = YES
-WARN_LOGFILE           = docs/doxy/api/doxygen-warnings.log
+WARN_LOGFILE           = docs/api/doxygen-warnings.log

@@ -2,20 +2,21 @@
 from pathlib import Path
 import subprocess
 import tempfile
-from host_coverage import compile_cpp, run_cpp, cpp_output, mapped
 
 root = Path(__file__).resolve().parents[2]
-source = (root / "src/functions/ntrip/NTRIP_Handler_IP.cpp").read_text()
-sender = source.split("void sendRoverGgaIfAvailable(", 1)[1].split("\nbool connectEndpoint(", 1)[0]
+source = (root / "src/functions/ntrip/ntrip_rover.cpp").read_text()
+sender = source.split("void sendRoverGgaIfAvailable(", 1)[1].split("/** @brief Implements startNtripRover. */", 1)[0]
 harness = r'''
 #include <cassert>
 #include <cstdint>
 #include <string>
 #include <vector>
 using String = std::string;
-uint32_t now = 10000, roverLastGgaMs = 0;
+uint32_t now = 10000;
+struct RoverSession { uint32_t lastGgaMs = 0; } session;
+RoverSession &roverSession() { return session; }
 uint32_t millis() { return now; }
-struct Snapshot { const char *lastGga = ""; uint32_t lastGgaMs = 0; } snapshot;
+struct Snapshot { std::string lastGga = ""; uint32_t lastGgaMs = 0; } snapshot;
 using GnssTelemetrySnapshot = Snapshot;
 Snapshot getGnssTelemetrySnapshot() { return snapshot; }
 struct {
@@ -59,11 +60,10 @@ int main() {
     assert(client.writes == 2 && Serial.logs.back() != "sent");
 }
 '''
-sender = mapped(root / 'src/functions/ntrip/NTRIP_Handler_IP.cpp', 'void sendRoverGgaIfAvailable(' + sender)
 with tempfile.TemporaryDirectory(prefix="esp32-gga-") as directory:
     path = Path(directory)
-    (path / "check.cpp").write_text(harness + sender + checks)
-    compile_cpp(["c++", "-std=c++17", "-fsanitize=address,undefined",
+    (path / "check.cpp").write_text(harness + "void sendRoverGgaIfAvailable(" + sender + checks)
+    subprocess.run(["c++", "-std=c++17", "-fsanitize=address,undefined",
                     str(path / "check.cpp"), "-o", str(path / "check")], check=True)
-    run_cpp([str(path / "check")], check=True)
+    subprocess.run([str(path / "check")], check=True)
 print("PASS: missing/stale GGA, CRLF forwarding, rate limit, socket write failure")

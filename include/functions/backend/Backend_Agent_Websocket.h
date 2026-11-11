@@ -6,7 +6,8 @@
 class BackendAgent;
 
 // RFC6455 client shared by Wi-Fi and cellular TCP transports.
-class BackendAgentWebsocket {
+class BackendAgentWebsocket
+{
 public:
     explicit BackendAgentWebsocket(BackendAgent *owner);
 
@@ -33,8 +34,8 @@ private:
 
     void connectNow();
 
-    bool readFrame(uint8_t &opcode, String &payload);
     void parseFrames();
+    bool readFrame(uint8_t &opcode, String &payload);
 
     void sendControl(uint8_t opcode, const uint8_t *payload, size_t length);
 };

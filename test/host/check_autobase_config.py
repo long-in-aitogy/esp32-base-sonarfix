@@ -1,0 +1,100 @@
+"""Exercise the real Auto Base config update and its persistence failure path."""
+from pathlib import Path
+import subprocess
+import tempfile
+root = Path(__file__).resolve().parents[2]
+source = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_text()
+start = source.index('    DynamicJsonDocument baseConfig(CONFIG_DOCUMENT_SIZE);', source.index('bool BackendAgent::completeAutoBaseSetup('))
+end = source.index('    setAgentState(normalAgentState());', start)
+update = source[start:end]
+harness = r'''
+#include <Arduino.h>
+#include <ArduinoJson.h>
+#include "functions/gnss/gnss_cmd_builder.h"
+#include <cassert>
+constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
+struct Position { double latitude = 21.25, longitude = 105.75, altitude = 10.5, northing = 1, easting = 2; };
+struct BackendAgent {
+    String baseConfig_, published;
+    bool saveOk = true, restartOk = true, restoreOk = true;
+    int saves = 0, failSave = 0;
+    int publishes = 0, stops = 0, writes = 0;
+    bool stopNtripRoverLocked() { ++stops; return true; }
+    bool restoreWorkflowBase(JsonObjectConst config) {
+        ++writes;
+        assert(config["base_setup_method"] == "FIXED_LLA");
+        assert(config["mode"] == "BASE" && config["coordinate_source"] == "AUTO_CORS");
+        assert(config["auto_cors_source_mode"] == "nearest" && config["coords"]["altitude_reference"] == "ELLIPSOID");
+        assert(config["gnss_options"]["output_mode"] == "rtcm_only");
+        assert(config["coords"]["lat"] == 21.25 && config["coords"]["alt"] == 10.5);
+        assert(config["accuracy"] == 5);
+        return restoreOk;
+    }
+    bool saveStatePreferences() { ++saves; return saveOk && saves != failSave; }
+    bool restartConfiguredNtrip() { return restartOk; }
+    void publishConfigState(const char *kind) { ++publishes; published = kind; }
+    bool apply(String &failureReason) {
+        Position result;
+        const double rawLatitude = 21, rawLongitude = 105, rawAltitude = 11;
+        const bool transformed = true;
+        const double centralMeridianDeg = 105, scale = 0.9999;
+        const char *projectionSource = "province";
+        const String provinceCode = "01", provinceName = "Ha Noi";
+'''
+checks = r'''
+        return true;
+    }
+};
+int main() {
+    BackendAgent agent;
+    agent.baseConfig_ = R"({"base_setup_method":"SURVEY_IN","survey_in_duration":300,"survey_in_accuracy":3,"accuracy":5,"gnss_options":{"msm_level":"7","output_mode":"diagnostics","constellations":{"glo":false,"qzss":true}},"coords":{"lat":1,"lon":2,"alt":3}})";
+    const String previous = agent.baseConfig_;
+    String error;
+    agent.restoreOk = false;
+    assert(!agent.apply(error) && agent.baseConfig_ == previous && agent.saves == 0 && agent.publishes == 0);
+    assert(error == "receiver did not confirm automatically measured Fixed LLA");
+    agent.restoreOk = true; agent.saveOk = false;
+    assert(!agent.apply(error) && agent.baseConfig_ == previous && agent.publishes == 0);
+    assert(error == "could not save automatically applied Fixed LLA");
+    agent.saveOk = true; agent.restartOk = false;
+    const int saves = agent.saves;
+    assert(!agent.apply(error) && agent.baseConfig_ == previous && agent.publishes == 0);
+    assert(agent.saves == saves + 2 && error == "could not restore configured NTRIP after applying Fixed LLA");
+    BackendAgent rollbackFailure;
+    rollbackFailure.baseConfig_ = previous;
+    rollbackFailure.restartOk = false;
+    rollbackFailure.failSave = 2;
+    assert(!rollbackFailure.apply(error) && rollbackFailure.baseConfig_ == previous && rollbackFailure.publishes == 0);
+    assert(error == "could not save previous Base configuration after NTRIP restore failed");
+    agent.restartOk = true;
+    assert(agent.apply(error) && agent.publishes == 1 && agent.published == "base_config_state");
+    DynamicJsonDocument result(4096);
+    assert(deserializeJson(result, agent.baseConfig_) == DeserializationError::Ok);
+    assert(result["base_setup_method"] == "FIXED_LLA" && result["survey_in_duration"] == 300);
+    assert(result["auto_cors_source_mode"] == "nearest" && result["coords"]["altitude_reference"] == "ELLIPSOID");
+    assert(result["accuracy"] == 5 && result["survey_in_accuracy"] == 5 && result["coords"]["accuracy"] == 5);
+    assert(result["gnss_options"]["msm_level"] == "7" && result["coords"]["lat"] == 21.25);
+    assert(result["gnss_options"]["constellations"]["qzss"] == true);
+    assert(result["gnss_options"]["constellations"]["glo"] == false);
+    assert(result["gnss_options"]["constellations"]["sbas"] == false);
+    BackendAgent defaults;
+    defaults.baseConfig_ = "{}";
+    assert(defaults.apply(error));
+    result.clear();
+    assert(deserializeJson(result, defaults.baseConfig_) == DeserializationError::Ok);
+    assert(result["gnss_options"]["msm_level"] == "4");
+    assert(result["gnss_options"]["constellations"]["qzss"] == false);
+    agent.baseConfig_ = "{bad"; error.clear();
+    const int writes = agent.writes, stops = agent.stops;
+    assert(!agent.apply(error) && agent.publishes == 1 && agent.baseConfig_ == "{bad");
+    assert(agent.writes == writes && agent.stops == stops);
+}
+'''
+with tempfile.TemporaryDirectory(prefix='autobase-config-') as directory:
+    path = Path(directory)
+    (path / 'check.cpp').write_text(harness + update + checks)
+    subprocess.run(['c++', '-std=c++17', '-fsanitize=address,undefined',
+                    '-I' + str(root / 'test/host'), '-I' + str(root / 'include'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
+                    str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
+    subprocess.run([str(path / 'check')], check=True)
+print('PASS: Auto Base checks receiver before saving, preserves options and handles restore failures')

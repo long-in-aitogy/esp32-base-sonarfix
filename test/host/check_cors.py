@@ -43,7 +43,7 @@ for msm in (4, 7, "both"):
         builder.build_base_survey_in_command("Unicorecomm", 120, 5, options),
         builder.build_lte_unicore_config("SURVEY_IN", duration=120, gnss_options=options),
     ):
-        assert commands.index(b"config undulation 0.0\r\n") < commands.index(b"mode base time 120 0\r\n")
+        assert commands.index(b"config undulation 0.0\r\n") < commands.index(b"mode base time 120\r\n")
         assert b"unlogall\r\n" in commands
         assert not any(packet.lower().startswith((b"gpgga", b"gpgsa", b"gpgsv", b"gpgst")) for packet in commands)
         assert any(packet.lower().startswith(b"rtcm1074") for packet in commands) == (msm in (4, "both"))

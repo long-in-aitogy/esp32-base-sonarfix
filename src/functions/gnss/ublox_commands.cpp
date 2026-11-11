@@ -3,10 +3,17 @@
 #include "Prog_Config.h"
 #include <array>
 #include <algorithm>
+#include <cstddef>
 #include <cstring>
 
-namespace UbloxCommands {
-using namespace GnssCmdBuilder;
+namespace UbloxCommands
+{
+    using GnssCmdBuilder::Command;
+    using GnssCmdBuilder::CommandList;
+    using GnssCmdBuilder::GnssOptions;
+    using GnssCmdBuilder::MsmLevel;
+    using GnssCmdBuilder::OutputMode;
+
     constexpr std::array<uint8_t, 21> UBLOX_SAVE_CONFIG = {
         0xB5, 0x62, 0x06, 0x09, 0x0D, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF,
         0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x1D, 0xAB};
@@ -43,39 +50,32 @@ using namespace GnssCmdBuilder;
             {"PUBX00", {0x209100ED, 0x209100EE, 0x209100EF}},
             {"PUBX03", {0x209100F2, 0x209100F3, 0x209100F4}},
             {"PUBX04", {0x209100F7, 0x209100F8, 0x209100F9}},
-        }
-    };
+        }};
 
     constexpr std::array<PortKeys, 2> NAV_KEYS = {
-        {
-            {0x20910007, 0x20910008, 0x20910009}, {0x20910034, 0x20910035, 0x20910036}
-        }
-    };
+        {{0x20910007, 0x20910008, 0x20910009}, {0x20910034, 0x20910035, 0x20910036}}};
 
-    constexpr std::array<MessageKeys, 10> RTCM_KEYS = {
+    constexpr std::array<MessageKeys, 9> RTCM_KEYS = {
         {
             {"1005", {0x209102BE, 0x209102BF, 0x209102C0, 0x209102BD, 0x209102C1}},
             {"1074", {0x2091035F, 0x20910360, 0x20910361, 0x2091035E, 0x20910362}},
             {"1084", {0x20910364, 0x20910365, 0x20910366, 0x20910363, 0x20910367}},
-            {"1094", {0x20910369, 0x2091036A, 0x2091036B, 0x20910368, 0x2091036C}},
+            {"1094", {0x20910368, 0x20910369, 0x2091036A, 0x2091036B, 0x2091036C}},
             {"1124", {0x2091036E, 0x2091036F, 0x20910370, 0x2091036D, 0x20910371}},
             {"1077", {0x209102CD, 0x209102CE, 0x209102CF, 0x209102CC, 0x209102D0}},
             {"1087", {0x209102D2, 0x209102D3, 0x209102D4, 0x209102D1, 0x209102D5}},
-            {"1097", {0x20910319, 0x2091031A, 0x2091031B, 0x20910318, 0x2091031C}},
-            {"1127", {0x209102D7, 0x209102D8, 0x209102D9, 0x209102D6, 0x209102DA}},
+            {"1097", {0x209102D7, 0x209102D8, 0x209102D9, 0x209102D6, 0x209102DA}},
             {"1230", {0x20910304, 0x20910305, 0x20910306, 0x20910303, 0x20910307}},
-        }
-    };
+        }};
 
+/** @brief Implements isValidRtcmPort. */
     inline bool isValidRtcmPort(const String &port)
     {
         return port == "I2C" || port == "UART1" || port == "UART2" ||
                port == "USB" || port == "SPI";
     }
 
-
-
-
+/** @brief Implements keyForPort. */
     uint32_t keyForPort(const PortKeys &keys, const String &port)
     {
         if (port == "UART1")
@@ -91,18 +91,21 @@ using namespace GnssCmdBuilder;
         return 0;
     }
 
+/** @brief Implements appendU32. */
     inline void appendU32(Command &data, uint32_t value)
     {
         for (uint8_t i = 0; i < 4; ++i)
             data.push_back(static_cast<uint8_t>(value >> (8 * i)));
     }
 
+/** @brief Implements writeU32. */
     inline void writeU32(Command &data, size_t index, uint32_t value)
     {
         for (uint8_t i = 0; i < 4; ++i)
             data[index + i] = static_cast<uint8_t>(value >> (8 * i));
     }
 
+/** @brief Implements ubxPacket. */
     Command ubxPacket(uint8_t messageClass, uint8_t messageId, const Command &payload)
     {
         Command result = {0xB5, 0x62, messageClass, messageId,
@@ -120,21 +123,19 @@ using namespace GnssCmdBuilder;
         return result;
     }
 
+/** @brief Implements ubxCfgValsetU1. */
     Command ubxCfgValsetU1(const std::vector<std::pair<uint32_t, bool>> &entries)
     {
-        Command result;
-        for (size_t offset = 0; offset < entries.size(); offset += 64) {
-            Command payload = {0x00, 0x07, 0x00, 0x00};
-            for (size_t i = offset; i < std::min(offset + 64, entries.size()); ++i) {
-                appendU32(payload, entries[i].first);
-                payload.push_back(entries[i].second ? 1 : 0);
-            }
-            const Command packet = ubxPacket(0x06, 0x8A, payload);
-            result.insert(result.end(), packet.begin(), packet.end());
+        Command payload = {0x00, 0x07, 0x00, 0x00};
+        for (const auto &[key, value] : entries)
+        {
+            appendU32(payload, key);
+            payload.push_back(value ? 1 : 0);
         }
-        return result;
+        return ubxPacket(0x06, 0x8A, payload);
     }
 
+/** @brief Implements ubxCfgMsg. */
     Command ubxCfgMsg(uint8_t messageClass, uint8_t messageId, const std::vector<String> &ports, uint8_t rate)
     {
         Command payload = {messageClass, messageId, 0, 0, 0, 0, 0, 0};
@@ -154,17 +155,19 @@ using namespace GnssCmdBuilder;
         return ubxPacket(0x06, 0x01, payload);
     }
 
+/** @brief Implements isDiagnosticNmea. */
     inline bool isDiagnosticNmea(const char *name)
     {
         return !strcmp(name, "GGA") || !strcmp(name, "GSA") || !strcmp(name, "GSV") || !strcmp(name, "GST");
     }
 
+/** @brief Implements rtcmEnabled. */
     bool rtcmEnabled(const char *message, const GnssOptions &o)
     {
         if (!strcmp(message, "1005"))
             return true;
-        const bool msm4 = o.msmLevel == MsmLevel::Msm4 || o.msmLevel == MsmLevel::Both;
-        const bool msm7 = o.msmLevel == MsmLevel::Msm7 || o.msmLevel == MsmLevel::Both;
+        const auto msm4 = o.msmLevel == MsmLevel::Msm4 || o.msmLevel == MsmLevel::Both;
+        const auto msm7 = o.msmLevel == MsmLevel::Msm7 || o.msmLevel == MsmLevel::Both;
         if (!strcmp(message, "1074"))
             return msm4 && o.gps;
         if (!strcmp(message, "1084"))
@@ -179,13 +182,13 @@ using namespace GnssCmdBuilder;
             return msm7 && o.glo;
         if (!strcmp(message, "1097"))
             return msm7 && o.gal;
-        if (!strcmp(message, "1127"))
-            return msm7 && o.bds;
         return !strcmp(message, "1230") && o.glo;
     }
 
+/** @brief Implements buildTmode3Message. */
     Command buildTmode3Message() { return Command({0xB5, 0x62, 0x06, 0x71, 0x28, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}); }
 
+/** @brief Implements finishTmode3Checksum. */
     void finishTmode3Checksum(Command &message)
     {
         uint8_t a = 0;
@@ -199,10 +202,11 @@ using namespace GnssCmdBuilder;
         message[47] = b;
     }
 
+/** @brief Implements buildOutputConfigCommand. */
     Command buildOutputConfigCommand(const GnssOptions &options)
     {
         const GnssOptions o = normalizeGnssOptions(options);
-        const bool diagnostics = o.outputMode != OutputMode::RtcmOnly;
+        const auto diagnostics = o.outputMode != OutputMode::RtcmOnly;
         std::vector<std::pair<uint32_t, bool>> entries;
         constexpr std::array<PortKeys, 3> protocols = {{
             {0x10740001, 0x10760001, 0x10780001},
@@ -232,73 +236,174 @@ using namespace GnssCmdBuilder;
             uint8_t msm7;
         };
         const std::array<MsmId, 4> ids = {{
-            {o.gps, 0x4A, 0x4D}, {o.glo, 0x54, 0x57},
-            {o.gal, 0x5E, 0x61}, {o.bds, 0x7C, 0x7F},
+            {o.gps, 0x4A, 0x4D},
+            {o.glo, 0x54, 0x57},
+            {o.gal, 0x5E, 0x61},
+            {o.bds, 0x7C, 0x7F},
         }};
         for (const auto &id : ids)
             for (uint8_t level : {(uint8_t)4, (uint8_t)7})
             {
-                const bool enabled = id.constellation && (o.msmLevel == MsmLevel::Both || static_cast<uint8_t>(o.msmLevel) == level);
+                const auto enabled = id.constellation && (o.msmLevel == MsmLevel::Both || static_cast<uint8_t>(o.msmLevel) == level);
                 Command packet = ubxCfgMsg(0xF5, level == 4 ? id.msm4 : id.msm7, enabled ? o.ports : std::vector<String>{}, enabled ? 1 : 0);
                 command.insert(command.end(), packet.begin(), packet.end());
             }
         return command;
     }
 
+/** @brief Implements remapOutputKey. */
+    inline uint32_t remapOutputKey(uint32_t key, const PortKeys &ports)
+    {
+        return key == ports.usb || key == ports.uart2 ? ports.uart1 : key;
+    }
+
+/** @brief Implements remapValsetKey. */
+    inline uint32_t remapValsetKey(uint32_t key)
+    {
+        for (const auto &message : NMEA_KEYS)
+            key = remapOutputKey(key, message.keys);
+        for (const auto &ports : NAV_KEYS)
+            key = remapOutputKey(key, ports);
+        for (const auto &message : RTCM_KEYS)
+            key = remapOutputKey(key, message.keys);
+        for (const uint8_t protocol : {1, 2, 4})
+        {
+            key = remapOutputKey(
+                key, {0x10740000U | protocol, 0x10760000U | protocol,
+                      0x10780000U | protocol});
+        }
+        return key;
+    }
+
+    size_t valsetValueSize(uint8_t type)
+    {
+        switch (type)
+        {
+        case 1: // L
+        case 2: // U1/I1/E1
+            return 1;
+        case 3: // U2/I2/E2
+            return 2;
+        case 4: // U4/I4/E4/R4
+            return 4;
+        case 5: // U8/I8/R8
+            return 8;
+        default:
+            return 0;
+        }
+    }
+
+/** @brief Implements remapValsetEntries. */
+    inline bool remapValsetEntries(uint8_t *packet, size_t payloadLength)
+    {
+        const size_t end = payloadLength + 6;
+        bool baseMode = true;
+        // Validate the complete sequence before changing any keys or values.
+        for (size_t i = 10; i < end;)
+        {
+            if (end - i < 4)
+                return false;
+            const uint8_t type = packet[i + 3] >> 4;
+            const size_t valueSize = valsetValueSize(type);
+            if (valueSize == 0 || end - i < 4 + valueSize)
+                return false;
+            if (packet[i] == 0x01 && packet[i + 1] == 0x00 && packet[i + 2] == 0x03 && packet[i + 3] == 0x20)
+                baseMode = packet[i + 4] != 0;
+            i += 4 + valueSize;
+        }
+        for (size_t i = 10; i < end;)
+        {
+            uint32_t key = 0;
+            for (uint8_t b = 0; b < 4; ++b)
+                key |= static_cast<uint32_t>(packet[i + b]) << (8 * b);
+            const uint8_t type = packet[i + 3] >> 4;
+            const size_t valueSize = valsetValueSize(type);
+            if (baseMode && (key == 0x4003000FU || key == 0x40030011U))
+            {
+                const uint32_t accuracy = static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000);
+                for (uint8_t b = 0; b < 4; ++b)
+                    packet[i + 4 + b] = static_cast<uint8_t>(accuracy >> (8 * b));
+            }
+            key = remapValsetKey(key);
+            for (uint8_t b = 0; b < 4; ++b)
+                packet[i + b] = static_cast<uint8_t>(key >> (8 * b));
+            i += 4 + valueSize;
+        }
+        return true;
+    }
+
+/** @brief Implements processUbloxPacket. */
+    bool processUbloxPacket(uint8_t *packet, size_t remaining)
+    {
+        const auto payloadLength = std::to_integer<size_t>(static_cast<std::byte>(packet[4])) | (std::to_integer<size_t>(static_cast<std::byte>(packet[5])) << 8);
+        if (payloadLength + 8 > remaining)
+            return false;
+        if (packet[2] == 0x06 && packet[3] == 0x8A && payloadLength >= 4)
+        {
+            if (!remapValsetEntries(packet, payloadLength))
+                return false;
+        }
+        else if (packet[2] == 0x06 && packet[3] == 0x71 && payloadLength == 40
+                 && packet[6] == 0 && (packet[8] == 1 || packet[8] == 2))
+        {
+            const size_t offset = packet[8] == 1 ? 34 : 26;
+            const uint32_t accuracy = static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000);
+            for (uint8_t i = 0; i < 4; ++i)
+                packet[offset + i] = static_cast<uint8_t>(accuracy >> (8 * i));
+        }
+        else if (packet[2] == 0x06 && packet[3] == 0x01 && payloadLength == 8)
+        {
+            packet[9] = std::max(packet[9], std::max(packet[10], packet[11]));
+            packet[10] = 0;
+            packet[11] = 0;
+        }
+        uint8_t a = 0;
+        uint8_t b = 0;
+        for (size_t i = 2; i < payloadLength + 6; ++i)
+        {
+            a += packet[i];
+            b += a;
+        }
+        packet[payloadLength + 6] = a;
+        packet[payloadLength + 7] = b;
+        return true;
+    }
+
+/** @brief Implements routeUbloxOutput. */
     void routeUbloxOutput(uint8_t *data, size_t length)
     {
-        size_t offset = 0;
-        while (offset + 8 <= length && data[offset] == 0xB5 && data[offset + 1] == 0x62) {
-            uint8_t *packet = data + offset;
-            const size_t payloadLength = packet[4] | (static_cast<size_t>(packet[5]) << 8);
-            if (payloadLength + 8 > length - offset) return;
-            if (packet[2] == 0x06 && packet[3] == 0x8A && payloadLength >= 4) {
-                // Handle VALSET entries containing a four-byte key and one-byte value.
-                const auto remap = [](uint32_t key, const PortKeys &ports) {
-                    return key == ports.usb || key == ports.uart2 ? ports.uart1 : key;
-                };
-                if ((payloadLength - 4) % 5 != 0) return;
-                for (size_t i = 10; i + 5 <= payloadLength + 6; i += 5) {
-                    uint32_t key = 0;
-                    for (uint8_t b = 0; b < 4; ++b) key |= static_cast<uint32_t>(packet[i + b]) << (8 * b);
-                    for (const auto &message : NMEA_KEYS) key = remap(key, message.keys);
-                    for (const auto &ports : NAV_KEYS) key = remap(key, ports);
-                    for (const auto &message : RTCM_KEYS) key = remap(key, message.keys);
-                    for (uint8_t protocol : {1, 2, 4}) {
-                        key = remap(key, {0x10740000U | protocol, 0x10760000U | protocol, 0x10780000U | protocol});
-                    }
-                    for (uint8_t b = 0; b < 4; ++b) packet[i + b] = static_cast<uint8_t>(key >> (8 * b));
-                }
-            } else if (packet[2] == 0x06 && packet[3] == 0x01 && payloadLength == 8) {
-                // CFG-MSG UART1 rate inherits any requested USB/UART2 rate.
-                packet[9] = std::max(packet[9], std::max(packet[10], packet[11]));
-                packet[10] = packet[11] = 0;
-            }
-            uint8_t a = 0, b = 0;
-            for (size_t i = 2; i < payloadLength + 6; ++i) { a += packet[i]; b += a; }
-            packet[payloadLength + 6] = a;
-            packet[payloadLength + 7] = b;
+        auto offset = 0;
+        while (offset + 8 <= length && data[offset] == 0xB5 && data[offset + 1] == 0x62)
+        {
+            if (!processUbloxPacket(data + offset, length - offset))
+                return;
+            const auto payloadLength = std::to_integer<size_t>(
+                                           static_cast<std::byte>(data[offset + 4])) |
+                                       (std::to_integer<size_t>(static_cast<std::byte>(data[offset + 5])) << 8);
             offset += payloadLength + 8;
         }
     }
 
-    namespace {
-    CommandList buildBaseCommands(Command &message, const GnssOptions &options) {
-        finishTmode3Checksum(message);
-        return {message, buildOutputConfigCommand(options),
-                Command(std::begin(UBLOX_SAVE_CONFIG), std::end(UBLOX_SAVE_CONFIG))};
-    }
-    } // namespace
-
-    CommandList buildBaseSurveyInCommand(uint32_t duration, float accuracy, const GnssOptions &options) {
+/** @brief Implements buildBaseSurveyInCommand. */
+    CommandList buildBaseSurveyInCommand(uint32_t duration, [[maybe_unused]] float accuracy, const GnssOptions &options)
+    {
+        CommandList commands;
         Command message = buildTmode3Message();
         message[8] = 1;
         writeU32(message, 30, duration);
-        writeU32(message, 34, static_cast<uint32_t>(accuracy * 10000));
-        return buildBaseCommands(message, options);
+        writeU32(message, 34, static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000));
+        finishTmode3Checksum(message);
+        commands.push_back(message);
+        commands.push_back(buildOutputConfigCommand(options));
+        commands.emplace_back(std::begin(UBLOX_SAVE_CONFIG), std::end(UBLOX_SAVE_CONFIG));
+
+        return commands;
     }
 
-    CommandList buildBaseFixedLlaCommand(double lat, double lon, double alt, float accuracy, const GnssOptions &options) {
+/** @brief Implements buildBaseFixedLlaCommand. */
+    CommandList buildBaseFixedLlaCommand(double lat, double lon, double alt, [[maybe_unused]] float accuracy, const GnssOptions &options)
+    {
+        CommandList commands;
         Command message = buildTmode3Message();
         message[8] = 2;
         message[9] = 1;
@@ -310,15 +415,22 @@ using namespace GnssCmdBuilder;
             writeU32(message, offsets[i], static_cast<uint32_t>(whole));
             message[22 + i] = static_cast<uint8_t>(static_cast<int8_t>((values[i] - whole) * 100));
         }
-        const auto accuracyValue = static_cast<uint32_t>(accuracy * 10000);
+        const auto accuracyValue = static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000);
         writeU32(message, 26, accuracyValue);
-        return buildBaseCommands(message, options);
+        finishTmode3Checksum(message);
+        commands.push_back(message);
+        commands.push_back(buildOutputConfigCommand(options));
+        commands.emplace_back(std::begin(UBLOX_SAVE_CONFIG), std::end(UBLOX_SAVE_CONFIG));
+
+        return commands;
     }
 
-    CommandList buildBaseRtcmOutputCommand(const String &message, const String &port, bool enabled) {
+/** @brief Implements buildBaseRtcmOutputCommand. */
+    CommandList buildBaseRtcmOutputCommand(const String &message, const String &port, bool enabled)
+    {
 
-        String normalizedMessage = message;
-        String normalizedPort = port;
+        auto normalizedMessage = message;
+        auto normalizedPort = port;
         normalizedMessage.trim();
         normalizedMessage.toUpperCase();
         normalizedPort.trim();
@@ -332,9 +444,7 @@ using namespace GnssCmdBuilder;
         {
             if (normalizedMessage == rtcm.name)
             {
-                commands.push_back(ubxCfgValsetU1({
-                    {keyForPort(rtcm.keys, normalizedPort), enabled}
-                }));
+                commands.push_back(ubxCfgValsetU1({{keyForPort(rtcm.keys, normalizedPort), enabled}}));
                 commands.emplace_back(std::begin(UBLOX_SAVE_CONFIG), std::end(UBLOX_SAVE_CONFIG));
                 return commands;
             }
@@ -343,8 +453,10 @@ using namespace GnssCmdBuilder;
         return commands;
     }
 
-    CommandList buildBaseAllRtcmOutputCommand(const String &port, bool enabled) {
-        String normalizedPort = port;
+/** @brief Implements buildBaseAllRtcmOutputCommand. */
+    CommandList buildBaseAllRtcmOutputCommand(const String &port, bool enabled)
+    {
+        auto normalizedPort = port;
         normalizedPort.trim();
         normalizedPort.toUpperCase();
 
@@ -360,7 +472,9 @@ using namespace GnssCmdBuilder;
         return commands;
     }
 
-    CommandList buildRoverCommand() {
+/** @brief Implements buildRoverCommand. */
+    CommandList buildRoverCommand()
+    {
         // Enable correction input and GGA/GST output on UART1, UART2 and USB.
         Command mode = buildTmode3Message();
         finishTmode3Checksum(mode);
@@ -369,19 +483,18 @@ using namespace GnssCmdBuilder;
         // Configure each port separately so a port-specific NAK cannot reject
         // the other port settings or the separately sent TMODE configuration.
         CommandList commands = {ubxCfgValsetU1({{0x20030001, false}}), mode};
-        for (uint32_t port = 0; port < 3; ++port) {
+        for (uint32_t port = 0; port < 3; ++port)
+        {
             const uint32_t input = 0x10730000U + port * 0x20000U;
             const uint32_t output = input + 0x10000U;
-            commands.push_back(ubxCfgValsetU1({{input | 1U, true}, {input | 4U, true},
-                {output | 1U, true}, {output | 2U, true}}));
+            commands.push_back(ubxCfgValsetU1({{input | 1U, true}, {input | 4U, true}, {output | 1U, true}, {output | 2U, true}}));
             commands.push_back(ubxCfgValsetU1({{0x209100BBU + port, true},
-                                             {0x209100D4U + port, true}}));
+                                               {0x209100D4U + port, true}}));
         }
         commands.push_back(ubxCfgMsg(0xF0, 0x00, options.ports, 1));
         commands.push_back(ubxCfgMsg(0xF0, 0x07, options.ports, 1));
         commands.push_back(ubxCfgMsg(0xF5, 0x05, {}, 0));
         commands.emplace_back(std::begin(UBLOX_SAVE_CONFIG), std::end(UBLOX_SAVE_CONFIG));
         return commands;
-
     }
 }

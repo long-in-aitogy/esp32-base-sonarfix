@@ -2,7 +2,6 @@
 from pathlib import Path
 import subprocess
 import tempfile
-from host_coverage import compile_cpp, run_cpp, cpp_output, mapped
 root=Path(__file__).resolve().parents[2]
 source=(root/'src/functions/backend/Backend_Agent_Workflows.cpp').read_text()
 method=source[source.index('void BackendAgent::setWorkflowProgress('):source.index('bool BackendAgent::startWorkflow(')]
@@ -31,9 +30,8 @@ int main() {
     }
 }
 '''
-method = mapped(root / 'src/functions/backend/Backend_Agent_Workflows.cpp', method)
 with tempfile.TemporaryDirectory(prefix='esp-workflow-json-') as directory:
     path=Path(directory);(path/'check.cpp').write_text(harness+method+checks)
-    compile_cpp(['c++','-std=c++17','-fsanitize=address,undefined','-I'+str(root/'test/host'),'-I'+str(root/'.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),str(path/'check.cpp'),'-o',str(path/'check')],check=True)
-    run_cpp([str(path/'check')],check=True)
+    subprocess.run(['c++','-std=c++17','-fsanitize=address,undefined','-I'+str(root/'test/host'),'-I'+str(root/'.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),str(path/'check.cpp'),'-o',str(path/'check')],check=True)
+    subprocess.run([str(path/'check')],check=True)
 print('PASS: workflow progress owns copied keys; Unicode and nested report survive repeated merges')
