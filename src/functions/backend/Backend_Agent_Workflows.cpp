@@ -181,7 +181,7 @@ bool BackendAgent::stopNtripRoverLocked() {
 }
 
 bool BackendAgent::applyBaseCoordinates(const double latitude, const double longitude,
-                                        const double altitude) {
+                                        const double altitude, JsonObjectConst base) {
     if (!std::isfinite(latitude) || !std::isfinite(longitude) || !std::isfinite(altitude)
         || latitude < -90.0 || latitude > 90.0
         || longitude < -180.0 || longitude > 180.0) {
@@ -191,6 +191,13 @@ bool BackendAgent::applyBaseCoordinates(const double latitude, const double long
     GnssCmdBuilder::GnssOptions options;
     options.ports = {"UART1"};
     options.outputMode = GnssCmdBuilder::OutputMode::RtcmOnly;
+    const JsonObjectConst output = base["gnss_options"];
+    const String level = output["msm_level"].isNull() ? "4" : output["msm_level"].as<String>();
+    options.msmLevel = level == "7" ? GnssCmdBuilder::MsmLevel::Msm7 : level == "both" ? GnssCmdBuilder::MsmLevel::Both : GnssCmdBuilder::MsmLevel::Msm4;
+    const JsonObjectConst systems = output["constellations"];
+    options.gps = systems["gps"] | true; options.glo = systems["glo"] | true;
+    options.gal = systems["gal"] | true; options.bds = systems["bds"] | true;
+    options.qzss = systems["qzss"] | false; options.sbas = systems["sbas"] | false;
     return writeGnssCommands(GnssCmdBuilder::buildBaseFixedLlaCommand(
         latitude, longitude, altitude, 0.01f,
         sensorType_ == "Ublox" ? GnssCmdBuilder::GnssSensorType::Ublox
@@ -247,7 +254,7 @@ bool BackendAgent::restoreWorkflowBase(JsonObjectConst base) {
             return fail("receiver rejected Survey-In restore");
         surveyInResultPending_ = true;
     } else if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(alt)
-               || !applyBaseCoordinates(lat, lon, alt)) {
+               || !applyBaseCoordinates(lat, lon, alt, base)) {
         return fail("cannot restore saved Base coordinates");
     }
     String error;
@@ -736,6 +743,8 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload) {
         applied["mode"] = "BASE";
         applied["accuracy"] = 0.01;
         applied["coordinate_source"] = "AUTO_CORS";
+        if (!applied["gnss_options"].is<JsonObject>()) applied.createNestedObject("gnss_options");
+        applied["gnss_options"]["output_mode"] = "rtcm_only";
         JsonObject appliedCoords = applied.createNestedObject("coords");
         appliedCoords["lat"] = result.latitude;
         appliedCoords["lon"] = result.longitude;

@@ -36,7 +36,7 @@ struct BackendAgent {
     bool applyRoverMode() { ++writes; survey = false; return !reject; }
     String baseConfig_;
     uint32_t surveyInTargetSeconds_ = 120;
-    bool applyBaseCoordinates(double lat, double lon, double alt) { ++writes; survey = false; return !reject && std::isfinite(lat+lon+alt); }
+    bool applyBaseCoordinates(double lat, double lon, double alt, JsonObjectConst) { ++writes; survey = false; return !reject && std::isfinite(lat+lon+alt); }
     bool writeGnssCommands(const GnssCmdBuilder::CommandList &commands) { ++writes; return !reject && !commands.empty(); }
     bool refreshReceiverReadback(String &) {
         receiverBaseReadback_ = mismatch ? "{\"mode_kind\":\"rover\"}" : survey ? "{\"mode_kind\":\"survey_in\"}" : "{\"mode_kind\":\"base\"}";

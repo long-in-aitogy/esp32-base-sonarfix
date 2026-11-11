@@ -70,7 +70,7 @@ struct BackendAgent {
     void setWorkflowProgress(const String&,uint8_t,uint8_t,const String&=String());
     bool startWorkflow(const String&,const String&); void requestWorkflowStop();
     static void workflowTaskThunk(void*); bool restartConfiguredNtrip();int loopNtripRoverLocked();
-    bool stopNtripRoverLocked();bool applyBaseCoordinates(double,double,double);
+    bool stopNtripRoverLocked();bool applyBaseCoordinates(double,double,double,JsonObjectConst);
     bool restoreWorkflowBase(JsonObjectConst);void runWorkflow();
     bool runAutoBaseWorkflow(JsonObject);bool runReferenceCheckWorkflow(JsonObject);
     bool waitForAutoBaseFix(uint32_t, uint8_t, bool &, String &, const String &);
@@ -130,11 +130,14 @@ String phase(BackendAgent &agent){DynamicJsonDocument doc(8192);deserializeJson(
 int main(){
     {
         BackendAgent agent; reset(agent); agent.sensorType_="Unicorecomm";
-        assert(agent.applyBaseCoordinates(21,105,12));
+        DynamicJsonDocument base(1024);
+        deserializeJson(base,R"({"gnss_options":{"msm_level":"both","constellations":{"qzss":true}}})");
+        assert(agent.applyBaseCoordinates(21,105,12,base.as<JsonObjectConst>()));
         std::string output;
         for(const auto &command:receiverCommands) output.append(command.begin(),command.end());
         assert(output.find("mode base ")!=std::string::npos);
         assert(output.find("rtcm1006 ")!=std::string::npos);
+        assert(output.find("rtcm1077 ")!=std::string::npos && output.find("rtcm1114 ")!=std::string::npos && output.find("rtcm1044 ")!=std::string::npos);
         assert(output.find("saveconfig")!=std::string::npos);
         for(const char *nmea:{"gpgga ","glgga ","gagga ","bdgga "})
             assert(output.find(nmea)==std::string::npos);

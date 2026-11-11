@@ -156,7 +156,7 @@ private:
     bool restartConfiguredNtrip();
     int loopNtripRoverLocked();
     bool stopNtripRoverLocked();
-    bool applyBaseCoordinates(double latitude, double longitude, double altitude);
+    bool applyBaseCoordinates(double latitude, double longitude, double altitude, JsonObjectConst base);
     bool restoreWorkflowBase(JsonObjectConst base);
     bool executeLicenseCommand(JsonObject payload, String &error, String &detail, bool &restartAfterCommand);
     bool executeServiceConfigCommand(JsonObject payload, String &error, String &detail);
