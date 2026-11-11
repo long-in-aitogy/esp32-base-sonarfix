@@ -97,13 +97,12 @@ void BackendAgentWebsocket::loop()
         {
             break;
         }
-        rx_.insert(rx_.end(), chunk.begin(), chunk.begin() + count);
-        if (rx_.size() > 32768)
+        if (rx_.size() + static_cast<size_t>(count) > 32768)
         {
-            rx_.clear();
             disconnect(false);
             return;
         }
+        rx_.insert(rx_.end(), chunk.begin(), chunk.begin() + count);
     }
     parseFrames();
 }
@@ -252,11 +251,12 @@ void BackendAgentWebsocket::connectNow()
 
 bool BackendAgentWebsocket::readFrame(uint8_t &opcode, String &payload)
 {
-    const uint8_t first = rx_[0];
+    const std::byte first{rx_[0]};
     const std::byte second{rx_[1]};
-    const bool masked = (second & std::byte{0x80}) != std::byte{0};
+    const bool masked = (second & std::byte{0x80}) != std::byte{};
     uint64_t payloadLength = std::to_integer<uint8_t>(second & std::byte{0x7F});
-    auto headerLength = 2;
+    const uint8_t lengthCode = static_cast<uint8_t>(payloadLength);
+    size_t headerLength = 2;
 
     if (payloadLength == 126)
     {
@@ -275,29 +275,24 @@ bool BackendAgentWebsocket::readFrame(uint8_t &opcode, String &payload)
         headerLength = 10;
     }
 
-    if (payloadLength > 32768)
+    opcode = std::to_integer<uint8_t>(first & std::byte{0x0F});
+    // No extensions or fragmentation were negotiated; server frames are unmasked.
+    if (masked || (first & std::byte{0x70}) != std::byte{} || (first & std::byte{0x80}) == std::byte{}
+        || (opcode != 1 && opcode != 2 && opcode != 8 && opcode != 9 && opcode != 10)
+        || (opcode >= 8 && (payloadLength > 125 || (opcode == 8 && payloadLength == 1)))
+        || (lengthCode == 126 && payloadLength < 126)
+        || (lengthCode == 127 && payloadLength < 65536)
+        || payloadLength > 32768)
     {
         disconnect(false);
         return false;
     }
-    if (masked)
-        headerLength += 4;
     if (rx_.size() < headerLength + payloadLength)
         return false;
 
-    std::array<uint8_t, 4> mask = {};
-    if (masked)
-        memcpy(mask.data(), rx_.data() + headerLength - 4, mask.size());
-    opcode = std::to_integer<uint8_t>(
-        static_cast<std::byte>(first) & static_cast<std::byte>(0x0F));
     payload.reserve(static_cast<size_t>(payloadLength));
     for (size_t i = 0; i < payloadLength; ++i)
-    {
-        uint8_t byte = rx_[headerLength + i];
-        if (masked)
-            byte = maskByte(byte, mask[i % mask.size()]);
-        payload += static_cast<char>(byte);
-    }
+        payload += static_cast<char>(rx_[headerLength + i]);
     rx_.erase(rx_.begin(), rx_.begin() + headerLength + payloadLength);
     return true;
 }
