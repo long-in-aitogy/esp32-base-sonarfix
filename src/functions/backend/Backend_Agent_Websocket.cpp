@@ -1,5 +1,9 @@
 #include "functions/backend/Backend_Agent_Websocket.h"
 #include "functions/backend/Backend_Agent.h"
+#include "functions/backend/Websocket_Protocol.h"
+
+#include <mbedtls/sha1.h>
+#include <mbedtls/base64.h>
 
 #include <array>
 #include <cstddef>
@@ -203,8 +207,8 @@ void BackendAgentWebsocket::connectNow()
     client_->print(String("GET ") + path_ + " HTTP/1.1\r\n" + "Host: " + host_ + ":" + String(port_) + "\r\n" + "Upgrade: websocket\r\n" + "Connection: Upgrade\r\n" + "Sec-WebSocket-Key: " + key + "\r\n" + "Sec-WebSocket-Version: 13\r\n\r\n");
 
     String response;
-    const uint32_t deadline = millis() + 5000UL;
-    while (millis() < deadline && response.length() < 4096)
+    const uint32_t started = millis();
+    while (millis() - started < 5000UL && response.length() < 4096)
     {
         while (client_->available() > 0 && response.length() < 4096
                && !response.endsWith("\r\n\r\n"))
@@ -221,7 +225,16 @@ void BackendAgentWebsocket::connectNow()
         delay(1);
     }
 
-    if (response.indexOf(" 101 ") < 0 && response.indexOf(" 101\r") < 0)
+    const String challenge = key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    std::array<unsigned char, 20> digest{};
+    std::array<unsigned char, 32> encoded{};
+    size_t encodedLength = 0;
+    const bool valid = mbedtls_sha1_ret(reinterpret_cast<const unsigned char *>(challenge.c_str()),
+                                        challenge.length(), digest.data()) == 0
+        && mbedtls_base64_encode(encoded.data(), encoded.size(), &encodedLength, digest.data(), digest.size()) == 0
+        && WebsocketProtocol::validUpgrade(std::string(response.c_str(), response.length()),
+                                           std::string(reinterpret_cast<const char *>(encoded.data()), encodedLength));
+    if (!valid)
     {
         client_->stop();
         return;
