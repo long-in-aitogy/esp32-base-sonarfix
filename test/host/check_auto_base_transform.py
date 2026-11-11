@@ -20,6 +20,7 @@ struct BackendAgent {
     struct ProjectedPosition { double latitude, longitude, altitude; double northing = 0, easting = 0; };
     bool reachedWrite = false, transformOk = false; int conversions = 0;
     bool resolveAutoBaseProjection(JsonObject, double, double &meridian, double &scale, String &, String &, String &) { meridian=105; scale=0.9999; return true; }
+    template <class... T> String buildAutoBaseResult(T&&...) { return "measured"; }
     bool transformToVn2000(double, double, double, double, double, ProjectedPosition &);
     bool transformItrfToVn2000(double, double, double, double, double, ProjectedPosition &) { ++conversions; return transformOk; }
     bool completeAutoBaseSetup(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &, String &);
@@ -38,7 +39,10 @@ int main() {
     assert(!agent.reachedWrite && error == "VN2000 conversion failed; no candidate coordinates were installed");
     payload["enable_itrf_vn2000_transform"] = false;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
-    assert(agent.reachedWrite && agent.conversions == 1);
+    assert(!agent.reachedWrite && resultJson == "measured" && agent.conversions == 1);
+    payload["auto_apply"] = true;
+    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
+    assert(agent.reachedWrite);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='auto-base-transform-') as directory:

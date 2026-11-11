@@ -764,6 +764,17 @@ bool BackendAgent::completeAutoBaseSetup(
         }
     }
 
+    const auto requestedProvince = payload["province_code"] | String();
+    const char *projectionSource = requestedProvince.isEmpty() ? "lon_fallback" : "manual_province";
+    if (!(payload["auto_apply"] | false))
+    {
+        resultJson = buildAutoBaseResult(
+            result.latitude, result.longitude, result.altitude, rawLatitude, rawLongitude, rawAltitude,
+            transformed, false, latitudes.size(), projectionSource,
+            provinceCode, provinceName, centralMeridianDeg, scale);
+        return true;
+    }
+
     setAgentState("auto_setup_base");
     DynamicJsonDocument baseProgress(2048);
     baseProgress["averaged_coord"]["lat"] = result.latitude;
@@ -771,8 +782,6 @@ bool BackendAgent::completeAutoBaseSetup(
     baseProgress["averaged_coord"]["alt"] = result.altitude;
     baseProgress["sample_count"] = latitudes.size();
     baseProgress["transform_applied"] = transformed;
-    const auto requestedProvince = payload["province_code"] | String();
-    const char *projectionSource = requestedProvince.isEmpty() ? "lon_fallback" : "manual_province";
     baseProgress["projection_source"] = projectionSource;
     baseProgress["province_code"] = provinceCode;
     baseProgress["province_name"] = provinceName;
@@ -1044,14 +1053,29 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         finish(false, false, failureReason);
         return false;
     }
+    const bool autoApply = payload["auto_apply"] | false;
+    if (!autoApply)
+    {
+        const bool stopped = stopNtripRoverLocked();
+        const bool restored = stopped && restoreWorkflowBase(previousBase.as<JsonObjectConst>());
+        if (!restored || !restartConfiguredNtrip())
+        {
+            finish(false, false, "cannot restore previous Base/NTRIP state after sampling");
+            return false;
+        }
+        setAgentState(normalAgentState());
+    }
     DynamicJsonDocument result(2048);
     if (deserializeJson(result, resultJson) == DeserializationError::Ok)
     {
         result["source_mountpoint"] = sourceMountpoint;
+        result["auto_applied"] = autoApply;
+        result["receiver_write_completed"] = autoApply;
+        result["configured_ntrip_restarted"] = true;
         resultJson.clear();
         serializeJson(result, resultJson);
     }
-    setWorkflowProgress("completed", 4, 4, resultJson);
+    setWorkflowProgress(autoApply ? "completed" : "ready_for_review", 4, 4, resultJson);
     saveStatePreferences();
     return true;
 }

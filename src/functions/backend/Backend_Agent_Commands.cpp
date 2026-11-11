@@ -539,6 +539,17 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
         error = "select Ublox or Unicorecomm in CORS before starting auto base";
         return false;
     }
+    const String sourceMode = payload["source_mode"] | String("manual");
+    if (sourceMode != "manual" && sourceMode != "nearest")
+    {
+        error = "unsupported CORS source mode";
+        return false;
+    }
+    if ((payload["auto_apply"] | false) && sourceMode != "nearest")
+    {
+        error = "automatic apply is only supported for nearest CORS mode";
+        return false;
+    }
     if (!hasConnection)
     {
         error = "missing or invalid CORS connection fields";

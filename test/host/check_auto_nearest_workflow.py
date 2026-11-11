@@ -60,6 +60,11 @@ int main() {
     BackendAgent selected; assert(selected.runAutoBaseWorkflow(payload));
     assert(selected.selectedRequested && selected.fixSource == "selected-station" && selected.sampleSource == "selected-station");
     assert(selected.details.find("selected-station") != String::npos);
+    assert(selected.stage == "ready_for_review" && selected.restores == 1 && selected.restarts == 1);
+    payload["auto_apply"] = true;
+    BackendAgent automatic; assert(automatic.runAutoBaseWorkflow(payload));
+    assert(automatic.stage == "completed" && automatic.restores == 0);
+    payload["auto_apply"] = false;
     BackendAgent fallback; fallback.connectOk = false; assert(fallback.runAutoBaseWorkflow(payload));
     DynamicJsonDocument saved(1024); assert(!deserializeJson(saved, fallback.baseConfig_));
     assert(saved["base_setup_method"] == "SURVEY_IN" && saved["accuracy"] == 5 && saved["survey_in_accuracy"] == 5);
@@ -74,6 +79,8 @@ int main() {
     cancelled.workflowCancelRequested_ = true;
     assert(!cancelled.runAutoBaseWorkflow(payload) && cancelled.stage == "stopped");
     assert(cancelled.baseStartupState_ == "awaiting_configuration" && cancelled.connections == 0);
+    BackendAgent restoreFailure; restoreFailure.restoreOk = false;
+    assert(!restoreFailure.runAutoBaseWorkflow(payload) && restoreFailure.stage == "failed");
     payload["source_mode"] = "manual";
     BackendAgent manual; assert(manual.runAutoBaseWorkflow(payload) && !manual.selectedRequested && manual.fixSource == "nearest");
 }
