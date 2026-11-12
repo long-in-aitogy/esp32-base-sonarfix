@@ -288,6 +288,11 @@ void checkUnicoreReplies()
         assert(rejected.state == UnicoreReply::State::Error);
     }
     um = umReply();
+    assert(feedUm(um, "$command,mo,response: OK\r\n") == 0);
+    assert(um.state == UnicoreReply::State::Pending);
+    assert(feedUm(um, "$command,mode rover,response: O\r\n") == 1);
+    assert(um.state == UnicoreReply::State::Error);
+    um = umReply();
     assert(feedUm(um, "$command,mode rover,response: \r\n") == 0);
     assert(feedUm(um, "$command,mode rover,response: OK*00\r\n") == 0);
     assert(feedUm(um, "$command,mode rover,response: OK*xx\r\n") == 0);
