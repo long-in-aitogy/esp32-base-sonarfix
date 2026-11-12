@@ -8,6 +8,7 @@
 #include "functions/ntrip/RTCM_Receiver.h"
 #include <array>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -892,9 +893,9 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
     if (base["auto_base_raw_itrf_llh"].isNull())
     {
         JsonObject raw = base.createNestedObject("auto_base_raw_itrf_llh");
-        raw["lat"] = rawLatitude;
-        raw["lon"] = rawLongitude;
-        raw["alt"] = rawAltitude;
+        raw["lat"] = rawCoordinates["lat"];
+        raw["lon"] = rawCoordinates["lon"];
+        raw["alt"] = rawCoordinates["alt"];
     }
     if (!base["gnss_options"].is<JsonObject>())
         base.createNestedObject("gnss_options");
@@ -902,9 +903,15 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
     JsonObject coordinates = base["coords"].as<JsonObject>();
     if (coordinates.isNull())
         coordinates = base["coords"].to<JsonObject>();
-    coordinates["lat"] = result.latitude;
-    coordinates["lon"] = result.longitude;
-    coordinates["alt"] = result.altitude;
+    const auto numberText = [](double value)
+    {
+        char text[32];
+        std::snprintf(text, sizeof(text), "%.17g", value);
+        return String(text);
+    };
+    coordinates["lat"] = numberText(result.latitude);
+    coordinates["lon"] = numberText(result.longitude);
+    coordinates["alt"] = numberText(result.altitude);
     base["base_setup_method"] = "FIXED_LLA";
     base["mode"] = "BASE";
     base["accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;

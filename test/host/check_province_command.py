@@ -66,7 +66,7 @@ int main() {
     agent.saveOk = true;
     assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
     DynamicJsonDocument saved(4096); assert(!deserializeJson(saved, agent.baseConfig_));
-    assert(saved["coords"]["lat"] == 21.01 && saved["coords"]["accuracy"] == 5);
+    assert(std::abs(saved["coords"]["lat"].as<double>() - 21.01) < 1e-12 && saved["coords"]["accuracy"] == 5);
     assert(saved["auto_base_raw_itrf_llh"]["lat"] == 21 && saved["base_setup_method"] == "FIXED_LLA");
     assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
     assert(agent.transformedInput == 21 && agent.sentLatitude == 21.01);
@@ -80,6 +80,14 @@ int main() {
     agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","itrf_vn2000_transform_applied":true,"coords":{"lat":"21.08","lon":"105.78","alt":"10.5"},"auto_base_raw_itrf_llh":{"lat":"21.084989583712345","lon":"105.78665644691234","alt":"10.5"}})";
     assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
     assert(std::abs(agent.transformedInput - 21.084989583712345) < 1e-13);
+    saved.clear(); assert(!deserializeJson(saved, agent.baseConfig_));
+    assert(std::abs(saved["coords"]["lat"].as<double>() - agent.sentLatitude) < 1e-13);
+    assert(saved["auto_base_raw_itrf_llh"]["lat"] == "21.084989583712345");
+    agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":"21.084989583712345","lon":"105.78665644691234","alt":"10.5"}})";
+    assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
+    saved.clear(); assert(!deserializeJson(saved, agent.baseConfig_));
+    assert(std::abs(saved["coords"]["lat"].as<double>() - agent.sentLatitude) < 1e-13);
+    assert(saved["auto_base_raw_itrf_llh"]["lat"] == "21.084989583712345");
     agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":"21bad","lon":"105.75","alt":"10.5"}})";
     writes = agent.writes;
     assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail) && agent.writes == writes);
