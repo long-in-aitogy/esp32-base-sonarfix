@@ -160,7 +160,7 @@ void BackendAgent::publishConfigState(const char *kind)
 {
     if (!mqttConnected())
         return;
-    DynamicJsonDocument doc(CONFIG_DOCUMENT_SIZE);
+    DynamicJsonDocument doc(CONFIG_DOCUMENT_SIZE + 1024);
     doc["serial"] = serialNumber_;
     doc["timestamp"] = epochString().toInt();
     doc["type"] = kind;
@@ -171,6 +171,11 @@ void BackendAgent::publishConfigState(const char *kind)
     else
     {
         copyJsonObject(doc, "config", serviceConfig_);
+    }
+    if (doc.overflowed())
+    {
+        Serial.printf("[BACKEND][ERROR] Cannot publish %s: configuration exceeds memory capacity\n", kind);
+        return;
     }
     String output;
     serializeJson(doc, output);
