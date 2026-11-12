@@ -311,7 +311,7 @@ private:
                              const String &status, const String &detail,
                              const String &commandId);
     void publishConfigState(const char *kind);
-    void applyServiceStreamCommand(JsonObject payload);
+    bool applyServiceStreamCommand(JsonObject payload, String &error);
     bool executeRawCommands(JsonArray commands, String &error, const String &sensorType = String());
     void publishTextFallback(const String &message);
 

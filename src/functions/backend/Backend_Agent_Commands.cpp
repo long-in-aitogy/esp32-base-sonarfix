@@ -178,7 +178,7 @@ void BackendAgent::publishConfigState(const char *kind)
     mqtt.publish(topic.c_str(), output.c_str(), true);
 }
 
-void BackendAgent::applyServiceStreamCommand(JsonObject payload)
+bool BackendAgent::applyServiceStreamCommand(JsonObject payload, String &error)
 {
     DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
     if (deserializeJson(serviceDoc, serviceConfig_) != DeserializationError::Ok || !serviceDoc.is<JsonObject>())
@@ -201,9 +201,21 @@ void BackendAgent::applyServiceStreamCommand(JsonObject payload)
     if (!applyTargetedStreamState(service, serverId, active, address, mountpoint))
         applyGlobalStreamState(service, active, mountpoint);
     service["stream_active"] = BackendAgent::effectiveStreamActive(service, 1, false) || BackendAgent::effectiveStreamActive(service, 2, false);
+    if (serviceDoc.overflowed())
+    {
+        error = "service configuration exceeds memory capacity";
+        return false;
+    }
+    const String previousServiceConfig = serviceConfig_;
     serviceConfig_.clear();
     serializeJson(serviceDoc, serviceConfig_);
-    saveStatePreferences();
+    if (!saveStatePreferences())
+    {
+        serviceConfig_ = previousServiceConfig;
+        error = "cannot save service configuration";
+        return false;
+    }
+    return true;
 }
 
 bool BackendAgent::applyLockCommand(JsonObjectConst payload, String &error)
@@ -1078,7 +1090,8 @@ bool BackendAgent::executeStreamCommand(JsonObject payload, String &error,
         error = "cannot change streams during an active base workflow";
         return false;
     }
-    applyServiceStreamCommand(payload);
+    if (!applyServiceStreamCommand(payload, error))
+        return false;
     setupNTRIP();
     connectNTRIP();
     detail = (payload["active"] | false) ? "stream activated" : "stream set to standby";

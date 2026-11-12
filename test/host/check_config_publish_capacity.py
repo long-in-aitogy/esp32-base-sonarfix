@@ -7,7 +7,7 @@ root = Path(__file__).resolve().parents[2]
 agent = (root / 'src/functions/backend/Backend_Agent.cpp').read_text()
 copy = agent[agent.index('    bool copyJsonObject('):agent.index('\n} // namespace BackendAgentInternal')]
 commands = (root / 'src/functions/backend/Backend_Agent_Commands.cpp').read_text()
-publish = commands[commands.index('void BackendAgent::publishConfigState('):commands.index('void BackendAgent::applyServiceStreamCommand(')]
+publish = commands[commands.index('void BackendAgent::publishConfigState('):commands.index('bool BackendAgent::applyServiceStreamCommand(')]
 harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>

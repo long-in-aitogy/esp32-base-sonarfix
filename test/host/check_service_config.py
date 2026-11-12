@@ -30,7 +30,7 @@ struct BackendAgent {
     void setAgentState(const String &) {}
     bool saveStatePreferences() { ++saves; return saveOk; }
     void publishConfigState(const String &) { ++published; }
-    void applyServiceStreamCommand(JsonObject) { ++streamChanges; }
+    bool applyServiceStreamCommand(JsonObject, String &) { ++streamChanges; return saveOk; }
     bool executeServiceConfigCommand(JsonObject, String &, String &);
     bool executeStreamCommand(JsonObject, String &, String &);
     bool executeBasicCommand(const String &, JsonObject, String &, String &);
