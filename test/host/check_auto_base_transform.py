@@ -87,9 +87,10 @@ double coordinateNumber(JsonVariantConst v) {
     if (v.is<const char *>()) { const char *p = v.as<const char *>(); char *end = nullptr; double value = std::strtod(p, &end); return end != p && *end == 0 ? value : NAN; }
     return v.as<double>();
 }
-bool datumTransformOk = true; int datumCalls = 0;
+bool datumTransformOk = true, cancelDuringTransform = false; int datumCalls = 0;
 bool transformVn2000(double lat, double lon, double alt, const Vn2000Datum &, Vn2000Result &out) {
     assert(roverStopped);
+    if (cancelDuringTransform && cancelFlag) *cancelFlag = true;
     ++datumCalls; out.latitude = lat; out.longitude = lon; out.altitude = alt; return datumTransformOk;
 }
 MATCHER_PLACEHOLDER
@@ -172,6 +173,12 @@ int main() {
     std::vector<double> lat{21}, lon{105}, alt{10}; String resultJson, error;
     payload["enable_itrf_vn2000_transform"] = true;
     payload["ip"] = "other-caster.example";
+    agent.workflowCancelRequested_ = true;
+    payload["auto_apply"] = true;
+    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    assert(error == "cancelled by user" && !agent.reachedWrite && datumCalls == 0);
+    agent.workflowCancelRequested_ = false;
+    payload["auto_apply"] = false;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     DynamicJsonDocument report(4096);
     assert(!deserializeJson(report, agent.reportJson));
@@ -207,6 +214,12 @@ int main() {
     sessionDatum.has1021 = true;
     assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(error == "location reply queue could not be allocated");
+    BackendAgent cancelledDuringConversion;
+    cancelFlag = &cancelledDuringConversion.workflowCancelRequested_;
+    cancelDuringTransform = true; sessionDatum.has1025 = true;
+    assert(!cancelledDuringConversion.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    assert(error == "cancelled by user" && !cancelledDuringConversion.reachedWrite);
+    cancelDuringTransform = false; cancelFlag = nullptr; sessionDatum.has1025 = false;
     agent.autoBaseLocationQueue_ = 1;
     assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(error == "backend location ACK timed out or did not match sampled LLH");

@@ -726,6 +726,11 @@ bool BackendAgent::completeAutoBaseSetup(
         failureReason = "cannot acquire rover transport for datum readback";
         return false;
     }
+    if (workflowCancelRequested_)
+    {
+        failureReason = "cancelled by user";
+        return false;
+    }
     if (requestedTransform)
     {
         if (!datum.has1021)
@@ -930,6 +935,11 @@ bool BackendAgent::completeAutoBaseSetup(
     if (resultJson.isEmpty())
     {
         failureReason = "Auto Base result exceeds memory capacity";
+        return false;
+    }
+    if (workflowCancelRequested_)
+    {
+        failureReason = "cancelled by user";
         return false;
     }
     if (!(payload["auto_apply"] | false))
