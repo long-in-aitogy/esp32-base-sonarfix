@@ -265,30 +265,27 @@ Client &activeNtripClient()
 bool ntrip_common::sendEndpointRtcm(NtripEndpoint &endpoint, Client &client, const String &rtcmData)
 {
   if (rtcmData.isEmpty())
-  {
-    if (endpoint.version == 2 && millis() - endpoint.lastKeepAliveMs >= 10000UL)
-    {
-      client.print("0\r\n\r\n");
-      endpoint.lastKeepAliveMs = millis();
-    }
     return false;
-  }
 
-  const auto payloadLength = rtcmData.length();
-  auto sent = 0;
+  const auto failWrite = [&]()
+  {
+    client.stop();
+    clearEndpointState(endpoint);
+    endpoint.lastError = "incomplete RTCM write";
+    return false;
+  };
+  const size_t payloadLength = rtcmData.length();
   if (endpoint.version == 2)
   {
-    client.print(String(payloadLength, HEX) + "\r\n");
-    sent = client.write(reinterpret_cast<const uint8_t *>(rtcmData.c_str()), payloadLength);
-    client.print("\r\n");
+    const String header = String(payloadLength, HEX) + "\r\n";
+    if (client.print(header) != header.length())
+      return failWrite();
   }
-  else
-  {
-    sent = client.write(reinterpret_cast<const uint8_t *>(rtcmData.c_str()), payloadLength);
-  }
-  if (sent != payloadLength)
-    return false;
-  endpoint.bytesInWindow += static_cast<uint32_t>(sent);
+  if (client.write(reinterpret_cast<const uint8_t *>(rtcmData.c_str()), payloadLength) != payloadLength)
+    return failWrite();
+  if (endpoint.version == 2 && client.print("\r\n") != 2)
+    return failWrite();
+  endpoint.bytesInWindow += static_cast<uint32_t>(payloadLength);
   return true;
 }
 
@@ -455,8 +452,8 @@ int loopNTRIP(String &rtcmData)
       continue;
     }
 
-    anyConnected = true;
     anySent = sendEndpointRtcm(endpoint, client, rtcmData) || anySent;
+    anyConnected = endpoint.authenticated || anyConnected;
     updateBps(endpoint);
   }
 
