@@ -749,15 +749,18 @@ bool BackendAgent::completeAutoBaseSetup(
     DynamicJsonDocument location(2048);
     double projectedHeight = rawAltitude;
     ProjectedPosition result{rawLatitude, rawLongitude, rawAltitude};
-    if (requestedTransform)
+    if (tcpStreamMutex && xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(requestedTransform ? MUTEX_TIMEOUT_MS * 4 : 0)) == pdTRUE)
     {
-        if (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS * 4)) != pdTRUE)
-        {
-            failureReason = "cannot acquire rover transport for datum readback";
-            return false;
-        }
         datum = ntripRoverDatum();
         xSemaphoreGive(tcpStreamMutex);
+    }
+    else if (requestedTransform)
+    {
+        failureReason = "cannot acquire rover transport for datum readback";
+        return false;
+    }
+    if (requestedTransform)
+    {
         if (!datum.has1021)
         {
             failureReason = "missing RTCM 1021 from this CORS session";
@@ -918,29 +921,29 @@ bool BackendAgent::completeAutoBaseSetup(
         report["zone_width_deg"] = 3;
     else if (transformed && std::abs(scale - 0.9996) < 1e-9)
         report["zone_width_deg"] = 6;
+    report["rtcm1025_used"] = transformed && datum.has1025;
+    if (datum.has1025)
+    {
+        JsonObject projection = report.createNestedObject("rtcm1025");
+        projection["raw_l0"] = String(static_cast<long long>(datum.projectionLongitudeRaw));
+        projection["raw_k0"] = datum.projectionScaleRaw;
+        projection["projection_type"] = datum.projectionType;
+        projection["l0_deg"] = numberText(datum.centralMeridianDeg);
+        projection["k0"] = numberText(datum.scale);
+        projection["false_easting"] = numberText(datum.falseEasting);
+        projection["false_northing"] = numberText(datum.falseNorthing);
+        projection["frame_hex"] = datum.projectionFrameHex;
+        projection["frame_bytes"] = datum.projectionFrameBytes;
+        projection["frame_truncated"] = datum.projectionFrameBytes > 32;
+    }
+    if (datum.count1021) report["received_messages"]["1021"] = datum.count1021;
+    if (datum.count1023) report["received_messages"]["1023"] = datum.count1023;
+    if (datum.count1025) report["received_messages"]["1025"] = datum.count1025;
     if (vngeonet && transformed)
     {
         report["zone_width_source"] = "inferred_from_k0";
         report["parameter_source"] = "rtcm1021";
         report["residual_source"] = datum.has1023 ? "rtcm1023" : "none";
-        report["rtcm1025_used"] = datum.has1025;
-        if (datum.has1025)
-        {
-            JsonObject projection = report.createNestedObject("rtcm1025");
-            projection["raw_l0"] = String(static_cast<long long>(datum.projectionLongitudeRaw));
-            projection["raw_k0"] = datum.projectionScaleRaw;
-            projection["projection_type"] = datum.projectionType;
-            projection["l0_deg"] = numberText(datum.centralMeridianDeg);
-            projection["k0"] = numberText(datum.scale);
-            projection["false_easting"] = numberText(datum.falseEasting);
-            projection["false_northing"] = numberText(datum.falseNorthing);
-            projection["frame_hex"] = datum.projectionFrameHex;
-            projection["frame_bytes"] = datum.projectionFrameBytes;
-            projection["frame_truncated"] = datum.projectionFrameBytes > 32;
-        }
-        report["received_messages"]["1021"] = datum.count1021;
-        report["received_messages"]["1023"] = datum.count1023;
-        report["received_messages"]["1025"] = datum.count1025;
         report["projected_coord"]["north"] = numberText(result.northing);
         report["projected_coord"]["east"] = numberText(result.easting);
         report["projected_coord"]["h"] = numberText(projectedHeight);

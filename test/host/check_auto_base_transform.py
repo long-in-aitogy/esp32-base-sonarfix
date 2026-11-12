@@ -47,7 +47,8 @@ int xQueueReceive(int, void *out, int timeout) {
     std::snprintf(static_cast<char *>(out), 1536, R"({"request_id":"boot:%u","location":{"input_coord":{"lat":21,"lon":105,"alt":10},"l0_deg":105,"k0":0.9999,"province_name":"Hà Nội","projection_options":[{"region":"A","l0_deg":105,"k0":0.9999},{"region":"B","l0_deg":105,"k0":0.9999},{"region":"C","l0_deg":105,"k0":0.9999}]}})", requestStarted);
     provideLocation = false; return 1;
 }
-int xSemaphoreTake(int, int) { return 1; }
+bool allowLock = true;
+int xSemaphoreTake(int, int) { return allowLock ? 1 : 0; }
 void xSemaphoreGive(int) {}
 Vn2000Datum sessionDatum;
 Vn2000Datum ntripRoverDatum() { return sessionDatum; }
@@ -225,6 +226,17 @@ int main() {
     payload["auto_apply"] = true;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(agent.reachedWrite);
+    payload["auto_apply"] = false; payload["enable_itrf_vn2000_transform"] = false;
+    sessionDatum.has1025 = true; sessionDatum.count1025 = 2; sessionDatum.projectionScaleRaw = 660000000;
+    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    report.clear(); assert(!deserializeJson(report, agent.reportJson));
+    assert(report["transform_applied"] == false && report["rtcm1025_used"] == false);
+    assert(report["received_messages"]["1025"] == 2 && report["rtcm1025"]["raw_k0"] == 660000000);
+    allowLock = false;
+    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    payload["enable_itrf_vn2000_transform"] = true;
+    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    assert(error == "cannot acquire rover transport for datum readback");
 }
 '''
 with tempfile.TemporaryDirectory(prefix='auto-base-transform-') as directory:
