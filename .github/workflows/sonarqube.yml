@@ -87,6 +87,7 @@ jobs:
           python3 test/host/check_ublox_satellites.py
           python3 test/host/check_ublox_navigation.py
           python3 test/host/check_ntrip_handshake.py
+          python3 test/host/check_ntrip_port.py
           python3 test/host/check_ntrip_reconnect.py
           python3 test/host/check_ntrip_chunk_write.py
           python3 test/host/check_rover_status.py

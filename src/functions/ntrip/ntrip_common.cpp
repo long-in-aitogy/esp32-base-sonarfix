@@ -10,6 +10,7 @@
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include <array>
+#include <cstdlib>
 #include <cstring>
 
 extern Preferences prefs;
@@ -86,7 +87,21 @@ uint16_t endpointPort(JsonObjectConst service, uint8_t index, uint16_t legacyPor
     const auto suffix = String(index + 1);
     const auto generic = index == 0 ? "port" : "port2";
     const uint16_t fallback = index == 0 ? legacyPort : 2101;
-    return static_cast<uint16_t>(service["port" + suffix] | (service["serverport" + suffix] | (service[generic] | fallback)));
+    JsonVariantConst value = service["port" + suffix];
+    if (value.isNull()) value = service["serverport" + suffix];
+    if (value.isNull()) value = service[generic];
+    if (value.isNull()) return fallback;
+    long port = 0;
+    if (value.is<int>())
+        port = value.as<int>();
+    else if (value.is<const char *>())
+    {
+        const char *text = value.as<const char *>();
+        char *end = nullptr;
+        port = std::strtol(text, &end, 10);
+        if (end == text || *end != '\0') return 0;
+    }
+    return port >= 1 && port <= 65535 ? static_cast<uint16_t>(port) : 0;
 }
 
 /** @brief Implements base64Encode. */
