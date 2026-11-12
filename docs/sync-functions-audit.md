@@ -2,6 +2,23 @@
 
 Phạm vi: 37 commit từ `develop` (`c921c25`) đến `sync-functions` (`8af74b7`). Commit `19d2de0` trong repo này đã nhập đúng cây nội dung của `8af74b7`; các thay đổi sau đó được áp dụng từng commit. Nguồn CORS được đối chiếu tại `7db656b`.
 
+Các commit CORS mới nhất liên quan đến ESP32 đã đối chiếu theo hành vi:
+
+| Commit CORS | Kết quả đối chiếu trên `main` |
+| --- | --- |
+| `7db656b` | Giữ tùy chọn GNSS khi áp dụng Fixed LLA, xác nhận receiver và báo cấu hình đã áp dụng. Kiểm tra bằng `check_fixed_output_options.py`, `check_autobase_config.py` và `check_workflow_restore.py`. Accuracy giữ 5 m. |
+| `d5a9e61` | AutoNearest mặc định dùng host và mountpoint tương ứng; các mặc định MQTT/NTRIP độc lập vẫn giữ theo `develop`. |
+| `149014a` | Auto Base báo Fixed LLA sau áp dụng; fallback Survey-In được lưu và báo hoàn thành. Kiểm tra bằng `check_auto_base_status.py` và `check_auto_nearest_workflow.py`. |
+| `84371e0` | Giữ cấu hình AutoNearest trong `Prog_Config.h`, như nguồn sau revert. |
+| `b2f4254`, `1d89155` | Hai SOURCE và lỗi ghi thiếu được kiểm tra bằng `check_ntrip_source_connect.py`; tách thông tin AutoNearest khỏi SOURCE đang chạy. |
+| `540d46b`, `754f3ca` | Kiểm tra handshake, khởi động và khôi phục bằng bộ host tương ứng trong repo này; cấu trúc bài kiểm tra có khác nguồn. |
+| `ef0631c`, `236072e`, `e43b82a` | Có log từ chối caster, fallback và bộ khởi động AutoNearest tại thiết bị; kiểm tra bằng `check_auto_nearest_workflow.py`, `check_autocors_scheduler.py`. |
+| `376b9f9` | Chủ ý không đặt lại Base sang AutoNearest ở mọi lần khởi động: giữ cấu hình đã lưu theo yêu cầu bảo toàn `develop`. |
+| `7141523`, `88edbe0` | Giữ kết nối khi cấu hình dịch vụ không đổi và xử lý SOURCE ACK; kiểm tra bằng `check_service_config.py`, `check_ntrip_handshake.py`. |
+| `ae200f9` | Có AutoNearest, lựa chọn mountpoint và fallback Survey-In; bảo toàn cấu hình cũ để phục hồi nếu workflow thất bại. |
+
+Tên bài kiểm tra chỉ chỉ ra phạm vi liên quan, không tự chứng minh mọi nhánh hoặc hoạt động thực tế trên receiver và caster.
+
 Ngày 12/11/2026, 23 bài kiểm tra Python độc lập trong danh sách dưới đây đã chạy đạt trên firmware hiện tại. `check_cors_accuracy.py` được chạy riêng với mã backend CORS và binary host. Tên bài kiểm tra là bằng chứng kiểm tra liên quan, không chứng minh mọi hành vi của commit; các mục không có bài Python cần xem mã hoặc chạy bài C++ tương ứng.
 
 | Commit | Nội dung | Bài kiểm tra gắn với commit |
