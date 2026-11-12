@@ -54,20 +54,24 @@ int main(int argc, char **argv) {
     const String alt = request["coords"]["alt"] | "";
     UnicoreReadback::mode = String("MODE BASE ") + (!std::strcmp(argv[1], "position") ? String("22") : lat) + " " + lon + " " + alt;
     bool skip = !std::strcmp(argv[1], "output");
-    UnicoreReadback::logs = String("#UNILOGLIST,header;< ") + String(request["logs"].size() - (skip ? 1 : 0)) + "\r\n";
+    const bool multiplePorts = !std::strcmp(argv[1], "multiple_ports");
+    UnicoreReadback::logs = String("#UNILOGLIST,header;< ") + String(request["logs"].size() - (skip ? 1 : 0) + (multiplePorts ? 1 : 0)) + "\r\n";
     for (JsonVariantConst log : request["logs"].as<JsonArrayConst>()) {
         if (skip) { skip = false; continue; }
         UnicoreReadback::logs += String("< ") + log.as<String>() + " " + port + " 1\r\n";
     }
+    if (multiplePorts) UnicoreReadback::logs += String("< RTCM1006 ") + (current ? "COM3" : "COM2") + " 1\r\n";
     UnicoreReadback::logs += "\r\n";
     if (!std::strcmp(argv[1], "unread")) UnicoreReadback::readable = false;
     BackendAgent agent; String error;
     assert(agent.verifyUnicoreConfig(request.as<JsonObjectConst>(), "cors", error));
     assert(!deserializeJson(result, agent.gnssVerification_));
-    const char *expected = !std::strcmp(argv[1], "match") ? "match" : !UnicoreReadback::readable ? "unread" : "mismatch";
+    const char *expected = !std::strcmp(argv[1], "match") || (multiplePorts && !current) ? "match" :
+                           !UnicoreReadback::readable || (multiplePorts && current) ? "unread" : "mismatch";
     if (result["state"] != expected) std::cerr << agent.gnssVerification_.c_str() << '\n';
     assert(result["state"] == expected);
-    if (UnicoreReadback::readable) assert(result["details"]["compare_ports"][0] == port);
+    if (UnicoreReadback::readable && !(multiplePorts && current)) assert(result["details"]["compare_ports"][0] == port);
+    if (multiplePorts && current) assert(result["details"]["compare_ports"].size() == 0);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='cors-unicore-verify-') as directory:
@@ -81,6 +85,6 @@ with tempfile.TemporaryDirectory(prefix='cors-unicore-verify-') as directory:
             config = {'base_setup_method': 'FIXED_LLA', 'coords': {'lat': '21.0849895837', 'lon': '105.7866564469', 'alt': '-7.9340'},
                       'accuracy': 5, 'gnss_options': {'output_mode': 'rtcm_only', 'msm_level': msm}}
             payload = builder.build_unicore_verification_payload(config, current_port=current)
-            for scenario in ('match', 'position', 'output', 'unread'):
+            for scenario in ('match', 'position', 'output', 'unread', 'multiple_ports'):
                 subprocess.run([str(path / 'check'), scenario], input=json.dumps(payload) + '\n', text=True, check=True)
 print('PASS: real CORS Unicore payloads match simulated readback and detect mismatches')

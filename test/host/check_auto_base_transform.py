@@ -22,6 +22,7 @@ harness = r'''
 #include <ArduinoJson.h>
 #include <cassert>
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <vector>
 #include <strings.h>
@@ -190,6 +191,8 @@ int main() {
     assert(!agent.reachedWrite);
     realLocation = 0;
     sessionDatum.has1025 = true; sessionDatum.centralMeridianDeg = 105; sessionDatum.scale = 0.9999;
+    sessionDatum.projectionLongitudeRaw = 9545454545LL; sessionDatum.projectionFrameBytes = 31;
+    std::strcpy(sessionDatum.projectionFrameHex, "d3001940102030405060708090a0b0c0d0e0f00112233445566778899aabb");
     sessionDatum.kT = 1.00000008613; sessionDatum.count1021 = 2;
     datumTransformOk = false;
     assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
@@ -208,6 +211,10 @@ int main() {
     applied.clear();
     assert(!deserializeJson(applied, agent.baseConfig_));
     assert(applied["conversion_report"]["rtcm1025"]["projection_type"] == 0);
+    assert(applied["conversion_report"]["rtcm1025"]["raw_l0"] == "9545454545");
+    assert(applied["conversion_report"]["rtcm1025"]["frame_bytes"] == 31);
+    assert(applied["conversion_report"]["rtcm1025"]["frame_hex"] == sessionDatum.projectionFrameHex);
+    assert(applied["conversion_report"]["rtcm1025"]["frame_truncated"] == false);
     assert(applied["conversion_report"]["receiver_write_completed"] == true);
     sessionDatum.scale = 0.9996;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
