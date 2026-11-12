@@ -759,23 +759,8 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
         sensorType_ = sensorType;
     String workflowPayload;
     serializeJson(payload, workflowPayload);
-    if (!startWorkflow("auto_base", workflowPayload))
-    {
-        sensorType_ = previousSensor;
-        if (startupAuto)
-        {
-            baseConfig_ = previousConfig;
-            if (!saveStatePreferences())
-            {
-                error = "cannot restore previous Base configuration after workflow start failed";
-                return false;
-            }
-        }
-        error = "cannot start auto base workflow";
-        return false;
-    }
-    if (startupAuto)
-        publishConfigState("base_config_state");
+    const String previousState = agentState_, previousProgress = autoBaseProgress_;
+    const String previousStartupState = baseStartupState_, previousStartupError = baseStartupError_;
     DynamicJsonDocument progress(CONFIG_DOCUMENT_SIZE);
     progress["ntrip_host"] = payload["ip"];
     progress["ntrip_port"] = payload["port"];
@@ -799,6 +784,28 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
         baseStartupError_.clear();
         markStatusDirty();
     }
+    if (!startWorkflow("auto_base", workflowPayload))
+    {
+        sensorType_ = previousSensor;
+        setAgentState(previousState);
+        autoBaseProgress_ = previousProgress;
+        baseStartupState_ = previousStartupState;
+        baseStartupError_ = previousStartupError;
+        markStatusDirty();
+        if (startupAuto)
+        {
+            baseConfig_ = previousConfig;
+            if (!saveStatePreferences())
+            {
+                error = "cannot restore previous Base configuration after workflow start failed";
+                return false;
+            }
+        }
+        error = "cannot start auto base workflow";
+        return false;
+    }
+    if (startupAuto)
+        publishConfigState("base_config_state");
     detail = "auto base workflow queued";
     return true;
 }
@@ -822,13 +829,17 @@ bool BackendAgent::executeReferenceCheckCommand(JsonObject payload, String &erro
     }
     String workflowPayload;
     serializeJson(payload, workflowPayload);
+    const String previousState = agentState_, previousProgress = autoBaseProgress_;
+    setAgentState("reference_check_queued");
+    setWorkflowProgress("reference_check_queued", 0, 4);
     if (!startWorkflow("reference_check", workflowPayload))
     {
+        setAgentState(previousState);
+        autoBaseProgress_ = previousProgress;
+        markStatusDirty();
         error = "cannot start reference check workflow";
         return false;
     }
-    setAgentState("reference_check_queued");
-    setWorkflowProgress("reference_check_queued", 0, 4);
     detail = "base reference check queued";
     return true;
 }

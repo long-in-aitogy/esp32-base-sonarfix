@@ -7,6 +7,9 @@ source = (root / 'src/functions/backend/Backend_Agent_Commands.cpp').read_text()
 begin = source.index('bool BackendAgent::executeAutoBaseCommand(')
 end = source.index('\nbool BackendAgent::', begin + 5)
 method = source[begin:end]
+reference_begin = source.index('bool BackendAgent::executeReferenceCheckCommand(')
+reference_end = source.index('\nbool BackendAgent::', reference_begin + 5)
+method += source[reference_begin:reference_end]
 harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -19,6 +22,7 @@ void stopNtrip() { assert(transportHeld); }
 void stopNtripRover() { assert(transportHeld); }
 struct BackendAgent {
     String statusBootId_="boot", sensorType_ = "Ublox", baseConfig_ = R"({"base_setup_method":"SURVEY_IN"})", baseStartupState_, baseStartupError_;
+    String agentState_ = "ready", autoBaseProgress_ = "old-progress";
     bool roverOk=true, saveOk=true, startOk=true, restoreOk=true, restartOk=true;
     int published=0, saves=0, failOnSave=0, restarts=0;
     bool applyRoverMode() { return roverOk; }
@@ -27,13 +31,14 @@ struct BackendAgent {
     bool restartConfiguredNtrip(bool locked) { assert(locked && transportHeld); ++restarts; return restartOk; }
     void publishConfigState(const char *) { ++published; }
     void markStatusDirty() {}
-    void setWorkflowProgress(const char *, int, int) {}
-    bool running = false; int started = 0; String progress;
+    void setWorkflowProgress(const char *phase, int, int) { autoBaseProgress_ = phase; }
+    bool running = false, startImmediately = false; int started = 0; String progress;
     bool workflowActive() { return running; }
-    bool startWorkflow(const char *, const String &) { ++started; return startOk; }
-    void setAgentState(const char *) {}
-    void setWorkflowProgress(const char *, int, int, const String &value) { progress = value; }
+    bool startWorkflow(const char *, const String &) { ++started; if (startImmediately) { agentState_="running"; autoBaseProgress_="running"; baseStartupState_="running"; } return startOk; }
+    void setAgentState(const String &state) { agentState_ = state; }
+    void setWorkflowProgress(const char *, int, int, const String &value) { progress = value; autoBaseProgress_ = value; }
     bool executeAutoBaseCommand(JsonObject, String &, String &);
+    bool executeReferenceCheckCommand(JsonObject, String &, String &);
 };
 '''
 checks = r'''
@@ -55,6 +60,9 @@ int main() {
     assert(agent.executeAutoBaseCommand(request, error, detail) && agent.started == 2);
     assert(agent.baseStartupState_=="auto_base_running");
     assert(agent.baseConfig_ == R"({"base_setup_method":"SURVEY_IN"})" && agent.published == 0);
+    BackendAgent immediate; immediate.startImmediately = true;
+    assert(immediate.executeAutoBaseCommand(request, error, detail));
+    assert(immediate.agentState_ == "running" && immediate.autoBaseProgress_ == "running" && immediate.baseStartupState_ == "running");
     progress.clear(); assert(!deserializeJson(progress, agent.progress));
     assert(progress["note"] == "Collect RTK Fixed LLH and apply Base coordinates after quality checks.");
     DynamicJsonDocument pending(1024); pending["source_mode"]="nearest"; pending["auto_apply"]=true;
@@ -90,6 +98,7 @@ int main() {
     startup["sensor_type"] = "Unicorecomm";
     assert(!startFailed.executeAutoBaseCommand(startup.as<JsonObject>(), error, detail));
     assert(startFailed.baseConfig_==R"({"base_setup_method":"SURVEY_IN"})" && startFailed.baseStartupState_=="configured");
+    assert(startFailed.agentState_ == "ready" && startFailed.autoBaseProgress_ == "old-progress");
     assert(startFailed.sensorType_ == "Ublox" && startFailed.published == 0);
     BackendAgent rollbackFailed; rollbackFailed.startOk=false; rollbackFailed.failOnSave=2;
     assert(!rollbackFailed.executeAutoBaseCommand(startup.as<JsonObject>(), error, detail));
@@ -110,6 +119,16 @@ int main() {
     request["source_mode"] = "unknown";
     assert(!agent.executeAutoBaseCommand(request, error, detail) && agent.started == 2);
     assert(error == "unsupported CORS source mode");
+    DynamicJsonDocument reference(1024);
+    reference["ip"]="host"; reference["port"]=2101; reference["user"]="user";
+    reference["password"]="pass"; reference["mountpoint"]="station";
+    reference["reference_coords"]["lat"]=21; reference["reference_coords"]["lon"]=105; reference["reference_coords"]["alt"]=10;
+    BackendAgent referenceImmediate; referenceImmediate.startImmediately=true;
+    assert(referenceImmediate.executeReferenceCheckCommand(reference.as<JsonObject>(), error, detail));
+    assert(referenceImmediate.agentState_=="running" && referenceImmediate.autoBaseProgress_=="running");
+    BackendAgent referenceFailed; referenceFailed.startOk=false;
+    assert(!referenceFailed.executeReferenceCheckCommand(reference.as<JsonObject>(), error, detail));
+    assert(referenceFailed.agentState_=="ready" && referenceFailed.autoBaseProgress_=="old-progress");
 }
 '''
 with tempfile.TemporaryDirectory(prefix='autobase-command-') as directory:
