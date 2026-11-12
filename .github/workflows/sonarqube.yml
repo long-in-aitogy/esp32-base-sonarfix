@@ -53,8 +53,21 @@ jobs:
           python3 test/host/check_wifi_migration.py
           python3 test/host/check_wifi_recovery.py
           python3 test/host/check_wifi_commands.py
+          python3 test/host/check_sim_apn.py
           python3 test/host/check_backend_restart_transport.py
           python3 test/host/check_websocket_control_write.py
+
+      - name: Run receiver and NTRIP checks
+        run: |
+          python3 test/host/check_unicore_quality.py
+          python3 test/host/check_unicore_verify_command.py
+          python3 test/host/check_ublox_verify_command.py
+          python3 test/host/check_ntrip_handshake.py
+          python3 test/host/check_ntrip_reconnect.py
+          python3 test/host/check_ntrip_chunk_write.py
+          python3 test/host/check_rover_status.py
+          python3 test/host/check_rover_gga.py
+          python3 test/host/check_ntrip_restore_lock.py
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
