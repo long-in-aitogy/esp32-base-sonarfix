@@ -41,6 +41,13 @@ int main() {
     assert(waitForNtripResponse(http, nullptr) && http.read() == 0xD3);
     Client customReason; customReason.wire = "HTTP/1.0 200 Success\r\n\r\n";
     assert(waitForNtripResponse(customReason, nullptr));
+    Client lower; lower.wire = "HTTP/1.1 200 OK\r\nx-ntrip-selected-mountpoint:  STATION1  \r\n\r\n";
+    String selected; assert(waitForNtripResponse(lower, nullptr, &selected) && selected == "STATION1");
+    Client duplicate; duplicate.wire = "HTTP/1.1 200 OK\r\nX-NTRIP-Selected-Mountpoint: A\r\nx-ntrip-selected-mountpoint: B\r\n\r\n";
+    assert(!waitForNtripResponse(duplicate, nullptr, &selected) && selected.isEmpty());
+    Client rejectedSelection; rejectedSelection.wire = "HTTP/1.1 401 Unauthorized\r\nX-NTRIP-Selected-Mountpoint: B\r\n\r\n";
+    selected = "old";
+    assert(!waitForNtripResponse(rejectedSelection, nullptr, &selected) && selected.isEmpty());
     Client rejected; rejected.wire = "HTTP/1.1 401 Unauthorized\r\n\r\n";
     assert(!waitForNtripResponse(rejected, nullptr));
     assert(now == 0);

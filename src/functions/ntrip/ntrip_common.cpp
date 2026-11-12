@@ -276,25 +276,40 @@ namespace ntrip_common
             if (statusLine->isEmpty())
                 *statusLine = "No response from caster (timeout or closed connection)";
         }
-        if (selectedMountpoint && response.endsWith("\r\n\r\n"))
-        {
-            const char *header = "\r\nX-NTRIP-Selected-Mountpoint:";
-            const int field = response.indexOf(header);
-            if (field >= 0)
-            {
-                const int start = field + strlen(header);
-                const int end = response.indexOf('\r', start);
-                if (end > start)
-                {
-                    *selectedMountpoint = response.substring(start, end);
-                    selectedMountpoint->trim();
-                }
-            }
-        }
-        return headerComplete && !readFailed
+        const bool accepted = headerComplete && !readFailed
             && (response == "ICY 200 OK\r\n"
                 || response.indexOf("HTTP/1.1 200 ") == 0 || response.indexOf("HTTP/1.1 200\r\n") == 0
                 || response.indexOf("HTTP/1.0 200 ") == 0 || response.indexOf("HTTP/1.0 200\r\n") == 0);
+        if (selectedMountpoint)
+        {
+            selectedMountpoint->clear();
+            if (accepted && response.endsWith("\r\n\r\n"))
+            {
+                bool found = false;
+                int start = response.indexOf('\n') + 1;
+                while (start > 0)
+                {
+                    const int end = response.indexOf('\r', start);
+                    if (end <= start)
+                        break;
+                    const int colon = response.indexOf(':', start);
+                    if (colon > start && colon < end
+                        && response.substring(start, colon).equalsIgnoreCase("X-NTRIP-Selected-Mountpoint"))
+                    {
+                        if (found)
+                        {
+                            selectedMountpoint->clear();
+                            return false;
+                        }
+                        *selectedMountpoint = response.substring(colon + 1, end);
+                        selectedMountpoint->trim();
+                        found = true;
+                    }
+                    start = end + 2;
+                }
+            }
+        }
+        return accepted;
     }
 
 } // namespace ntrip_common
