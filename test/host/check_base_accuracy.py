@@ -5,7 +5,7 @@ import tempfile
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Storage.cpp').read_text()
-function = source[source.index('    bool enforceBaseAccuracy('):source.index('    Preferences &backendPreferences()')]
+function = source[source.index('    bool enforceBaseAccuracy('):source.index('    const char *backendPreferencesPartition()')]
 harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>

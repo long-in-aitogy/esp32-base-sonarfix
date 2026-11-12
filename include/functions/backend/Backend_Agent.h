@@ -213,7 +213,7 @@ private:
     String buildReferenceCheckResult(JsonObject reference, double measuredLatitude,
                                      double measuredLongitude, double measuredAltitude,
                                      size_t sampleCount);
-    bool restartConfiguredNtrip();
+    bool restartConfiguredNtrip(bool transportLocked = false);
     int loopNtripRoverLocked();
     bool stopNtripRoverLocked();
     bool applyBaseCoordinates(double latitude, double longitude, double altitude, JsonObjectConst base);

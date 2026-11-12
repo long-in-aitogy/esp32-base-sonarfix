@@ -15,7 +15,7 @@ struct BackendAgent {
     String baseStartupState_="awaiting_auto_base", baseStartupError_, baseConfig_="{}", phase, state;
     bool active=false, cancelled=false, dirty=false, restored=false, restarted=false, restoreOk=true, restartOk=true, saveOk=true;
     bool restoreWorkflowBase(JsonObjectConst) { restored=true; if (restoreOk) baseStartupState_="configured"; return restoreOk; }
-    bool restartConfiguredNtrip() { restarted=true; return restartOk; }
+    bool restartConfiguredNtrip(bool locked) { assert(locked); restarted=true; return restartOk; }
     bool saveStatePreferences() { return saveOk; }
     void publishConfigState(const char *) {}
     bool workflowActive() { return active; }

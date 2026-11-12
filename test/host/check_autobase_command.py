@@ -12,22 +12,18 @@ harness = r'''
 #include <ArduinoJson.h>
 #include <cassert>
 constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
-constexpr int MUTEX_TIMEOUT_MS = 1500, pdTRUE = 1;
 const char *AUTO_BASE_CASTER_HOST="caster", *AUTO_BASE_CASTER_USER="user", *AUTO_BASE_CASTER_PASSWORD="pass", *AUTO_BASE_CASTER_MOUNTPOINT="nearest";
 constexpr int AUTO_BASE_CASTER_PORT=2101;
-int tcpStreamMutex=1; bool lockOk=true;
-int pdMS_TO_TICKS(int n) { return n; }
-int xSemaphoreTake(int, int) { return lockOk ? 1 : 0; }
-void xSemaphoreGive(int) {}
-void stopNtrip() {}
-void stopNtripRover() {}
+bool transportHeld=true;
+void stopNtrip() { assert(transportHeld); }
+void stopNtripRover() { assert(transportHeld); }
 struct BackendAgent {
     String statusBootId_="boot", sensorType_ = "Ublox", baseConfig_ = R"({"base_setup_method":"SURVEY_IN"})", baseStartupState_, baseStartupError_;
     bool roverOk=true, saveOk=true, startOk=true;
     bool applyRoverMode() { return roverOk; }
     bool saveStatePreferences() { return saveOk; }
     bool restoreWorkflowBase(JsonObjectConst) { baseStartupState_="configured"; return true; }
-    bool restartConfiguredNtrip() { return true; }
+    bool restartConfiguredNtrip(bool locked) { assert(locked && transportHeld); return true; }
     void publishConfigState(const char *) {}
     void markStatusDirty() {}
     void setWorkflowProgress(const char *, int, int) {}
@@ -68,9 +64,6 @@ int main() {
     saved.clear(); assert(!deserializeJson(saved,local.baseConfig_));
     assert(saved["auto_base_previous_config"]["base_setup_method"]=="SURVEY_IN");
     assert(saved["auto_base_previous_config"]["auto_base_previous_config"].isNull());
-    BackendAgent blocked; lockOk=false;
-    assert(!blocked.executeAutoBaseCommand(pending.as<JsonObject>(), error, detail));
-    assert(blocked.baseConfig_==R"({"base_setup_method":"SURVEY_IN"})"); lockOk=true;
     BackendAgent failed; failed.roverOk=false;
     assert(!failed.executeAutoBaseCommand(pending.as<JsonObject>(), error, detail));
     assert(failed.baseConfig_==R"({"base_setup_method":"SURVEY_IN"})" && failed.baseStartupState_=="configured");

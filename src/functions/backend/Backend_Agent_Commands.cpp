@@ -591,14 +591,9 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
             error = "nearest CORS configuration exceeds memory capacity";
             return false;
         }
-        if (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS * 4)) != pdTRUE)
-        {
-            error = "network transport is busy";
-            return false;
-        }
+        // Command callbacks run under tcpStreamMutex in the MQTT task.
         stopNtrip();
         stopNtripRover();
-        xSemaphoreGive(tcpStreamMutex);
         sensorType_ = sensorType;
         baseStartupState_ = "awaiting_auto_base";
         if (!applyRoverMode())
@@ -606,7 +601,7 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
             sensorType_ = previousSensor;
             DynamicJsonDocument previous(CONFIG_DOCUMENT_SIZE);
             deserializeJson(previous, previousConfig);
-            if (restoreWorkflowBase(previous.as<JsonObjectConst>())) restartConfiguredNtrip();
+            if (restoreWorkflowBase(previous.as<JsonObjectConst>())) restartConfiguredNtrip(true);
             error = "cannot switch GNSS receiver to Rover mode";
             return false;
         }
@@ -619,7 +614,7 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
             saveStatePreferences();
             DynamicJsonDocument previous(CONFIG_DOCUMENT_SIZE);
             deserializeJson(previous, previousConfig);
-            if (restoreWorkflowBase(previous.as<JsonObjectConst>())) restartConfiguredNtrip();
+            if (restoreWorkflowBase(previous.as<JsonObjectConst>())) restartConfiguredNtrip(true);
             error = "cannot save nearest CORS request";
             return false;
         }
@@ -886,7 +881,7 @@ bool BackendAgent::executeStopWorkflowCommand(String &error, String &detail)
             || (!coords["lat"].isNull() && !coords["lon"].isNull() && !coords["alt"].isNull());
         if (hasSavedBase)
         {
-            if (!restoreWorkflowBase(base) || !restartConfiguredNtrip())
+            if (!restoreWorkflowBase(base) || !restartConfiguredNtrip(true))
             {
                 error = "could not restore saved Base after stopping nearest-source wait";
                 return false;

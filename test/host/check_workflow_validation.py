@@ -32,7 +32,8 @@ struct BackendAgent {
     String normalAgentState() { return "ready"; }
     void setAgentState(const String &) {}
     void setWorkflowProgress(const String &s, int, int, const String &) { stage = s; }
-    void saveStatePreferences() { ++saved; }
+    bool saveStatePreferences() { ++saved; return true; }
+    void publishConfigState(const char *) {}
     bool runAutoBaseWorkflow(JsonObject);
     bool runReferenceCheckWorkflow(JsonObject);
 };

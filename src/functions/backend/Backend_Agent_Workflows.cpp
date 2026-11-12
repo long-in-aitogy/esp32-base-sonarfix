@@ -128,16 +128,17 @@ void BackendAgent::workflowTaskThunk(void *parameter)
     vTaskDelete(nullptr);
 }
 
-bool BackendAgent::restartConfiguredNtrip()
+bool BackendAgent::restartConfiguredNtrip(bool transportLocked)
 {
-    if (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS * 4)) != pdTRUE)
+    if (!transportLocked && (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS * 4)) != pdTRUE))
     {
         return false;
     }
     stopNtripRover();
     setupNTRIP();
     connectNTRIP();
-    xSemaphoreGive(tcpStreamMutex);
+    if (!transportLocked)
+        xSemaphoreGive(tcpStreamMutex);
     return true;
 }
 
