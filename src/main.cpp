@@ -50,6 +50,7 @@ static bool tryWifiFallback(bool protocolsRunning);
 static void checkSimInternetFallback();
 static void checkSimRecovery();
 static void activateNetwork(ConnectionType type, bool protocolsRunning);
+static void logNetworkStatus(bool force = false);
 static bool wifiFallbackActive = false;
 static uint32_t lastSimProbeMs = 0;
 static uint8_t simRecoverySuccesses = 0;
@@ -191,10 +192,12 @@ void setup()
         else
         {
             Serial.println("[ERROR] Khong the ket noi mang. Vui long kiem tra cau hinh va thu lai.");
+            delay(1000);
         }
     }
 
     Serial.println("[SETUP] Ket noi mang thanh cong!");
+    logNetworkStatus(true);
     configTime(0, 0, "pool.ntp.org", "time.google.com");
 
     Serial.println("[SETUP] Task MQTT: Quan ly ket noi MQTT va callback.");
@@ -329,6 +332,7 @@ __attribute__((noreturn)) void taskMQTT([[maybe_unused]] void *parameter)
             serviceMqtt(true);
             checkSimInternetFallback();
             backendAgent.loop();
+            logNetworkStatus();
             xSemaphoreGive(tcpStreamMutex);
         }
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -415,6 +419,7 @@ static bool tryWifiFallback(bool protocolsRunning)
     lastSimProbeMs = millis();
     simRecoverySuccesses = 0;
     Serial.println("[NETWORK] Da chuyen sang Wi-Fi du phong; giu nguyen tuy chon SIM da luu.");
+    logNetworkStatus(true);
     return true;
 }
 
@@ -463,6 +468,24 @@ static void checkSimRecovery()
     wifiFallbackActive = false;
     simRecoverySuccesses = 0;
     WiFi.disconnect();
+    logNetworkStatus(true);
+}
+
+// Caller holds tcpStreamMutex after startup; connected() can access the modem.
+static void logNetworkStatus(bool force)
+{
+    static uint32_t lastLogMs = 0;
+    const uint32_t now = millis();
+    if (!force && now - lastLogMs < 30000UL)
+        return;
+    lastLogMs = now;
+    Serial.printf("[NETWORK][ACTIVE] transport=%s; fallback=%s; MQTT=%s; NTRIP=%s\n",
+                  isWifiConnection() ? "WIFI" : "SIM/4G", wifiFallbackActive ? "YES" : "NO",
+                  mqtt.connected() ? "UP" : "DOWN", isNtripConnected() ? "UP" : "DOWN");
+    if (isWifiConnection())
+        Serial.printf("[NETWORK][WIFI] connected=%s; SSID=%s; IP=%s; RSSI=%d dBm\n",
+                      WiFi.status() == WL_CONNECTED ? "YES" : "NO", WiFi.SSID().c_str(),
+                      WiFi.localIP().toString().c_str(), WiFi.RSSI());
 }
 
 /** @brief Implements checkSimInternetFallback. */
