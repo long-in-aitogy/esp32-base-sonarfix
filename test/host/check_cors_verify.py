@@ -17,6 +17,10 @@ spec.loader.exec_module(builder)
 gnss = (root / 'src/functions/backend/Backend_Agent_Gnss.cpp').read_text()
 a = gnss.index('void describeTmode(')
 describe = gnss[a:gnss.index('\n}', a) + 2]
+a = gnss.index('int ubxPortIndex(')
+describe += '\n' + gnss[a:gnss.index('\n}', a) + 2]
+a = gnss.index('bool matchUbxOutputValues(')
+describe += '\n' + gnss[a:gnss.index('\n}', a) + 2]
 a = gnss.index('bool BackendAgent::verifyGnssConfig(')
 verify = gnss[a:gnss.index('\nvoid BackendAgent::saveSurveyResult(', a)]
 codec = (root / 'src/functions/backend/Backend_Agent_Codec.cpp').read_text()

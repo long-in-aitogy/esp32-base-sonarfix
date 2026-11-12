@@ -84,30 +84,8 @@ void compareUnicoreLogs(JsonObject groups, JsonArrayConst expectedLogs,
     for (const char *name : {"diagnostics", "rtcm"})
         if (groups[name]["checked"].as<unsigned>() == 0) groups[name]["checked"] = 1;
 }
-} // namespace
-
-bool BackendAgent::verifyUnicoreConfig(JsonObjectConst payload, const String &commandId, String &error) {
-    gnssVerification_.clear();
-    const JsonArrayConst expectedLogs = payload["logs"].as<JsonArrayConst>();
-    std::array<double, 3> wanted{};
-    uint8_t selectedPort = 0;
-    if (!readUnicoreExpectations(payload, wanted, selectedPort, error)) return false;
-    DynamicJsonDocument result(VERIFICATION_DOCUMENT_SIZE);
-    result["command_id"] = commandId;
-    JsonObject details = result.createNestedObject("details");
-    details["kind"] = "Unicorecomm";
-    details["expected_logs"].set(expectedLogs);
-    JsonArray comparedPorts = details.createNestedArray("compare_ports");
-    JsonObject fixedDetails = details.createNestedObject("fixed");
-    JsonObject expectedPosition = fixedDetails.createNestedObject("expected");
-    expectedPosition["mode"] = "Fixed";
-    expectedPosition["self_position"].set(payload["coords"]);
-    JsonObject actualPosition = fixedDetails.createNestedObject("actual");
-    JsonObject groups = result.createNestedObject("groups");
-    for (const char *name : {"fixed", "diagnostics", "rtcm"}) {
-        JsonObject group = groups.createNestedObject(name);
-        group["checked"] = 0; group["mismatched"] = 0; group["unread"] = 0;
-    }
+void verifyUnicorePosition(JsonObject result, JsonObject groups, JsonObject actualPosition,
+                           const std::array<double, 3> &wanted) {
     String mode;
     String modeError;
     bool positionRead = UnicoreReadback::readMode(mode, modeError);
@@ -136,6 +114,32 @@ bool BackendAgent::verifyUnicoreConfig(JsonObjectConst payload, const String &co
         }
     }
     if (!positionRead) { groups["fixed"]["unread"] = 1; result["mode_error"] = modeError; }
+}
+} // namespace
+
+bool BackendAgent::verifyUnicoreConfig(JsonObjectConst payload, const String &commandId, String &error) {
+    gnssVerification_.clear();
+    const JsonArrayConst expectedLogs = payload["logs"].as<JsonArrayConst>();
+    std::array<double, 3> wanted{};
+    uint8_t selectedPort = 0;
+    if (!readUnicoreExpectations(payload, wanted, selectedPort, error)) return false;
+    DynamicJsonDocument result(VERIFICATION_DOCUMENT_SIZE);
+    result["command_id"] = commandId;
+    JsonObject details = result.createNestedObject("details");
+    details["kind"] = "Unicorecomm";
+    details["expected_logs"].set(expectedLogs);
+    JsonArray comparedPorts = details.createNestedArray("compare_ports");
+    JsonObject fixedDetails = details.createNestedObject("fixed");
+    JsonObject expectedPosition = fixedDetails.createNestedObject("expected");
+    expectedPosition["mode"] = "Fixed";
+    expectedPosition["self_position"].set(payload["coords"]);
+    JsonObject actualPosition = fixedDetails.createNestedObject("actual");
+    JsonObject groups = result.createNestedObject("groups");
+    for (const char *name : {"fixed", "diagnostics", "rtcm"}) {
+        JsonObject group = groups.createNestedObject(name);
+        group["checked"] = 0; group["mismatched"] = 0; group["unread"] = 0;
+    }
+    verifyUnicorePosition(result.as<JsonObject>(), groups, actualPosition, wanted);
     String rawLogs;
     String outputError;
     std::vector<UnicoreConfigVerification::Log> logs;
@@ -207,6 +211,29 @@ void describeTmode(JsonObject object, const uint8_t *raw) {
         snprintf(value.data(), value.size(), "%.4f", status.height); position["alt"] = value.data();
     }
 }
+int ubxPortIndex(const String &name) {
+    static constexpr std::array<const char *, 5> names = {"I2C", "UART1", "UART2", "USB", "SPI"};
+    for (size_t i = 0; i < names.size(); ++i)
+        if (name == names[i]) return static_cast<int>(i);
+    return -1;
+}
+bool matchUbxOutputValues(const uint8_t *expected, size_t expectedLength,
+                          const uint8_t *actual, size_t actualLength,
+                          const uint8_t *observed, uint8_t *values) {
+    bool allFound = true;
+    for (size_t i = 0; i < expectedLength; i += 5) {
+        bool found = false;
+        for (size_t j = 0; j < actualLength; j += 5) {
+            if (UbxBaseStatus::u32(expected + i) != UbxBaseStatus::u32(actual + j)) continue;
+            values[i / 5] = observed[j / 5];
+            found = true;
+            break;
+        }
+        if (!found) allFound = false;
+    }
+    return allFound;
+}
+
 }
 
 bool BackendAgent::verifyGnssConfig(JsonObjectConst payload, const String &commandId, String &error) {
@@ -254,11 +281,7 @@ bool BackendAgent::verifyGnssConfig(JsonObjectConst payload, const String &comma
         unsigned seen = 0;
         for (JsonObjectConst request : ports) {
             const String name = request["name"] | "";
-            static constexpr std::array<const char *, 5> portNames = {"I2C", "UART1", "UART2", "USB", "SPI"};
-            int portIndex = -1;
-            for (size_t i = 0; i < portNames.size(); ++i) {
-                if (name == portNames[i]) { portIndex = static_cast<int>(i); break; }
-            }
+            const int portIndex = ubxPortIndex(name);
             if (portIndex < 0 || (seen & (1U << portIndex))) { error = "Invalid GNSS readback port"; return false; }
             seen |= 1U << portIndex;
             std::array<uint8_t, UbxConfigVerification::MAX_KEYS * 5> records{};
@@ -290,14 +313,8 @@ bool BackendAgent::verifyGnssConfig(JsonObjectConst payload, const String &comma
             }
             if (name == "UART1") {
                 // Match by key, never by the ordering of a catalogue supplied over the wire.
-                outputRead = read;
-                for (size_t i = 0; read && i < outputLength; i += 5) {
-                    bool found = false;
-                    for (size_t j = 0; j < length; j += 5) if (UbxBaseStatus::u32(expectedOutput.data() + i) == UbxBaseStatus::u32(records.data() + j)) {
-                        values[i / 5] = observed[j / 5]; found = true; break;
-                    }
-                    if (!found) outputRead = false;
-                }
+                outputRead = read && matchUbxOutputValues(
+                    expectedOutput.data(), outputLength, records.data(), length, observed.data(), values.data());
                 if (!outputRead) outputError = readError.length() ? readError : "Missing UART1 readback keys";
             }
         }
