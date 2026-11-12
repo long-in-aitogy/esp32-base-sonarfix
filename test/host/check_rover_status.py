@@ -15,6 +15,7 @@ harness = r'''
 #include <string>
 using std::min;
 struct Session {
+    struct Datum { std::vector<uint8_t> received; void feed(const uint8_t *data, size_t n) { received.insert(received.end(), data, data + n); } } datum;
     bool active = true, authenticated = true;
     uint32_t bytesReceived = 0, packetsReceived = 0;
     const char *lastError = "CORS rover connection lost";
@@ -62,6 +63,7 @@ int main() {
         assert(Serial1.output == std::vector<uint8_t>(size, 0xD3));
         assert(session.bytesReceived == received + size && session.packetsReceived == packets + 1);
     }
+    assert(session.datum.received == std::vector<uint8_t>(504 + 1 + 200 + 512, 0xD3));
     assert(loopNtripRover() == 200 && releases == 4);
     client.input.assign(504, 0xD3); lockAvailable = false;
     assert(loopNtripRover() == 200 && client.input.size() == 504 && releases == 4);

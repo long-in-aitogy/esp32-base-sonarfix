@@ -25,6 +25,7 @@ const char *AGENT_VERSION = "test";
 struct GnssTelemetrySnapshot { std::array<char, 128> lastGga{}; uint32_t lastGgaMs = 0; } snapshot;
 GnssTelemetrySnapshot getGnssTelemetrySnapshot() { return snapshot; }
 struct RoverSession {
+    struct Datum { int resets = 0; void reset() { ++resets; } } datum;
     bool active = false, authenticated = false;
     uint32_t bytesReceived = 0, packetsReceived = 0, lastGgaMs = 0;
     const char *lastError = "old error";
@@ -71,6 +72,7 @@ int main() {
     client = Client{}; client.reply = "ICY 200 OK\r\n";
     assert(startNtripRover("host", 2101, "user", "secret", "mount", 1));
     assert(session.active && session.authenticated && String(session.lastError) == "CORS rover connection lost");
+    assert(session.datum.resets > 0);
     String selected = "old";
     client = Client{}; client.reply = "HTTP/1.1 200 OK\r\nX-NTRIP-Selected-Mountpoint:  STATION1  \r\n\r\n";
     client.reply += char(0xD3);

@@ -25,6 +25,7 @@ namespace
 {
     struct RoverSession
     {
+        Vn2000Session datum;
         bool active = false;
         bool authenticated = false;
         uint32_t lastGgaMs = 0;
@@ -83,6 +84,7 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
 
     // The temporary rover reuses source server 1's client and modem mux 0.
     // Close that client before opening a receive-only correction stream.
+    roverSession().datum.reset();
     roverSession().bytesReceived = 0;
     roverSession().packetsReceived = 0;
     roverSession().active = true;
@@ -204,6 +206,7 @@ int loopNtripRover()
     const auto bytesRead = client.read(buffer.data(), bytesToRead);
     if (bytesRead > 0)
     {
+        roverSession().datum.feed(buffer.data(), static_cast<size_t>(bytesRead));
         const size_t written = Serial1.write(buffer.data(), static_cast<size_t>(bytesRead));
         roverSession().bytesReceived += static_cast<uint32_t>(bytesRead);
         ++roverSession().packetsReceived;
@@ -251,3 +254,5 @@ uint32_t ntripRoverBytesReceived() { return roverSession().bytesReceived; }
 uint32_t ntripRoverPacketsReceived() { return roverSession().packetsReceived; }
 
 const char *ntripRoverLastError() { return roverSession().lastError; }
+
+Vn2000Datum ntripRoverDatum() { return roverSession().datum.datum(); }
