@@ -140,6 +140,15 @@ namespace UnicoreCommands
         return commands;
     }
 
+    static void appendBaseOutputAndSave(CommandList &commands, const GnssOptions &options)
+    {
+        commands.push_back(delayCommand(2000));
+        const auto port = configuredOutputPort();
+        Serial.printf("Configuring Unicore output messages on %s\n", port.isEmpty() ? "current command port" : port.c_str());
+        appendUnicoreOutputCommands(commands, port, options);
+        commands.push_back(asciiCommand("saveconfig\r\n"));
+    }
+
 /** @brief Implements buildBaseSurveyInCommand. */
     CommandList buildBaseSurveyInCommand(uint32_t duration, [[maybe_unused]] float accuracy, const GnssOptions &options)
     {
@@ -150,11 +159,7 @@ namespace UnicoreCommands
         const auto cmd = "mode base time " + String(duration) + " 0\r\n";
         Serial.printf("Survey-In command: %s", cmd.c_str());
         commands.push_back(asciiCommand(cmd));
-        commands.push_back(delayCommand(2000));
-        const auto port = configuredOutputPort();
-        Serial.printf("Configuring Unicore output messages on %s\n", port.isEmpty() ? "current command port" : port.c_str());
-        appendUnicoreOutputCommands(commands, port, options);
-        commands.push_back(asciiCommand("saveconfig\r\n"));
+        appendBaseOutputAndSave(commands, options);
 
         return commands;
     }
@@ -178,11 +183,7 @@ namespace UnicoreCommands
         const auto cmd = "mode base " + coordinateText(lat) + " " + coordinateText(lon) + " " + String(alt, 4) + "\r\n";
         Serial.printf("Fixed position command: %s", cmd.c_str());
         commands.push_back(asciiCommand(cmd));
-        commands.push_back(delayCommand(2000));
-        const auto port = configuredOutputPort();
-        Serial.printf("Configuring Unicore output messages on %s\n", port.isEmpty() ? "current command port" : port.c_str());
-        appendUnicoreOutputCommands(commands, port, options);
-        commands.push_back(asciiCommand("saveconfig\r\n"));
+        appendBaseOutputAndSave(commands, options);
 
         return commands;
     }
