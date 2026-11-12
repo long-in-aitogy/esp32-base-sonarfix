@@ -1242,9 +1242,16 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
             survey["base_setup_method"] = "SURVEY_IN";
             survey["accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
             survey["survey_in_accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
+            if (survey["survey_in_duration"].isNull())
+                survey["survey_in_duration"] = 120;
             survey.remove("coords");
             survey.remove("coordinate_source");
             survey.remove("conversion_report");
+            if (survey.overflowed())
+            {
+                finish(false, false, "Survey-In fallback configuration exceeds memory capacity");
+                return false;
+            }
             if (restoreWorkflowBase(survey.as<JsonObjectConst>()) && restartConfiguredNtrip())
             {
                 const String oldConfig = baseConfig_;

@@ -68,7 +68,13 @@ int main() {
     BackendAgent fallback; fallback.connectOk = false; assert(fallback.runAutoBaseWorkflow(payload));
     DynamicJsonDocument saved(1024); assert(!deserializeJson(saved, fallback.baseConfig_));
     assert(saved["base_setup_method"] == "SURVEY_IN" && saved["accuracy"] == 5 && saved["survey_in_accuracy"] == 5);
+    assert(saved["survey_in_duration"] == 120);
     assert(saved["coords"].isNull() && fallback.restores == 1 && fallback.restarts == 1);
+    BackendAgent duration; duration.connectOk = false;
+    duration.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","survey_in_duration":300,"coords":{"lat":21,"lon":105,"alt":4}})";
+    assert(duration.runAutoBaseWorkflow(payload));
+    saved.clear(); assert(!deserializeJson(saved, duration.baseConfig_));
+    assert(saved["survey_in_duration"] == 300);
     BackendAgent failed; failed.connectOk = false; failed.error = "ERROR - FIXED STATION CATALOG UNAVAILABLE";
     assert(!failed.runAutoBaseWorkflow(payload) && failed.restores == 1 && failed.stage == "failed");
     BackendAgent saveFailed; saveFailed.connectOk = false; saveFailed.saveOk = false;
