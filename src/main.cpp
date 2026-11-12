@@ -516,7 +516,7 @@ void initPrefs()
     prefs.putBool("NEED_RESET", false);
     prefs.putInt("RSTRT_COUNT", 0);
     // Hai giá trị hợp lệ: "4G" và "WIFI". Giá trị này được nạp khi khởi động.
-    prefs.putString("CONNECTION_TYPE", "4G");
+    prefs.putString("CONNECTION_TYPE", CONNECTION_PREFERENCE);
     prefs.putString("GNSS_MDL_TYPE", "INVALID");
 
     prefs.putString("APN", APN);

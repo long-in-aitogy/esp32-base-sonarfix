@@ -2,6 +2,7 @@
 #define PROG_CONFIG_H
 
 #include <cstdint>
+#include <string_view>
 #include "Top_Lvl_Config.h"
 #include <Preferences.h>
 
@@ -26,6 +27,10 @@ inline constexpr uint8_t GNSS_UNICORE_PORT = 0;
 inline constexpr int MUTEX_TIMEOUT_MS = 1500; // Thời gian tối đa để chờ mutex (ms)
 
 // ================= CẤU HÌNH KẾT NỐI =================
+
+inline constexpr char CONNECTION_PREFERENCE[] = "4G"; // "4G" hoặc "WIFI".
+static_assert(std::string_view(CONNECTION_PREFERENCE) == "4G" || std::string_view(CONNECTION_PREFERENCE) == "WIFI",
+              "CONNECTION_PREFERENCE must be 4G or WIFI");
 
 inline constexpr char WIFI_SSID[] = "AITOGY-VP";
 inline constexpr char WIFI_PASSWORD[] = "";
