@@ -105,6 +105,7 @@ int main() {
     assert(!deserializeJson(report, agent.reportJson));
     assert(report["source"]["mountpoint"] == "station" && report["projection_source"] == "rtcm1025");
     assert(report["parameter_source"] == "rtcm1021" && report["received_messages"]["1021"] == 2);
+    assert(report["zone_width_source"] == "inferred_from_k0");
     assert(std::abs(coordinateNumber(report["parameters"]["kT"]) - 1.00000008613) < 1e-15);
     assert(report["receiver_write_completed"] == false && report["auto_applied"] == false);
     payload["resN"] = "invalid";

@@ -967,6 +967,7 @@ bool BackendAgent::completeAutoBaseSetup(
     report["k0"] = numberText(scale);
     if (vngeonet && transformed)
     {
+        report["zone_width_source"] = "inferred_from_k0";
         report["parameter_source"] = "rtcm1021";
         report["residual_source"] = datum.has1023 ? "rtcm1023" : "none";
         report["rtcm1025_used"] = datum.has1025;
