@@ -69,6 +69,8 @@ Lệnh đổi tỉnh VN2000 được giữ theo lựa chọn của người dùn
 
 Các tệp không còn cùng đường dẫn đã được đối chiếu theo chức năng: quản lý mạng nằm trong `main.cpp`; nhận diện GNSS nằm trong `ntrip_base.cpp`; định tuyến log Unicore nằm trong `Unicore_Log.h`; NTRIP được tách thành ba mô-đun. `math_functions.c` phía CORS là tệp rỗng. Các hàm đọc datum RTCM được chuyển sang `Vn2000_Datum.cpp` và đã kiểm tra cùng dữ liệu tham chiếu Python.
 
+Tại CORS `7db656b`, toàn bộ nội dung `Vn2000_Datum.cpp` trùng phần đầu `Backend_Agent_Projection.cpp` của nguồn. Bộ host kiểm tra CRC, chia nhỏ và reset RTCM, gói 1025 M3/M6 và phép chuyển với dữ liệu tham chiếu đạt. Dữ liệu datum thuộc phiên Rover: khởi tạo lại khi bắt đầu phiên mới; kiểm tra luồng Rover và trường hợp đọc 504 byte đạt.
+
 Khởi động có chủ ý khác CORS: CORS đặt lại Base sang AutoNearest mỗi lần khởi động; nhánh này giữ và khôi phục chế độ, tọa độ hoặc thời gian Survey-In đã lưu theo yêu cầu bảo toàn cấu hình. Fixed LLA chỉ được xác nhận sau readback phù hợp. Đã đối chiếu tên 17 lệnh backend trong CORS với nhánh này; trùng tên không tự chứng minh toàn bộ hành vi giống nhau. Nền tảng PlatformIO đã đồng bộ 7.1.3 với CORS; ba môi trường firmware và bộ kiểm tra modem đều biên dịch thành công; bảng phân vùng vẫn giữ theo từng môi trường của nhánh này.
 
 Các bài host và build không thay thế nghiệm thu trên receiver thật: cần kiểm tra BESTPOS, accuracy cấu hình 5 m, nguồn RTCM, mất kết nối, khởi động lại và tọa độ ngoài thực địa.
