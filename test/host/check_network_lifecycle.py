@@ -16,7 +16,7 @@ constexpr int WL_CONNECTED = 1;
 enum class ConnectionType { WIFI, GSM };
 ConnectionType connectionType = ConnectionType::GSM;
 bool wifiFallbackActive = false, wifiConnected = false, wifiOk = false, probeOk = true;
-bool mqttUp = false, ntripUp = false;
+bool mqttUp = false, ntripUp = false, networkOk = true, workflowActive = false;
 uint32_t now = 1000, lastSimProbeMs = 0;
 int simRecoverySuccesses = 0, wifiAttempts = 0, probes = 0;
 std::string events;
@@ -26,8 +26,8 @@ bool isGsmConnection() { return connectionType == ConnectionType::GSM; }
 struct WiFiClass { static int status() { return wifiConnected ? WL_CONNECTED : 0; } };
 struct { void disconnect() { wifiConnected = false; events += 'D'; } } WiFi;
 struct { bool connected() { return mqttUp; } void disconnect() { mqttUp = false; events += 'M'; } } mqtt;
-struct { bool isNetworkConnected() { return true; } bool isGprsConnected() { return true; } } modem;
-struct { void onNetworkChanged() { events += 'B'; } bool workflowActive() { return false; } } backendAgent;
+struct { bool isNetworkConnected() { return networkOk; } bool isGprsConnected() { return true; } } modem;
+struct { void onNetworkChanged() { events += 'B'; } bool workflowActive() { return ::workflowActive; } } backendAgent;
 bool isNtripConnected() { return ntripUp; }
 void stopNtrip() { ntripUp = false; events += 'N'; }
 void setupMQTT() { events += 'Q'; }
@@ -53,6 +53,27 @@ int main() {
     assert(isWifiConnection() && simRecoverySuccesses == 1);
     now += 60000; checkSimRecovery();
     assert(isGsmConnection() && !wifiFallbackActive && !wifiConnected && events == "MNBQSCMNBQSCD");
+
+    // Healthy fallback must not interrupt an active workflow, but a lost Wi-Fi
+    // route can return to SIM after one successful probe.
+    assert(tryWifiFallback(true));
+    workflowActive = true; now += 60000;
+    const int before = probes;
+    checkSimRecovery(); assert(probes == before && isWifiConnection());
+    wifiConnected = false; networkOk = false; now += 15000;
+    checkSimRecovery(); assert(probes == before && isWifiConnection());
+    networkOk = true; now += 14999;
+    checkSimRecovery(); assert(probes == before && isWifiConnection());
+    ++now; checkSimRecovery();
+    assert(probes == before + 1 && isGsmConnection() && !wifiFallbackActive);
+
+    // A failed Wi-Fi probe must leave existing SIM sockets running.
+    workflowActive = false; mqttUp = ntripUp = true; wifiOk = false; events.clear();
+    assert(!tryWifiFallback(true));
+    assert(isGsmConnection() && mqttUp && ntripUp && events.empty());
+    wifiOk = true;
+    assert(tryWifiFallback(true));
+    assert(isWifiConnection() && !mqttUp && ntripUp && events == "MNBQSC");
 }
 '''
 # Supply only a stub for diagnostic logging; it is covered separately.
@@ -67,4 +88,4 @@ with tempfile.TemporaryDirectory(prefix='network-lifecycle-') as directory:
     subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(path), str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     subprocess.run([str(path / 'check')], check=True)
-print('PASS: SIM fallback delay, failed Wi-Fi, recovery probes and route transition')
+print('PASS: SIM fallback, workflow protection, recovery probes and lost Wi-Fi route')

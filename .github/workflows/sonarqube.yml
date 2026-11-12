@@ -63,6 +63,7 @@ jobs:
           python3 test/host/check_sim_recovery_workflow.py
           python3 test/host/check_backend_migration.py
           python3 test/host/check_backend_save_state.py
+          python3 test/host/check_license_reference_commands.py
           python3 test/host/check_nvs_cleanup.py
           python3 test/host/check_nvs_inventory.py
           python3 test/host/check_survey_result_retry.py

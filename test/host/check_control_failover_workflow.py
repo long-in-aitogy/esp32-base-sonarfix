@@ -6,7 +6,10 @@ import tempfile
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent.cpp').read_text()
 method = source[source.index('void BackendAgent::evaluateControlPlaneFailover()'):source.index('void BackendAgent::loop()')]
+ack = source[source.index('void BackendAgent::handleControlAck('):source.index('\nvoid BackendAgent::onMqttMessage(')]
 harness = r'''
+#include <Arduino.h>
+#include <ArduinoJson.h>
 #include <cstdint>
 #include <cassert>
 constexpr uint32_t BACKEND_CONTROL_STALE_MS = 10000, BACKEND_CONTROL_RECOVERY_MS = 6000;
@@ -15,8 +18,11 @@ uint32_t millis() { return clockMs; }
 int setups = 0, connections = 0;
 void setupNTRIP() { ++setups; }
 void connectNTRIP() { ++connections; }
-struct { void println(const char *) {} } Serial;
+void xQueueOverwrite(int, const void *) {}
 struct BackendAgent {
+    struct AutoBaseLocationReply { char json[1536]; };
+    int autoBaseLocationQueue_ = 0;
+    String statusBootId_ = "boot", serialNumber_ = "station";
     uint32_t lastControlCheckMs_ = 0, recoveryStartedMs_ = 0, controlPlaneArmedMs_ = 0;
     uint32_t lastMqttAckMs_ = 0, lastWebsocketAckMs_ = 0;
     int statusSequence_ = 1, failOpenEntrySequence_ = 0;
@@ -24,6 +30,7 @@ struct BackendAgent {
     bool licenseValid_ = true, provisioned_ = true, controlPlaneFailOpen_ = false, active = false;
     bool workflowActive() { return active; }
     void evaluateControlPlaneFailover();
+    void handleControlAck(const String &, const String &, bool);
 };
 '''
 checks = r'''
@@ -41,11 +48,36 @@ int main() {
     assert(agent.controlPlaneFailOpen_ && setups == 1 && connections == 1);
     agent.active = false; clockMs = 24000; agent.evaluateControlPlaneFailover();
     assert(!agent.controlPlaneFailOpen_ && setups == 2 && connections == 2);
+
+    // Exercise the real ACK parser together with failover, including replayed ACKs.
+    BackendAgent replay;
+    setups = connections = 0;
+    clockMs = 12000; replay.evaluateControlPlaneFailover();
+    assert(replay.controlPlaneFailOpen_ && setups == 1);
+    const String oldAck = R"({"type":"control_plane_ack","status_boot_id":"boot","serial":"station","status_sequence":1})";
+    const String newAck = R"({"type":"control_plane_ack","status_boot_id":"boot","serial":"station","status_sequence":2})";
+    const String wrongBoot = R"({"type":"control_plane_ack","status_boot_id":"old","serial":"station","status_sequence":2})";
+    clockMs = 14000;
+    replay.handleControlAck("mqtt", newAck, true);
+    replay.handleControlAck("mqtt", wrongBoot, false);
+    replay.handleControlAck("mqtt", oldAck, false);
+    replay.evaluateControlPlaneFailover();
+    assert(replay.controlPlaneFailOpen_ && replay.recoveryStartedMs_ == 0);
+    replay.handleControlAck("websocket", newAck, false);
+    clockMs = 16000; replay.evaluateControlPlaneFailover();
+    assert(replay.recoveryStartedMs_ == 16000);
+    clockMs = 18000; replay.handleControlAck("websocket", newAck, false);
+    assert(replay.lastWebsocketAckMs_ == 14000);
+    clockMs = 22000; replay.evaluateControlPlaneFailover();
+    assert(!replay.controlPlaneFailOpen_ && setups == 2 && connections == 2);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='control-failover-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(harness + method + checks)
-    subprocess.run(['c++', '-std=c++17', '-fsanitize=address,undefined', str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
+    (path / 'check.cpp').write_text(harness + method + ack + checks)
+    subprocess.run(['c++', '-std=c++17', '-fsanitize=address,undefined',
+                    '-I' + str(root / 'test/host'),
+                    '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
+                    str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     subprocess.run([str(path / 'check')], check=True)
-print('PASS: failover and recovery wait for active workflow')
+print('PASS: failover, ACK replay and recovery during workflows')
