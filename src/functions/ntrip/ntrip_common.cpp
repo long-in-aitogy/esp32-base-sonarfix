@@ -1,13 +1,9 @@
 #define NTRIP_HANDLER_IP_CODE
 
 #include "functions/ntrip/ntrip_common.h"
-#include "functions/ntrip/unicore_bootstrap_cmds.h"
 
 #include "Prog_Config.h"
 #include "functions/backend/Backend_Agent.h"
-#include "functions/ntrip/RTCM_Receiver.h"
-#include "functions/gnss/unicore_commands.h"
-#include "functions/gnss/Unicore_Identification.h"
 #include "hardware/Sim_handler.h"
 #include "hardware/Wifi_handler.h"
 
@@ -18,151 +14,6 @@
 
 extern Preferences prefs;
 extern TinyGsm modem;
-
-namespace
-{
-    class ntripConfig
-    {
-    public:
-        inline static bool isIcyOk = false;
-        inline static unsigned long lastReconnect = 0;
-        inline static bool isNmeaSent = false;
-    };
-
-    inline constexpr std::array<uint8_t, 8> ubxMonVerPoll = {
-        0xB5, 0x62, 0x0A, 0x04, 0x00, 0x00, 0x0E, 0x34};
-
-/** @brief Implements waitForUm980Input. */
-    void waitForUm980Input()
-    {
-        const auto started = millis();
-        while (!Serial1.available() && millis() - started < 2000)
-            delay(10);
-    }
-
-/** @brief Implements logUm980Response. */
-    void logUm980Response()
-    {
-#ifdef PROGRAM_DEBUG
-        waitForUm980Input();
-        const auto response = Serial1.readStringUntil('\n');
-        Serial.println("[NMEA CMD] Response: " + response);
-#endif
-    }
-
-/** @brief Implements sendUm980Command. */
-    inline void sendUm980Command(const char *command, size_t maxLength, bool logResponse,
-                                 uint32_t pauseMs)
-    {
-        waitForUm980Input();
-        Serial1.write(command, strnlen(command, maxLength));
-        if (logResponse)
-            logUm980Response();
-        if (pauseMs > 0)
-            delay(pauseMs);
-    }
-
-/** @brief Implements clearGnssInput. */
-    void clearGnssInput()
-    {
-        while (Serial1.available() > 0)
-        {
-            Serial1.read();
-        }
-    }
-
-/** @brief Implements hasValidUbxFrame. */
-    bool hasValidUbxFrame(const uint8_t *data, size_t length)
-    {
-        for (size_t start = 0; start + 8 <= length; ++start)
-        {
-            if (data[start] != 0xB5 || data[start + 1] != 0x62 ||
-                data[start + 2] != 0x0A || data[start + 3] != 0x04)
-            {
-                continue;
-            }
-
-            const auto payloadLength =
-                static_cast<size_t>(data[start + 4]) |
-                (static_cast<size_t>(data[start + 5]) << 8);
-            const auto frameLength = payloadLength + 8;
-            // A MON-VER response contains SW (30 bytes) and HW (10 bytes), never an empty poll.
-            if (payloadLength < 40 || frameLength > 512)
-                continue;
-            if (start + frameLength > length)
-            {
-                continue;
-            }
-
-            uint8_t checksumA = 0;
-            uint8_t checksumB = 0;
-            for (size_t i = start + 2; i < start + 6 + payloadLength; ++i)
-            {
-                checksumA = static_cast<uint8_t>(checksumA + data[i]);
-                checksumB = static_cast<uint8_t>(checksumB + checksumA);
-            }
-
-            if (checksumA == data[start + frameLength - 2] &&
-                checksumB == data[start + frameLength - 1])
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
-/** @brief Implements receiveUbxFrame. */
-    bool receiveUbxFrame(uint32_t timeoutMs)
-    {
-        std::array<uint8_t, 512> buffer{};
-        auto length = 0;
-        const uint32_t start = millis();
-
-        while (millis() - start < timeoutMs)
-        {
-            while (Serial1.available() > 0)
-            {
-                const auto value = Serial1.read();
-                if (length < buffer.size())
-                {
-                    buffer[length++] = static_cast<uint8_t>(value);
-                }
-                else
-                {
-                    memmove(buffer.data(), buffer.data() + 1, buffer.size() - 1);
-                    buffer[buffer.size() - 1] = static_cast<uint8_t>(value);
-                }
-                if (hasValidUbxFrame(buffer.data(), length))
-                {
-                    return true;
-                }
-            }
-            delay(2);
-        }
-        return false;
-    }
-
-/** @brief Implements receiveUnicoreIdentification. */
-    bool receiveUnicoreIdentification(uint32_t timeoutMs)
-    {
-        UnicoreIdentification identity;
-        const uint32_t start = millis();
-        while (millis() - start < timeoutMs)
-        {
-            while (Serial1.available() > 0)
-            {
-                if (identity.feed(static_cast<uint8_t>(Serial1.read())))
-                {
-                    Serial.printf("[GNSS][UNICORE RESPONSE] %s\n", identity.line.data());
-                    return true;
-                }
-            }
-            delay(2);
-        }
-
-        return false;
-    }
-} // namespace
 
 /** @brief Implements jsonBool. */
 bool jsonBool(JsonObjectConst object, const String &key, bool fallback = false)
