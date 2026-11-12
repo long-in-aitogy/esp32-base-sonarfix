@@ -75,6 +75,18 @@ int main() {
     assert(duration.runAutoBaseWorkflow(payload));
     saved.clear(); assert(!deserializeJson(saved, duration.baseConfig_));
     assert(saved["survey_in_duration"] == 300);
+    payload["startup_auto"] = true;
+    BackendAgent bootFallback; bootFallback.connectOk = false;
+    bootFallback.baseConfig_ = R"({"base_setup_method":"AUTO_CORS","auto_base_started_boot_id":"boot-1","auto_base_started_request_id":"request-1","auto_base_previous_config":{"base_setup_method":"FIXED_LLA","coords":{"lat":21,"lon":105,"alt":4}}})";
+    assert(bootFallback.runAutoBaseWorkflow(payload));
+    saved.clear(); assert(!deserializeJson(saved, bootFallback.baseConfig_));
+    assert(saved["auto_base_started_boot_id"] == "boot-1" && saved["auto_base_started_request_id"] == "request-1");
+    payload["startup_auto"] = false;
+    BackendAgent manualFallback; manualFallback.connectOk = false;
+    manualFallback.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","auto_base_started_boot_id":"boot-1","coords":{"lat":21,"lon":105,"alt":4}})";
+    assert(manualFallback.runAutoBaseWorkflow(payload));
+    saved.clear(); assert(!deserializeJson(saved, manualFallback.baseConfig_));
+    assert(saved["auto_base_started_boot_id"].isNull());
     BackendAgent failed; failed.connectOk = false; failed.error = "ERROR - FIXED STATION CATALOG UNAVAILABLE";
     assert(!failed.runAutoBaseWorkflow(payload) && failed.restores == 1 && failed.stage == "failed");
     BackendAgent saveFailed; saveFailed.connectOk = false; saveFailed.saveOk = false;

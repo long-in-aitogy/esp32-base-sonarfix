@@ -1130,6 +1130,8 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
     String selectedMountpoint;
     DynamicJsonDocument previousBase(CONFIG_DOCUMENT_SIZE);
     deserializeJson(previousBase, baseConfig_);
+    const String startedBootId = previousBase["auto_base_started_boot_id"] | String();
+    const String startedRequestId = previousBase["auto_base_started_request_id"] | String();
     const JsonObjectConst savedPrevious = previousBase["auto_base_previous_config"].as<JsonObjectConst>();
     const bool hasSavedPrevious = !savedPrevious.isNull();
     if (hasSavedPrevious)
@@ -1247,6 +1249,13 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
             survey.remove("coords");
             survey.remove("coordinate_source");
             survey.remove("conversion_report");
+            survey.remove("auto_base_started_boot_id");
+            survey.remove("auto_base_started_request_id");
+            if (payload["startup_auto"] == true && !startedBootId.isEmpty())
+            {
+                survey["auto_base_started_boot_id"] = startedBootId;
+                survey["auto_base_started_request_id"] = startedRequestId;
+            }
             if (survey.overflowed())
             {
                 finish(false, false, "Survey-In fallback configuration exceeds memory capacity");
