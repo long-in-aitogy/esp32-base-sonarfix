@@ -55,6 +55,7 @@ struct BackendAgent {
     void publishConfigState(const char *) {}
     bool applyRoverMode() { return true; }
     bool startAutoBaseRover(const String &, uint16_t, const String &, const String &, const String &, uint8_t, String &failure, String *selected) {
+        assert(stage == "connect_caster");
         ++connections; selectedRequested = selected != nullptr;
         if (!connectOk) { failure = error; return false; }
         if (selected) *selected = "selected-station";

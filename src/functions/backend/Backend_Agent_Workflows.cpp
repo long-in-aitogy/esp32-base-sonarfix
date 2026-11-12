@@ -1202,6 +1202,7 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         }
     }
 
+    setWorkflowProgress("connect_caster", 1, 4);
     String failureReason;
     Serial.printf("[AUTO BASE][CASTER] Connecting %s:%u/%s; AutoNearest=%s.\n",
                   host.c_str(), static_cast<unsigned>(port), mountpoint.c_str(), autoNearest ? "YES" : "NO");
