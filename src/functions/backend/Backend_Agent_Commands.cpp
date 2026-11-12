@@ -268,12 +268,16 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
             error = "invalid raw command item";
             return false;
         }
-        auto length = decodeBase64(encoded, decoded.data(), decoded.size());
-        if (length == 0)
+        if (decodeBase64(encoded, decoded.data(), decoded.size()) == 0)
         {
             error = "raw command is not valid base64";
             return false;
         }
+    }
+    for (JsonVariant item : commands)
+    {
+        const auto encoded = item.as<String>();
+        auto length = decodeBase64(encoded, decoded.data(), decoded.size());
         uint32_t delayMs = 0;
         if (delayMarker(decoded.data(), length, delayMs))
         {
@@ -293,9 +297,14 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
         }
         if (rtcmBufferMutex && xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE)
         {
-            Serial1.write(decoded.data(), length);
+            const auto written = Serial1.write(decoded.data(), length);
             Serial1.flush();
             xSemaphoreGive(rtcmBufferMutex);
+            if (written != length)
+            {
+                error = "GNSS serial write incomplete";
+                return false;
+            }
         }
         else
         {
