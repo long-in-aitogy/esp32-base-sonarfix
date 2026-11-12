@@ -140,14 +140,18 @@ void BackendAgent::begin()
     {
         nmeaQueue_ = xQueueCreate(NMEA_QUEUE_LENGTH, sizeof(NmeaPacket));
     }
+#if BACKEND_PUBLISH_RAW_RTCM
     if (!rtcmQueue_)
     {
         rtcmQueue_ = xQueueCreate(RTCM_QUEUE_LENGTH, sizeof(DataPacket));
     }
+#endif
+#if BACKEND_WEBSOCKET_ENABLED
     if (!websocket_)
     {
         websocket_ = std::make_unique<BackendAgentWebsocket>(this);
     }
+#endif
     // Initialize the WebSocket endpoint with the restored device identity and token.
     setupWebsocket();
     lastStatusMs_ = 0;

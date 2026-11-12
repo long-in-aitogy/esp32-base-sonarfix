@@ -53,6 +53,7 @@ jobs:
           python3 test/host/check_survey_result_retry.py
           python3 test/host/check_status_config_capacity.py
           python3 test/host/check_status_publish_failure.py
+          python3 test/host/check_optional_backend_allocations.py
           python3 test/host/check_config_publish_capacity.py
           python3 test/host/check_connection_preference.py
           python3 test/host/check_wifi_migration.py
