@@ -64,6 +64,7 @@ jobs:
           test/host/check_control_failover_workflow.py
           test/host/check_sim_recovery_workflow.py
           test/host/check_backend_migration.py
+          test/host/check_backend_load.py
           test/host/check_backend_save_state.py
           test/host/check_license_reference_commands.py
           test/host/check_nvs_cleanup.py
