@@ -9,6 +9,7 @@ source = (root / 'src/main.cpp').read_text()
 start = source.index('static bool tryWifiFallback(bool protocolsRunning)\n{')
 end = source.index('/** @brief Implements settleModemBeforeNtrip.', start)
 functions = source[start:end]
+loop = source[source.index('void loop()\n{'):source.index('// Called with the shared modem mutex held once worker tasks are running.')]
 harness = r'''
 #include <Arduino.h>
 #include <cassert>
@@ -18,6 +19,18 @@ enum class ConnectionType { WIFI, GSM };
 ConnectionType connectionType = ConnectionType::GSM;
 bool wifiFallbackActive = false, wifiConnected = false, wifiOk = false, probeOk = true;
 bool mqttUp = false, ntripUp = false, networkOk = true, workflowActive = false;
+bool gprsUp = true, gsmOk = true, lockOk = true;
+int locks = 0, unlocks = 0;
+void *tcpStreamMutex = reinterpret_cast<void *>(1);
+constexpr int MUTEX_TIMEOUT_MS = 1500, LED_PIN = 1, HIGH = 1, LOW = 0;
+#define TCP_IP 1
+#define RTCM_COMMUNICATION_PROTOCOL TCP_IP
+int pdMS_TO_TICKS(int ms) { return ms; }
+bool xSemaphoreTake(void *, int) { if (!lockOk) return false; ++locks; return true; }
+void xSemaphoreGive(void *) { ++unlocks; }
+void vTaskDelay(int) {}
+void digitalWrite(int, int) {}
+namespace DeviceRuntime { int gsmDisconnectCount = 0; }
 uint32_t now = 1000, lastSimProbeMs = 0;
 int simRecoverySuccesses = 0, wifiAttempts = 0, probes = 0;
 std::string events;
@@ -27,16 +40,17 @@ bool isGsmConnection() { return connectionType == ConnectionType::GSM; }
 struct WiFiClass { static int status() { return wifiConnected ? WL_CONNECTED : 0; } };
 struct { void disconnect() { wifiConnected = false; events += 'D'; } } WiFi;
 struct { bool connected() { return mqttUp; } void disconnect() { mqttUp = false; events += 'M'; } } mqtt;
-struct { bool isNetworkConnected() { return networkOk; } bool isGprsConnected() { return true; } } modem;
+struct { bool isNetworkConnected() { return networkOk; } bool isGprsConnected() { return gprsUp; } } modem;
 struct { void onNetworkChanged() { events += 'B'; } bool workflowActive() { return ::workflowActive; } } backendAgent;
 bool isNtripConnected() { return ntripUp; }
 void stopNtrip() { ntripUp = false; events += 'N'; }
 void setupMQTT() { events += 'Q'; }
 void setupNTRIP() { events += 'S'; }
 void connectNTRIP() { ntripUp = true; events += 'C'; }
-bool connectGSM(int) { return true; }
+bool connectGSM(int) { if (gsmOk) gprsUp = true; return gsmOk; }
 bool probeMqttTransport(bool) { ++probes; return probeOk; }
 bool setupWiFi(bool (*validate)()) { ++wifiAttempts; wifiConnected = wifiOk; return wifiOk && validate(); }
+bool setupWiFi() { ++wifiAttempts; wifiConnected = wifiOk; return wifiOk; }
 static void activateNetwork(ConnectionType, bool);
 static void logNetworkStatus(bool = false);
 '''
@@ -75,6 +89,22 @@ int main() {
     wifiOk = true;
     assert(tryWifiFallback(true));
     assert(isWifiConnection() && !mqttUp && ntripUp && events == "MNBQSC");
+
+    // Run the production loop with failed and successful mutex acquisition.
+    connectionType = ConnectionType::GSM; wifiFallbackActive = false;
+    gprsUp = false; gsmOk = false; wifiOk = false; events.clear();
+    lockOk = false; const int oldLocks = locks; loop();
+    assert(locks == oldLocks && events.empty());
+    lockOk = true; loop();
+    assert(DeviceRuntime::gsmDisconnectCount == 1 && events == "N");
+    gsmOk = true; events.clear(); loop();
+    assert(gprsUp && DeviceRuntime::gsmDisconnectCount == 0 && events == "NSC");
+    connectionType = ConnectionType::WIFI; wifiFallbackActive = false;
+    wifiConnected = false; wifiOk = true; mqttUp = ntripUp = true; events.clear();
+    loop();
+    assert(wifiConnected && !mqttUp && !ntripUp && events == "MNB");
+    tcpStreamMutex = nullptr; const int oldUnlocks = unlocks; loop();
+    assert(unlocks == oldUnlocks && locks == unlocks);
 }
 '''
 # Supply only a stub for diagnostic logging; it is covered separately.
@@ -86,7 +116,7 @@ with tempfile.TemporaryDirectory(prefix='network-lifecycle-') as directory:
     path = Path(directory)
     shim = (root / 'test/host/Arduino.h').read_text().replace('    void println(const char *) {}', '    void println(const char *) {}\n    void println(const String &) {}')
     (path / 'Arduino.h').write_text(shim)
-    (path / 'check.cpp').write_text(harness + functions + checks)
+    (path / 'check.cpp').write_text(harness + functions + mapped(root / 'src/main.cpp', loop) + checks)
     compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(path), str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     run_cpp([str(path / 'check')], check=True)
