@@ -64,6 +64,7 @@ jobs:
 
       - name: Run receiver and NTRIP checks
         run: |
+          python3 test/host/check_detection_lifecycle.py
           python3 test/host/check_unicore_quality.py
           python3 test/host/check_unicore_fixed_readback.py
           python3 test/host/check_unicore_verify_command.py
