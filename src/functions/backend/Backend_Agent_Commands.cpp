@@ -446,6 +446,11 @@ bool BackendAgent::executeServiceConfigCommand(JsonObject payload, String &error
         else if (service[activeKey].isNull())
             service[activeKey] = globalActive;
     }
+    if (serviceDoc.overflowed())
+    {
+        error = "service configuration exceeds memory capacity";
+        return false;
+    }
     String updatedServiceConfig;
     serializeJson(serviceDoc, updatedServiceConfig);
     if (updatedServiceConfig != serviceConfig_)

@@ -37,6 +37,12 @@ int main() {
     request["port1"] = 2102;
     assert(agent.executeServiceConfigCommand(request.as<JsonObject>(), error, detail));
     assert(setups == 2 && connections == 2);
+    const String previous = agent.serviceConfig_;
+    DynamicJsonDocument large(12000);
+    large["serverhost1"] = String(std::string(6000, 'x'));
+    assert(!agent.executeServiceConfigCommand(large.as<JsonObject>(), error, detail));
+    assert(error == "service configuration exceeds memory capacity");
+    assert(agent.serviceConfig_ == previous && setups == 2 && connections == 2 && agent.published == 3);
     request.clear(); request.to<JsonObject>();
     assert(!agent.executeServiceConfigCommand(request.as<JsonObject>(), error, detail));
     assert(setups == 2 && connections == 2 && agent.published == 3);
