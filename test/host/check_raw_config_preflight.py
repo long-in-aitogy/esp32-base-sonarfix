@@ -15,7 +15,7 @@ harness = r'''
 #include <array>
 #include <cassert>
 #include <vector>
-constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
+constexpr size_t CONFIG_DOCUMENT_SIZE = 6144;
 namespace GnssCmdBuilder {
     enum class GnssSensorType { Invalid, Ublox, Unicore };
     using CommandList = std::vector<int>;
@@ -61,7 +61,7 @@ int main() {
     auto payload = doc.createNestedObject("payload");
     payload.createNestedArray("commands_b64").add("AQ==");
     String error, detail;
-    config["params"]["extra"] = String(std::string(6000, 'x'));
+    config["params"]["extra"] = String(std::string(9000, 'x'));
     agent.active = true;
     assert(!agent.executeRawCommand(doc, payload, error, detail));
     assert(error == "Base configuration exceeds memory capacity");

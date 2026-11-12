@@ -31,6 +31,7 @@ jobs:
         run: |
           python3 test/host/check_auto_base_status.py
           python3 test/host/check_auto_base_report.py
+          python3 test/host/check_boot_progress_restore.py
           python3 test/host/check_auto_base_transform.py
           python3 test/host/check_auto_nearest_workflow.py
           python3 test/host/check_autobase_config.py
@@ -43,6 +44,7 @@ jobs:
           python3 test/host/check_raw_config_preflight.py
           python3 test/host/check_raw_batch.py
           python3 test/host/check_service_config.py
+          python3 test/host/check_status_config_capacity.py
           python3 test/host/check_connection_preference.py
           python3 test/host/check_backend_restart_transport.py
           python3 test/host/check_websocket_control_write.py

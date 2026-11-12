@@ -60,7 +60,7 @@ namespace
 void BackendAgent::setWorkflowProgress(const String &phase, const uint8_t step,
                                        const uint8_t total, const String &details)
 {
-    DynamicJsonDocument progress(CONFIG_DOCUMENT_SIZE);
+    DynamicJsonDocument progress(PROGRESS_DOCUMENT_SIZE);
     progress["phase"] = phase;
     progress["step"] = step;
     progress["total_steps"] = total;
@@ -68,7 +68,7 @@ void BackendAgent::setWorkflowProgress(const String &phase, const uint8_t step,
 
     if (!details.isEmpty())
     {
-        DynamicJsonDocument extra(4096);
+        DynamicJsonDocument extra(AUTO_BASE_RESULT_SIZE);
         if (deserializeJson(extra, details) == DeserializationError::Ok && extra.is<JsonObject>())
         {
             for (JsonPairConst pair : extra.as<JsonObjectConst>())
@@ -668,33 +668,35 @@ String BackendAgent::buildAutoBaseResult(
     const String &projectionSource, const String &provinceCode, const String &provinceName,
     const double centralMeridianDeg, const double scale, JsonObjectConst report)
 {
-    DynamicJsonDocument completed(CONFIG_DOCUMENT_SIZE);
-    completed["averaged_coord"]["lat"] = finalLatitude;
-    completed["averaged_coord"]["lon"] = finalLongitude;
-    completed["averaged_coord"]["alt"] = finalAltitude;
-    completed["raw_itrf_coord"]["lat"] = rawLatitude;
-    completed["raw_itrf_coord"]["lon"] = rawLongitude;
-    completed["raw_itrf_coord"]["alt"] = rawAltitude;
-    if (report["output_coord"].is<JsonObjectConst>())
-        completed["averaged_coord"].set(report["output_coord"]);
-    completed["raw_coord"].set(report["input_coord"]);
-    completed["calculated_coord"].set(report["calculated_coord"]);
-    completed["sample_count"] = sampleCount;
-    completed["fixed_samples_only"] = true;
-    completed["transform_applied"] = transformed;
-    completed["configured_ntrip_restarted"] = transportRestored;
-    completed["projection_source"] = projectionSource;
-    completed["province_code"] = provinceCode;
-    completed["province_name"] = provinceName;
-    completed["central_meridian_deg"] = centralMeridianDeg;
-    completed["k0"] = scale;
-    completed["conversion_report"].set(report);
     const String mountpoint = report["source"]["mountpoint"] | String();
-    if (completed.overflowed())
-        return String();
     String serialized;
-    serializeJson(completed, serialized);
-    DynamicJsonDocument checked(CONFIG_DOCUMENT_SIZE), progress(CONFIG_DOCUMENT_SIZE);
+    {
+        DynamicJsonDocument completed(AUTO_BASE_RESULT_SIZE);
+        completed["averaged_coord"]["lat"] = finalLatitude;
+        completed["averaged_coord"]["lon"] = finalLongitude;
+        completed["averaged_coord"]["alt"] = finalAltitude;
+        completed["raw_itrf_coord"]["lat"] = rawLatitude;
+        completed["raw_itrf_coord"]["lon"] = rawLongitude;
+        completed["raw_itrf_coord"]["alt"] = rawAltitude;
+        if (report["output_coord"].is<JsonObjectConst>())
+            completed["averaged_coord"].set(report["output_coord"]);
+        completed["raw_coord"].set(report["input_coord"]);
+        completed["calculated_coord"].set(report["calculated_coord"]);
+        completed["sample_count"] = sampleCount;
+        completed["fixed_samples_only"] = true;
+        completed["transform_applied"] = transformed;
+        completed["configured_ntrip_restarted"] = transportRestored;
+        completed["projection_source"] = projectionSource;
+        completed["province_code"] = provinceCode;
+        completed["province_name"] = provinceName;
+        completed["central_meridian_deg"] = centralMeridianDeg;
+        completed["k0"] = scale;
+        completed["conversion_report"].set(report);
+        if (completed.overflowed())
+            return String();
+        serializeJson(completed, serialized);
+    }
+    DynamicJsonDocument checked(AUTO_BASE_RESULT_SIZE), progress(PROGRESS_DOCUMENT_SIZE);
     if (deserializeJson(checked, serialized) != DeserializationError::Ok)
         return String();
     checked["source_mountpoint"] = mountpoint;
@@ -1305,7 +1307,7 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         }
         setAgentState(normalAgentState());
     }
-    DynamicJsonDocument result(CONFIG_DOCUMENT_SIZE);
+    DynamicJsonDocument result(AUTO_BASE_RESULT_SIZE);
     if (deserializeJson(result, resultJson) == DeserializationError::Ok)
     {
         result["source_mountpoint"] = sourceMountpoint;

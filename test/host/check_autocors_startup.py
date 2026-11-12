@@ -14,7 +14,7 @@ harness=r'''
 #include <cmath>
 #include <cstdlib>
 #include "functions/gnss/gnss_cmd_builder.h"
-constexpr size_t CONFIG_DOCUMENT_SIZE=4096;
+constexpr size_t CONFIG_DOCUMENT_SIZE=6144;
 namespace {
 '''+helper+r'''
 }

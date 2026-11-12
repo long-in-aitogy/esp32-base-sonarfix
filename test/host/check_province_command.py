@@ -11,7 +11,7 @@ harness = r'''
 #include <ArduinoJson.h>
 #include <cassert>
 #include <cmath>
-constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
+constexpr size_t CONFIG_DOCUMENT_SIZE = 6144;
 namespace GnssCmdBuilder {
     constexpr float BASE_ACCURACY_METERS = 5.0f;
     enum class GnssSensorType { Ublox, Unicore };

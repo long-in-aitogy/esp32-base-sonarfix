@@ -13,20 +13,21 @@ harness=r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <cassert>
-constexpr size_t STATUS_DOCUMENT_SIZE=8192,CONFIG_DOCUMENT_SIZE=4096,VERIFICATION_DOCUMENT_SIZE=12288;
+#include <cstring>
+constexpr size_t STATUS_DOCUMENT_SIZE=8192,CONFIG_DOCUMENT_SIZE=6144,PROGRESS_DOCUMENT_SIZE=8192,VERIFICATION_DOCUMENT_SIZE=12288;
 '''
 checks=r'''
 int main() {
     String baseConfig_, serviceConfig_, autoBaseProgress_, nvsInventory_, gnssVerification_, satelliteReadback_, versionReadback_, versionReadbackError_;
     unsigned receiverInfoMs_=0;
-    DynamicJsonDocument input(CONFIG_DOCUMENT_SIZE);
-    auto fill=[&](const char *prefix, String &output) {
+    DynamicJsonDocument input(PROGRESS_DOCUMENT_SIZE);
+    auto fill=[&](const char *prefix, String &output, int count) {
         input.clear();
-        for (int i=0;i<55;++i) input[String(prefix)+String(i)] = String(prefix)+String(i)+String(20,'x');
+        for (int i=0;i<count;++i) input[String(prefix)+String(i)] = String(prefix)+String(i)+String(20,'x');
         assert(!input.overflowed());
         serializeJson(input,output);
     };
-    fill("base",baseConfig_); fill("service",serviceConfig_); fill("progress",autoBaseProgress_);
+    fill("base",baseConfig_,70); fill("service",serviceConfig_,70); fill("progress",autoBaseProgress_,90);
     ALLOCATION
     copyJsonObject(doc,"base_config",baseConfig_);
     copyJsonObject(doc,"service_config",serviceConfig_);
@@ -34,7 +35,7 @@ int main() {
     JsonObject telemetry=doc.createNestedObject("system_info");
     for (int i=0;i<30;++i) telemetry[String("status")+String(i)]=i;
     assert(!doc.overflowed());
-    assert(doc["base_config"].size()==55 && doc["service_config"].size()==55 && doc["auto_base_progress"].size()==55 && telemetry.size()==30);
+    assert(doc["base_config"].size()==70 && doc["service_config"].size()==70 && doc["auto_base_progress"].size()==90 && telemetry.size()==30);
 }
 '''.replace('ALLOCATION',allocation)
 with tempfile.TemporaryDirectory(prefix='status-capacity-') as directory:

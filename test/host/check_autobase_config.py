@@ -12,7 +12,7 @@ harness = r'''
 #include <ArduinoJson.h>
 #include "functions/gnss/gnss_cmd_builder.h"
 #include <cassert>
-constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
+constexpr size_t CONFIG_DOCUMENT_SIZE = 6144;
 struct Position { double latitude = 21.25, longitude = 105.75, altitude = 10.5, northing = 1, easting = 2; };
 struct BackendAgent {
     String baseConfig_, published;
@@ -100,9 +100,9 @@ int main() {
     result.clear(); assert(!deserializeJson(result, replacement.baseConfig_));
     assert(result["conversion_report"]["detail"].as<String>().length()==900);
     BackendAgent tooLarge;
-    DynamicJsonDocument nearCapacity(4096);
+    DynamicJsonDocument nearCapacity(CONFIG_DOCUMENT_SIZE);
     nearCapacity["base_setup_method"] = "SURVEY_IN";
-    nearCapacity["extra"] = String(3000, 'x');
+    nearCapacity["extra"] = String(5000, 'x');
     serializeJson(nearCapacity, tooLarge.baseConfig_);
     tooLarge.largeReport = true;
     assert(!tooLarge.apply(error));

@@ -463,7 +463,7 @@ String BackendAgent::buildStatusPayload()
     DynamicJsonDocument doc(STATUS_DOCUMENT_SIZE + 1024
                             + (baseConfig_.length() > 2 ? CONFIG_DOCUMENT_SIZE : 0)
                             + (serviceConfig_.length() > 2 ? CONFIG_DOCUMENT_SIZE : 0)
-                            + (autoBaseProgress_.length() > 2 ? CONFIG_DOCUMENT_SIZE : 0)
+                            + (autoBaseProgress_.length() > 2 ? PROGRESS_DOCUMENT_SIZE : 0)
                             + (nvsInventory_.isEmpty() ? 0 : 3072) + (gnssVerification_.isEmpty() ? 0 : VERIFICATION_DOCUMENT_SIZE)
                             + (satelliteReadback_.isEmpty() ? 0 : satelliteReadback_.length() + 256)
                             + (receiverInfoMs_ ? versionReadback_.length() + versionReadbackError_.length() + 256 : 0));

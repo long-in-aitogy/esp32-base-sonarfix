@@ -21,7 +21,7 @@ harness = r'''
 #include <cstring>
 #include "functions/gnss/gnss_cmd_builder.h"
 #include "functions/gnss/Unicore_Config_Verification.h"
-constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
+constexpr size_t CONFIG_DOCUMENT_SIZE = 6144;
 uint32_t restoredDuration;
 float restoredAccuracy;
 GnssCmdBuilder::GnssOptions restoredOptions;

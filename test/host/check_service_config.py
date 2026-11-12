@@ -12,7 +12,7 @@ harness = r'''
 #include <ArduinoJson.h>
 #include <array>
 #include <cassert>
-constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
+constexpr size_t CONFIG_DOCUMENT_SIZE = 6144;
 int setups = 0, connections = 0;
 void setupNTRIP() { ++setups; }
 void connectNTRIP() { ++connections; }
@@ -47,7 +47,7 @@ int main() {
     assert(setups == 2 && connections == 2);
     const String previous = agent.serviceConfig_;
     DynamicJsonDocument large(12000);
-    large["serverhost1"] = String(std::string(6000, 'x'));
+    large["serverhost1"] = String(std::string(9000, 'x'));
     assert(!agent.executeServiceConfigCommand(large.as<JsonObject>(), error, detail));
     assert(error == "service configuration exceeds memory capacity");
     assert(agent.serviceConfig_ == previous && setups == 2 && connections == 2 && agent.published == 3);

@@ -7,6 +7,11 @@ workflow = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_tex
 begin = workflow.index('bool BackendAgent::completeAutoBaseSetup(')
 end = workflow.index('    setAgentState("auto_setup_base");', begin)
 method = workflow[begin:end] + '    reachedWrite = true;\n    (void)resultJson;\n    return true;\n}\n'
+result_method = workflow[workflow.index('String BackendAgent::buildAutoBaseResult('):begin]
+result_method = result_method.replace('BackendAgent::buildAutoBaseResult(', 'BackendAgent::buildRealAutoBaseResult(', 1)
+config_start = workflow.index('    DynamicJsonDocument baseConfig(CONFIG_DOCUMENT_SIZE);', begin)
+config_end = workflow.index('    setAgentState(normalAgentState());', config_start)
+config_update = workflow[config_start:config_end]
 projection = (root / 'src/functions/backend/Backend_Agent_Projection.cpp').read_text()
 begin = projection.index('bool BackendAgent::transformToVn2000(')
 validation = projection[begin:]
@@ -19,8 +24,9 @@ harness = r'''
 #include <vector>
 #include <strings.h>
 #include "functions/backend/Vn2000_Datum.h"
+#include "functions/gnss/gnss_cmd_builder.h"
 int tcpStreamMutex = 1; constexpr int MUTEX_TIMEOUT_MS = 1500, pdTRUE = 1;
-constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
+constexpr size_t CONFIG_DOCUMENT_SIZE = 6144, AUTO_BASE_RESULT_SIZE = 6144, PROGRESS_DOCUMENT_SIZE = 8192;
 uint32_t now = 1000;
 uint32_t millis() { return now; }
 int pdMS_TO_TICKS(int n) { return n; }
@@ -29,7 +35,7 @@ int xQueueReset(int) { requestStarted = now; return 1; }
 int xQueueReceive(int, void *out, int timeout) {
     now += timeout;
     if (!provideLocation) return 0;
-    std::snprintf(static_cast<char *>(out), 1536, R"({"request_id":"boot:%u","location":{"input_coord":{"lat":21,"lon":105,"alt":10},"l0_deg":105,"k0":0.9999,"province_name":"Hanoi","projection_options":[{"l0_deg":105,"k0":0.9999}]}})", requestStarted);
+    std::snprintf(static_cast<char *>(out), 1536, R"({"request_id":"boot:%u","location":{"input_coord":{"lat":21,"lon":105,"alt":10},"l0_deg":105,"k0":0.9999,"province_name":"Hà Nội","projection_options":[{"region":"A","l0_deg":105,"k0":0.9999},{"region":"B","l0_deg":105,"k0":0.9999},{"region":"C","l0_deg":105,"k0":0.9999}]}})", requestStarted);
     provideLocation = false; return 1;
 }
 int xSemaphoreTake(int, int) { return 1; }
@@ -55,12 +61,23 @@ struct BackendAgent {
     void setWorkflowProgress(const char *, int, int, const String &) {}
     struct ProjectedPosition { double latitude, longitude, altitude; double northing = 0, easting = 0; };
     bool reachedWrite = false, transformOk = false; int conversions = 0;
-    bool resolveAutoBaseProjection(JsonObject, double, double &meridian, double &scale, String &, String &, String &) { meridian=105; scale=0.9999; return true; }
     String sensorType_ = "Ublox";
     String reportJson;
-    String buildAutoBaseResult(double, double, double, double, double, double, bool, bool, size_t,
-                               const String &, const String &, const String &, double, double, JsonObjectConst report) {
-        reportJson.clear(); serializeJson(report, reportJson); return "measured";
+    String baseConfig_ = R"({"base_setup_method":"SURVEY_IN","survey_in_duration":300})";
+    int configWrites = 0;
+    bool restoreWorkflowBase(JsonObjectConst) { ++configWrites; return true; }
+    bool saveStatePreferences() { return true; }
+    bool restartConfiguredNtrip() { return true; }
+    void publishConfigState(const char *) {}
+    bool applyCandidate(String &);
+    String buildRealAutoBaseResult(double, double, double, double, double, double, bool, bool, size_t,
+                                   const String &, const String &, const String &, double, double, JsonObjectConst);
+    String buildAutoBaseResult(double lat, double lon, double alt, double rawLat, double rawLon, double rawAlt,
+                               bool transformed, bool restarted, size_t count, const String &source,
+                               const String &code, const String &name, double meridian, double scale, JsonObjectConst report) {
+        reportJson.clear(); serializeJson(report, reportJson);
+        return buildRealAutoBaseResult(lat, lon, alt, rawLat, rawLon, rawAlt, transformed, restarted,
+                                       count, source, code, name, meridian, scale, report);
     }
     bool transformToVn2000(double, double, double, double, double, ProjectedPosition &);
     bool transformItrfToVn2000(double, double, double, double, double, ProjectedPosition &) { ++conversions; return transformOk; }
@@ -69,6 +86,17 @@ struct BackendAgent {
 '''
 matcher = workflow[workflow.index('    bool acceptAutoBaseLocationReply('):workflow.index('} // namespace')]
 harness = harness.replace('MATCHER_PLACEHOLDER', matcher)
+candidate = r'''
+bool BackendAgent::applyCandidate(String &failureReason) {
+    ProjectedPosition result{21, 105, 10};
+    DynamicJsonDocument report(CONFIG_DOCUMENT_SIZE);
+    if (deserializeJson(report, reportJson)) return false;
+    const double rawLatitude=21, rawLongitude=105, rawAltitude=10;
+    const bool transformed=true;
+    const double centralMeridianDeg=105, scale=0.9999;
+    const char *projectionSource="rtcm1025";
+    const String provinceCode="01", provinceName="Hanoi";
+''' + config_update + '\n    return true;\n}\n'
 checks = r'''
 int main() {
     BackendAgent agent; BackendAgent::ProjectedPosition result{21, 105, 10};
@@ -87,7 +115,7 @@ int main() {
     assert(agent.conversions == 0);
     payload["enable_itrf_vn2000_transform"] = false;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
-    assert(!agent.reachedWrite && resultJson == "measured" && agent.conversions == 0);
+    assert(!agent.reachedWrite && !resultJson.isEmpty() && agent.conversions == 0);
     payload["ip"] = "VNGEONET.VN";
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     report.clear(); assert(!deserializeJson(report, agent.reportJson));
@@ -106,10 +134,20 @@ int main() {
     assert(error == "cancelled by user");
     agent.workflowCancelRequested_ = false;
     provideLocation = true;
-    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    const bool located = agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station");
+    if (!located) std::fprintf(stderr, "location report failure: %s\n", error.c_str());
+    assert(located);
     report.clear(); assert(!deserializeJson(report, agent.reportJson));
-    assert(report["location"]["province_name"] == "Hanoi");
+    assert(report["location"]["province_name"] == "Hà Nội");
     assert(report["location"]["projection_options"][0]["l0_deg"] == 105);
+    DynamicJsonDocument resultDoc(AUTO_BASE_RESULT_SIZE);
+    assert(!deserializeJson(resultDoc, resultJson));
+    assert(resultDoc["conversion_report"]["location"]["province_name"] == "Hà Nội");
+    assert(agent.applyCandidate(error));
+    DynamicJsonDocument applied(8192);
+    assert(!deserializeJson(applied, agent.baseConfig_));
+    assert(applied["conversion_report"]["location"]["province_name"] == "Hà Nội");
+    assert(applied["conversion_report"]["location"]["projection_options"].size() == 3);
     sessionDatum.has1025 = true; sessionDatum.centralMeridianDeg = 105; sessionDatum.scale = 0.9999;
     sessionDatum.kT = 1.00000008613; sessionDatum.count1021 = 2;
     datumTransformOk = false;
@@ -125,6 +163,11 @@ int main() {
     assert(report["zone_width_deg"] == 3);
     assert(std::abs(coordinateNumber(report["parameters"]["kT"]) - 1.00000008613) < 1e-15);
     assert(report["receiver_write_completed"] == false && report["auto_applied"] == false);
+    assert(agent.applyCandidate(error));
+    applied.clear();
+    assert(!deserializeJson(applied, agent.baseConfig_));
+    assert(applied["conversion_report"]["rtcm1025"]["projection_type"] == 0);
+    assert(applied["conversion_report"]["receiver_write_completed"] == true);
     sessionDatum.scale = 0.9996;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     report.clear(); assert(!deserializeJson(report, agent.reportJson));
@@ -147,7 +190,7 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='auto-base-transform-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(harness + validation + method + checks)
+    (path / 'check.cpp').write_text(harness + validation + result_method + method + candidate + checks)
     subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / 'test/host'), '-I' + str(root / 'include'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)

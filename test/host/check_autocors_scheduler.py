@@ -9,7 +9,7 @@ harness=r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <cassert>
-constexpr size_t CONFIG_DOCUMENT_SIZE=4096;
+constexpr size_t CONFIG_DOCUMENT_SIZE=6144;
 constexpr int WL_CONNECTED=3;
 bool gsm=false, connected=false;
 bool isGsmConnection() { return gsm; }

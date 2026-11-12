@@ -13,7 +13,7 @@ harness = r'''
 #include <cassert>
 #include <cmath>
 #include <vector>
-constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
+constexpr size_t CONFIG_DOCUMENT_SIZE = 6144, AUTO_BASE_RESULT_SIZE = 6144;
 namespace GnssCmdBuilder { constexpr double BASE_ACCURACY_METERS = 5.0; }
 uint32_t now = 10000;
 uint32_t millis() { return now; }

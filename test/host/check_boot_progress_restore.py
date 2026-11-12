@@ -10,10 +10,12 @@ harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <cassert>
-constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
+constexpr size_t PROGRESS_DOCUMENT_SIZE = 8192;
 '''
 checks = r'''
 int main() {
+    String large = String(R"({"phase":"completed","details":")") + String(std::string(6500, 'x')) + R"("})";
+    assert(restoreWorkflowProgress(large) == large);
     for (const char *phase : {"ready_for_review", "completed", "failed", "stopped", "reference_check_completed", "reference_check_failed", "reprojected"}) {
         String saved = String("{\"phase\":\"") + phase + "\",\"result\":42}";
         assert(restoreWorkflowProgress(saved) == saved);

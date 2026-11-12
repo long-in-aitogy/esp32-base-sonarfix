@@ -10,7 +10,7 @@ harness=r'''
 #include <Arduino.h>
 #include <cassert>
 #include <ArduinoJson.h>
-constexpr int CONFIG_DOCUMENT_SIZE=4096;
+constexpr int CONFIG_DOCUMENT_SIZE=6144;
 struct BackendAgent {
     String baseStartupState_="awaiting_auto_base", baseStartupError_, baseConfig_="{}", phase, state;
     bool active=false, cancelled=false, dirty=false, restored=false, restarted=false, restoreOk=true, restartOk=true, saveOk=true;

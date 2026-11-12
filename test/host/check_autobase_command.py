@@ -11,7 +11,7 @@ harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <cassert>
-constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
+constexpr size_t CONFIG_DOCUMENT_SIZE = 6144;
 const char *AUTO_BASE_CASTER_HOST="caster", *AUTO_BASE_CASTER_USER="user", *AUTO_BASE_CASTER_PASSWORD="pass", *AUTO_BASE_CASTER_MOUNTPOINT="nearest";
 constexpr int AUTO_BASE_CASTER_PORT=2101;
 bool transportHeld=true;

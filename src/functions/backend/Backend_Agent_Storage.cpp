@@ -18,7 +18,7 @@ namespace BackendAgentInternal
 
     String restoreWorkflowProgress(const String &saved)
     {
-        DynamicJsonDocument progress(CONFIG_DOCUMENT_SIZE);
+        DynamicJsonDocument progress(PROGRESS_DOCUMENT_SIZE);
         if (deserializeJson(progress, saved) != DeserializationError::Ok)
             return "{}";
         const String phase = progress["phase"] | String();

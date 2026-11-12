@@ -15,7 +15,7 @@ harness = r'''
 #include <ArduinoJson.h>
 #include <cmath>
 #include <cassert>
-constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
+constexpr size_t CONFIG_DOCUMENT_SIZE = 6144;
 #define constrain(value, low, high) ((value) < (low) ? (low) : (value) > (high) ? (high) : (value))
 struct BackendAgent {
     String baseConfig_ = R"({"base_setup_method":"SURVEY_IN"})";

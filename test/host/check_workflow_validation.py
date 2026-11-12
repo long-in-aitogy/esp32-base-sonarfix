@@ -14,7 +14,7 @@ harness = r'''
 #include <ArduinoJson.h>
 #include <cmath>
 #include <cassert>
-constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
+constexpr size_t CONFIG_DOCUMENT_SIZE = 6144;
 double coordinateNumber(JsonVariantConst value) { return value.isNull() ? NAN : value.as<double>(); }
 struct BackendAgent {
     String baseStartupState_;
