@@ -196,6 +196,27 @@ namespace
         sentence.trim();
         if (sentence.length() < 7 || sentence[0] != '$')
             return;
+        const int star = sentence.indexOf('*');
+        if (star >= 0)
+        {
+            const auto hex = [](char value) -> int
+            {
+                if (value >= '0' && value <= '9') return value - '0';
+                if (value >= 'A' && value <= 'F') return value - 'A' + 10;
+                if (value >= 'a' && value <= 'f') return value - 'a' + 10;
+                return -1;
+            };
+            if (star != static_cast<int>(sentence.length()) - 3)
+                return;
+            const int high = hex(sentence[star + 1]), low = hex(sentence[star + 2]);
+            if (high < 0 || low < 0)
+                return;
+            uint8_t checksum = 0;
+            for (int i = 1; i < star; ++i)
+                checksum ^= static_cast<uint8_t>(sentence[i]);
+            if (checksum != static_cast<uint8_t>((high << 4) | low))
+                return;
+        }
         if (sentence.startsWith("$PUBX"))
         {
             backendAgent.setDetectedChipIfUnknown("Ublox");
