@@ -23,12 +23,14 @@ struct Client {
     size_t print(const String &value) { request=value; return shortWrite ? value.length()-1 : value.length(); }
 } clients[2];
 std::array<NtripEndpoint,2> endpoints;
+bool responseOk=true;
+String response="ICY 200 OK";
 NtripEndpoint &endpointFor(uint8_t index) { return endpoints[index]; }
 Client &clientFor(uint8_t index) { return clients[index]; }
 bool streamActive(uint8_t) { return true; }
 void clearEndpointState(NtripEndpoint &endpoint) { endpoint.authenticated=false; }
 String base64Encode(const String &) { return "encoded"; }
-bool waitForNtripResponse(Client &client,String *line) { ++client.waits; *line="ICY 200 OK"; return true; }
+bool waitForNtripResponse(Client &client,String *line) { ++client.waits; *line=response; return responseOk; }
 '''
 checks=r'''
 int main() {
@@ -41,10 +43,15 @@ int main() {
     assert(!connectEndpoint(0) && !clients[0].up && !endpoints[0].authenticated);
     assert(clients[0].waits==0 && endpoints[0].lastError=="incomplete NTRIP request write");
     assert(clients[1].up && endpoints[1].authenticated);
+    clients[0].shortWrite=false; clients[0].connectOk=false;
+    assert(!connectEndpoint(0) && endpoints[0].lastError=="TCP connection failed");
+    clients[0].connectOk=true; responseOk=false; response="rejected secret";
+    assert(!connectEndpoint(0) && !clients[0].up && !endpoints[0].authenticated);
+    assert(endpoints[0].lastError=="rejected [redacted]" && clients[1].up);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='ntrip-source-connect-') as directory:
     path=Path(directory); (path/'check.cpp').write_text(shim+harness+method+checks)
     subprocess.run(['c++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',str(path/'check.cpp'),'-o',str(path/'check')],check=True)
     subprocess.run([str(path/'check')],check=True)
-print('PASS: dual SOURCE authentication and incomplete request isolation')
+print('PASS: dual SOURCE, incomplete writes, TCP failure and credential redaction')
