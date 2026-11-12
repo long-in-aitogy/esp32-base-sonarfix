@@ -37,6 +37,9 @@ int main() {
     assert(fabs(telemetry.longitude - 105.786656) < 1e-9);
     assert(fabs(telemetry.altitude + 8.0624) < 1e-9);
     assert(telemetry.lastGgaMs == now);
+    const auto previousGgaCount = telemetry.traffic.ggaCount;
+    parseNmeaSentence("$LONGNAMEGGA,010000,2105.0994,N,10547.19936,E,4,20,0.7,20.5000,M,-28.5624,M,,*00");
+    assert(telemetry.traffic.ggaCount == previousGgaCount + 1);
     parseNmeaSentence("$GNGSA,A,3,,,,,,,,,,,,,1.0,0.7,0.8*00");
     assert(strcmp(telemetry.fixStatus.data(), "RTK_FIXED") == 0);
     parseNmeaSentence("$GNGGA,010001,2105.0994,N,10547.19936,E,4,20,0.7,20.5,M,,M,,*00");

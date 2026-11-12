@@ -201,7 +201,7 @@ namespace
         if (fieldCount == 0)
             return;
 
-        const auto typeLength = strnlen(fields[0], sizeof(fields[0]));
+        const auto typeLength = strnlen(fields[0], copyLength);
         if (typeLength < 3)
             return;
         const char *type = fields[0] + typeLength - 3;
