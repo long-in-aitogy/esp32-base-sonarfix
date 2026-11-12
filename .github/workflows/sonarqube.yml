@@ -114,6 +114,13 @@ jobs:
           python3 test/host/check_rover_gga.py
           python3 test/host/check_ntrip_restore_lock.py
 
+      - name: Measure native firmware coverage
+        env:
+          CXX: clang++-18
+          LLVM_PROFDATA: llvm-profdata-18
+          LLVM_COV: llvm-cov-18
+        run: python3 test/host/run_coverage.py
+
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
         env:
