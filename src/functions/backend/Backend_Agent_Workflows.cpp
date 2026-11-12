@@ -1227,11 +1227,15 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
     }
 
     String failureReason;
+    Serial.printf("[AUTO BASE][CASTER] Connecting %s:%u/%s; AutoNearest=%s.\n",
+                  host.c_str(), static_cast<unsigned>(port), mountpoint.c_str(), autoNearest ? "YES" : "NO");
     if (!startAutoBaseRover(host, port, username, password, mountpoint, ntripVersion, failureReason,
                             autoNearest ? &selectedMountpoint : nullptr))
     {
+        Serial.printf("[AUTO BASE][CASTER][FAILED] %s\n", failureReason.c_str());
         if (autoNearest && failureReason == "ERROR - NO STATION WITHIN 20 KM" && !workflowCancelRequested_)
         {
+            Serial.println("[AUTO BASE][FALLBACK] No station within 20 km; starting Survey-In.");
             DynamicJsonDocument survey(CONFIG_DOCUMENT_SIZE);
             survey.set(previousBase.as<JsonObjectConst>());
             survey["base_setup_method"] = "SURVEY_IN";
@@ -1252,6 +1256,8 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
                         R"({"mode":"survey_in","auto_applied":true,"receiver_write_completed":true,"reason":"no_fixed_station_within_20_km"})");
                     saveStatePreferences();
                     publishConfigState("base_config_state");
+                    Serial.printf("[AUTO BASE][SURVEY-IN] Started; target=%lu seconds; RTCM SOURCE restored.\n",
+                                  static_cast<unsigned long>(surveyInTargetSeconds_));
                     return true;
                 }
                 baseConfig_ = oldConfig;
