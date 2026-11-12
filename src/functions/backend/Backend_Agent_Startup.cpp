@@ -105,7 +105,7 @@ bool BackendAgent::buildStartupCommands(JsonObjectConst base,
     position.ellipsoid = detected == GnssSensorType::Ublox;
     if (!restoreFixed)
     {
-        const auto duration = AUTO_SURVEY_IN_SECONDS;
+        const double duration = configNumber(base["survey_in_duration"], AUTO_SURVEY_IN_SECONDS);
         const auto accuracy = GnssCmdBuilder::BASE_ACCURACY_METERS;
         if (const auto maxDuration = detected == GnssSensorType::Unicore ? 3600U : 604800U;
             !std::isfinite(duration) || std::floor(duration) != duration || duration < 1 || duration > maxDuration || !std::isfinite(accuracy) || accuracy < 0.001 || accuracy > 10000)

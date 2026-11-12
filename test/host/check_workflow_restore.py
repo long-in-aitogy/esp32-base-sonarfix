@@ -64,6 +64,23 @@ int main() {
     assert(agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
     assert(restoredDuration == 120 && restoredAccuracy == 5 && agent.surveyInResultPending_);
     assert(agent.baseStartupState_ == "configured");
+    GnssCmdBuilder::CommandList startupCommands;
+    BackendAgent::StartupPosition startupPosition;
+    String startupError;
+    base["survey_in_duration"] = 300;
+    assert(agent.buildStartupCommands(base.as<JsonObjectConst>(), GnssCmdBuilder::GnssSensorType::Ublox,
+                                      false, startupCommands, startupPosition, startupError));
+    assert(restoredDuration == 300 && restoredAccuracy == 5 && agent.surveyInTargetSeconds_ == 300);
+    base.remove("survey_in_duration");
+    assert(agent.buildStartupCommands(base.as<JsonObjectConst>(), GnssCmdBuilder::GnssSensorType::Ublox,
+                                      false, startupCommands, startupPosition, startupError));
+    assert(restoredDuration == 120);
+    base["survey_in_duration"] = 3601;
+    assert(!agent.buildStartupCommands(base.as<JsonObjectConst>(), GnssCmdBuilder::GnssSensorType::Unicore,
+                                       false, startupCommands, startupPosition, startupError));
+    base["survey_in_duration"] = 1.5;
+    assert(!agent.buildStartupCommands(base.as<JsonObjectConst>(), GnssCmdBuilder::GnssSensorType::Ublox,
+                                       false, startupCommands, startupPosition, startupError));
     base["survey_in_duration"] = 300;
     assert(agent.restoreWorkflowBase(base.as<JsonObjectConst>()) && restoredDuration == 300);
     base["survey_in_duration"] = -1;
