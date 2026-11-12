@@ -1363,7 +1363,13 @@ bool BackendAgent::prepareReferenceCheckConfig(
     requestedSamples = static_cast<uint16_t>(constrain(
         static_cast<int>(payload["samples"] | 60), 5, 120));
 
-    return baseParsed && !reference.isNull() && std::isfinite(referenceLatitude) && std::isfinite(referenceLongitude) && std::isfinite(referenceAltitude) && referenceLatitude >= -90.0 && referenceLatitude <= 90.0 && referenceLongitude >= -180.0 && referenceLongitude <= 180.0 && (storedBaseObject["base_setup_method"] == "SURVEY_IN" || (std::isfinite(restoreLatitude) && std::isfinite(restoreLongitude) && std::isfinite(restoreAltitude))) && !host.isEmpty() && !username.isEmpty() && !password.isEmpty() && !mountpoint.isEmpty() && port != 0;
+    const bool validSavedPosition = std::isfinite(restoreLatitude) && std::isfinite(restoreLongitude)
+        && std::isfinite(restoreAltitude) && std::abs(restoreLatitude) <= 90.0
+        && std::abs(restoreLongitude) <= 180.0 && restoreAltitude >= -12000.0 && restoreAltitude <= 100000.0;
+    return baseParsed && !reference.isNull() && std::isfinite(referenceLatitude) && std::isfinite(referenceLongitude)
+        && std::isfinite(referenceAltitude) && std::abs(referenceLatitude) <= 90.0 && std::abs(referenceLongitude) <= 180.0
+        && (storedBaseObject["base_setup_method"] == "SURVEY_IN" || validSavedPosition)
+        && !host.isEmpty() && !username.isEmpty() && !password.isEmpty() && !mountpoint.isEmpty() && port != 0;
 }
 
 bool BackendAgent::startReferenceRover(const String &host, const uint16_t port,

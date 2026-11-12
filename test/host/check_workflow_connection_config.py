@@ -59,6 +59,14 @@ int main() {
     DynamicJsonDocument result(2048);
     assert(!deserializeJson(result, agent.buildReferenceCheckResult(reference, 21.25, 105.75, 11.5, 60)));
     assert(result["delta_n_m"] == 0 && result["delta_e_m"] == 0 && result["delta_u_m"] == 1);
+    for (const char *invalid : {
+        R"({"base_setup_method":"FIXED_LLA","coords":{"lat":91,"lon":105,"alt":10}})",
+        R"({"base_setup_method":"FIXED_LLA","coords":{"lat":21,"lon":181,"alt":10}})",
+        R"({"base_setup_method":"FIXED_LLA","coords":{"lat":21,"lon":105,"alt":100001}})"}) {
+        agent.baseConfig_ = invalid;
+        assert(!agent.prepareReferenceCheckConfig(payload, reference, lat, lon, alt, oldLat, oldLon, oldAlt, host, port, user, password, mountpoint, timeout, samples));
+    }
+    agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":"21.25","lon":"105.75","alt":"10.5"}})";
     payload["reference_coords"]["lat"] = "21bad";
     assert(!agent.prepareReferenceCheckConfig(payload, reference, lat, lon, alt, oldLat, oldLon, oldAlt, host, port, user, password, mountpoint, timeout, samples));
     payload["ip"] = "   "; payload["port"] = 2101;
