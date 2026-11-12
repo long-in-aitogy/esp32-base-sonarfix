@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 
 root = Path(__file__).resolve().parents[2]
 commands = (root / 'src/functions/backend/Backend_Agent_Commands.cpp').read_text()
@@ -62,9 +63,12 @@ int main() {
 with tempfile.TemporaryDirectory(prefix='stream-targeting-') as directory:
     path = Path(directory)
     (path / 'Arduino.h').write_text(shim)
-    (path / 'check.cpp').write_text(harness + json_helpers + helpers + active + stream + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    command_path = root / 'src/functions/backend/Backend_Agent_Commands.cpp'
+    agent_path = root / 'src/functions/backend/Backend_Agent.cpp'
+    (path / 'check.cpp').write_text(harness + json_helpers + mapped(command_path, helpers) +
+                                    mapped(agent_path, active) + mapped(command_path, stream) + checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(path), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: 44 stream-targeting cases from CORS against firmware code')

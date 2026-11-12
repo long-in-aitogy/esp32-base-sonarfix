@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 root=Path(__file__).resolve().parents[2]
 source=(root/'src/functions/mqtt/MQTT_Manager.cpp').read_text()
 callback=source[source.index('void mqttCallback('):source.index('/** @brief Implements probeMqttTransport.')]
@@ -47,7 +48,7 @@ int main() {
 }
 '''
 with tempfile.TemporaryDirectory(prefix='mqtt-dispatch-') as directory:
-    path=Path(directory); (path/'check.cpp').write_text(shim+harness+callback+checks)
-    subprocess.run(['c++','-std=c++17','-Wall','-Wextra','-Werror','-Wno-sign-compare','-fsanitize=address,undefined',str(path/'check.cpp'),'-o',str(path/'check')],check=True)
-    subprocess.run([str(path/'check')],check=True)
+    path=Path(directory); (path/'check.cpp').write_text(shim+harness+mapped(root/'src/functions/mqtt/MQTT_Manager.cpp',callback)+checks)
+    compile_cpp(['c++','-std=c++17','-Wall','-Wextra','-Werror','-Wno-sign-compare','-fsanitize=address,undefined',str(path/'check.cpp'),'-o',str(path/'check')],check=True)
+    run_cpp([str(path/'check')],check=True)
 print('PASS: MQTT routing rejects locked, NUL and oversized legacy commands')

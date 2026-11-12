@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/ntrip/ntrip_common.cpp').read_text()
@@ -69,8 +70,8 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='ntrip-handshake-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + harness + declarations + function + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
+    (path / 'check.cpp').write_text(shim + harness + declarations + mapped(root / 'src/functions/ntrip/ntrip_common.cpp', function) + checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
                     '-fsanitize=address,undefined', str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: SOURCE ACK, preserved RTCM bytes, HTTP headers, rejection and timeout')

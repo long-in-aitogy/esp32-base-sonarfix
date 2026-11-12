@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 
 root = Path(__file__).resolve().parents[2]
 readback = (root / 'src/functions/gnss/Unicore_Readback.cpp').read_text()
@@ -70,11 +71,13 @@ int main() {
 with tempfile.TemporaryDirectory(prefix='unicore-fixed-readback-') as directory:
     path = Path(directory)
     (path / 'Arduino.h').write_text(shim)
-    (path / 'check.cpp').write_text(harness + number + parser + verify + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    startup_path = root / 'src/functions/backend/Backend_Agent_Startup.cpp'
+    (path / 'check.cpp').write_text(harness + mapped(startup_path, number) +
+                                    mapped(root / 'src/functions/gnss/Unicore_Readback.cpp', parser) + mapped(startup_path, verify) + checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(path), '-I' + str(root / 'include'),
                     '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), str(root / 'src/functions/gnss/Unicore_Log.cpp'),
                     '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: real BESTNAV checksum and parser feed Fixed LLA verification')

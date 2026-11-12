@@ -11,15 +11,14 @@ begin = workflow.index('bool BackendAgent::completeAutoBaseSetup(')
 end = workflow.index('    setAgentState("auto_setup_base");', begin)
 method = workflow[begin:end] + '    reachedWrite = true;\n    (void)resultJson;\n    return true;\n}\n'
 full_end = workflow.index('\nbool BackendAgent::runAutoBaseWorkflow(', begin)
-full_method = workflow[begin:full_end].replace('BackendAgent::completeAutoBaseSetup(', 'BackendAgent::completeAutoBaseSetupFull(', 1)
+full_method = workflow[begin:full_end]
 run_end = workflow.index('\nbool BackendAgent::prepareReferenceCheckConfig(', full_end)
-run_method = workflow[full_end:run_end].replace('completeAutoBaseSetup(', 'completeAutoBaseSetupFull(')
+run_method = workflow[full_end:run_end]
 sampling = workflow[workflow.index('bool BackendAgent::waitForAutoBaseFix('):workflow.index('String BackendAgent::buildAutoBaseResult(')]
 reference_methods = workflow[workflow.index('bool BackendAgent::waitForReferenceFix('):]
 auto_config = workflow[workflow.index('bool BackendAgent::prepareAutoBaseConfig('):workflow.index('bool BackendAgent::startAutoBaseRover(')]
 reference_config = workflow[workflow.index('bool BackendAgent::prepareReferenceCheckConfig('):workflow.index('bool BackendAgent::startReferenceRover(')]
 result_method = workflow[workflow.index('String BackendAgent::buildAutoBaseResult('):begin]
-result_method = result_method.replace('BackendAgent::buildAutoBaseResult(', 'BackendAgent::buildRealAutoBaseResult(', 1)
 config_start = workflow.index('    DynamicJsonDocument baseConfig(CONFIG_DOCUMENT_SIZE);', begin)
 config_end = workflow.index('    setAgentState(normalAgentState());', config_start)
 config_update = workflow[config_start:config_end]
@@ -370,8 +369,12 @@ with tempfile.TemporaryDirectory(prefix='auto-base-transform-') as directory:
     projection_path = root / 'src/functions/backend/Backend_Agent_Projection.cpp'
     workflow_path = root / 'src/functions/backend/Backend_Agent_Workflows.cpp'
     (path / 'check.cpp').write_text(harness + mapped(agent_path, json_bool) + mapped(projection_path, validation) +
-                                    result_method + method + full_method + mapped(workflow_path, auto_config) +
-                                    mapped(workflow_path, sampling) + run_method + mapped(workflow_path, reference_config) +
+                                    '#define buildAutoBaseResult buildRealAutoBaseResult\n' + mapped(workflow_path, result_method) +
+                                    '#undef buildAutoBaseResult\n' + method +
+                                    '#define completeAutoBaseSetup completeAutoBaseSetupFull\n' + mapped(workflow_path, full_method) +
+                                    '#undef completeAutoBaseSetup\n' + mapped(workflow_path, auto_config) +
+                                    mapped(workflow_path, sampling) + '#define completeAutoBaseSetup completeAutoBaseSetupFull\n' +
+                                    mapped(workflow_path, run_method) + '#undef completeAutoBaseSetup\n' + mapped(workflow_path, reference_config) +
                                     mapped(workflow_path, reference_methods) + candidate + checks)
     compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / 'test/host'), '-I' + str(root / 'include'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
