@@ -74,9 +74,11 @@ int main() {
     int writes = agent.writes;
     assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
     assert(agent.writes == writes && error == "original coordinates are missing; cannot transform again");
-    agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":"21.25","lon":"105.75","alt":"10.5"}})";
+    agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":"21.25","lon":"105.75","alt":"10.5"},"conversion_report":{"projection_source":"rtcm1025","central_meridian_deg":107}})";
     assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
     assert(agent.transformedInput == 21.25 && agent.sentLatitude == 21.26);
+    saved.clear(); assert(!deserializeJson(saved, agent.baseConfig_));
+    assert(saved["conversion_report"].isNull() && saved["central_meridian_deg"] == 105);
     agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","itrf_vn2000_transform_applied":true,"coords":{"lat":"21.08","lon":"105.78","alt":"10.5"},"auto_base_raw_itrf_llh":{"lat":"21.084989583712345","lon":"105.78665644691234","alt":"10.5"}})";
     assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
     assert(std::abs(agent.transformedInput - 21.084989583712345) < 1e-13);

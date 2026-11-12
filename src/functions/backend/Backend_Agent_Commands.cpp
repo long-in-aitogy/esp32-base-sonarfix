@@ -911,6 +911,7 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
     if (!base["gnss_options"].is<JsonObject>())
         base.createNestedObject("gnss_options");
     base["gnss_options"]["output_mode"] = "rtcm_only";
+    base.remove("conversion_report");
     JsonObject coordinates = base["coords"].as<JsonObject>();
     if (coordinates.isNull())
         coordinates = base["coords"].to<JsonObject>();
