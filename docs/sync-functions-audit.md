@@ -16,6 +16,8 @@ Các commit CORS mới nhất liên quan đến ESP32 đã đối chiếu theo h
 | `376b9f9` | Chủ ý không đặt lại Base sang AutoNearest ở mọi lần khởi động: giữ cấu hình đã lưu theo yêu cầu bảo toàn `develop`. |
 | `7141523`, `88edbe0` | Giữ kết nối khi cấu hình dịch vụ không đổi và xử lý SOURCE ACK; kiểm tra bằng `check_service_config.py`, `check_ntrip_handshake.py`. |
 | `ae200f9` | Có AutoNearest, lựa chọn mountpoint và fallback Survey-In; bảo toàn cấu hình cũ để phục hồi nếu workflow thất bại. |
+| `87e0f62` | Xác minh cấu hình Unicore bằng MODE BASE, hỗ trợ chọn cổng và thử lại xác nhận Fixed LLA đến muộn. Các bài `check_unicore_verify_command.py`, `check_unicore_fixed_readback.py`, `check_workflow_restore.py` đạt. |
+| `c60bd2b` | Parser xác minh cấu hình Unicore trong hai cây giống nhau; các bài kiểm tra response không đầy đủ, cổng và checksum BESTNAV đạt. |
 
 Tên bài kiểm tra chỉ chỉ ra phạm vi liên quan, không tự chứng minh mọi nhánh hoặc hoạt động thực tế trên receiver và caster.
 
