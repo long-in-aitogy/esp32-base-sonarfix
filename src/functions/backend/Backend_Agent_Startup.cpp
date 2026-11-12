@@ -2,7 +2,6 @@
 #include "functions/backend/Backend_Agent_Internal.h"
 #include "functions/gnss/Ublox_Readback.h"
 #include "functions/gnss/Unicore_Readback.h"
-#include "functions/gnss/Unicore_Config_Verification.h"
 #include <array>
 #include <cmath>
 #include <cstdlib>
@@ -170,20 +169,15 @@ bool BackendAgent::verifyStartupReadback(GnssCmdBuilder::GnssSensorType detected
         return true;
 
     const JsonObjectConst position = readback["bestpos"].as<JsonObjectConst>();
+    if (position["state"] != "ok" || position["position_type"] != "FIXEDPOS")
+    {
+        error = "Receiver has not confirmed the saved fixed position";
+        return false;
+    }
     double lat = 0.0;
     double lon = 0.0;
     double height = 0.0;
-    if (position["state"] != "ok" || position["position_type"] != "FIXEDPOS")
-    {
-        const String mode = readback["mode_raw"] | String();
-        if (detected != GnssCmdBuilder::GnssSensorType::Unicore
-            || !UnicoreConfigVerification::parseFixedMode(mode.c_str(), lat, lon, height))
-        {
-            error = "Receiver has not confirmed the saved fixed position";
-            return false;
-        }
-    }
-    else if (detected == GnssCmdBuilder::GnssSensorType::Ublox)
+    if (detected == GnssCmdBuilder::GnssSensorType::Ublox)
     {
         lat = position["lat"].as<double>();
         lon = position["lon"].as<double>();

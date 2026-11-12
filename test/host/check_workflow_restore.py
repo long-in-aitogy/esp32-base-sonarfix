@@ -96,7 +96,7 @@ int main() {
     const auto &undulation = agent.lastCommands.front();
     assert(std::string(undulation.begin(), undulation.end()) == "config undulation 0.0\r\n");
     agent.receiverBaseReadback_ = R"({"mode_kind":"base","mode_raw":"MODE BASE 21.25 105.75 10.5"})";
-    assert(agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
+    assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>())); // MODE alone cannot confirm actual BESTPOS.
     agent.receiverBaseReadback_ = R"({"mode_kind":"base","mode_raw":"MODE BASE 21.26 105.75 10.5"})";
     assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
     agent.receiverBaseReadback_ = R"({"mode_kind":"base","mode_raw":"MODE BASE invalid"})";
