@@ -52,6 +52,7 @@ jobs:
           python3 test/host/check_raw_batch.py
           python3 test/host/check_service_config.py
           python3 test/host/check_control_failover_workflow.py
+          python3 test/host/check_sim_recovery_workflow.py
           python3 test/host/check_backend_migration.py
           python3 test/host/check_nvs_cleanup.py
           python3 test/host/check_nvs_inventory.py

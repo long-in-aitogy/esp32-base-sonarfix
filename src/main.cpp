@@ -449,6 +449,8 @@ static void checkSimRecovery()
     if (!wifiFallbackActive || !isWifiConnection())
         return;
     const auto wifiConnected = WiFiClass::status() == WL_CONNECTED;
+    if (wifiConnected && backendAgent.workflowActive())
+        return;
     const uint32_t now = millis();
     if (const uint32_t interval = wifiConnected ? 60000UL : 15000UL;
         now - lastSimProbeMs < interval)
