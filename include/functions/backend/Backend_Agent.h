@@ -12,6 +12,7 @@
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -252,7 +253,7 @@ private:
     static bool transformItrfToVn2000(double latitude, double longitude, double altitude,
                                      double centralMeridianDeg, double scale, ProjectedPosition &result);
     bool getProvinceProjection(const String &code, double &centralMeridianDeg,
-                               double &scale, String &name) const;
+                               double &scale, String &name, std::array<double, 3> &meridians) const;
     void markStatusDirty() { statusDirty_ = true; }
 
     String buildStatusPayload();

@@ -890,9 +890,25 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
         error = "missing payload.province_code";
         return false;
     }
-    if (!getProvinceProjection(province, centralMeridianDeg, scale, provinceName))
+    std::array<double, 3> meridians{};
+    if (!getProvinceProjection(province, centralMeridianDeg, scale, provinceName, meridians))
     {
         error = "invalid province_code";
+        return false;
+    }
+    if (!payload["l0_deg"].isNull())
+    {
+        const double requested = coordinate(payload["l0_deg"]);
+        if (!std::isfinite(requested) || requested < 100.0 || (requested != meridians[0] && requested != meridians[1] && requested != meridians[2]))
+        {
+            error = "l0_deg is not valid for the selected province";
+            return false;
+        }
+        centralMeridianDeg = requested;
+    }
+    else if (meridians[1] != 0.0)
+    {
+        error = "province has multiple central meridians; specify payload.l0_deg";
         return false;
     }
     if (const auto validCoordinates = baseParsed && std::isfinite(rawLatitude) && std::isfinite(rawLongitude) && std::isfinite(rawAltitude) && transformToVn2000(rawLatitude, rawLongitude, rawAltitude, centralMeridianDeg, scale, result);

@@ -9,6 +9,7 @@ method = source[source.index('bool BackendAgent::executeProvinceCommand('):sourc
 harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <array>
 #include <cassert>
 #include <cmath>
 constexpr size_t CONFIG_DOCUMENT_SIZE = 6144;
@@ -29,13 +30,15 @@ struct BackendAgent {
     String baseStartupState_, baseStartupError_;
     bool active = false, readOk = true, confirmOk = true, saveOk = true;
     int writes = 0, saves = 0, publishes = 0;
-    double transformedInput = 0, sentLatitude = 0;
+    double transformedInput = 0, sentLatitude = 0, usedMeridian = 0;
     bool workflowActive() { return active; }
-    bool getProvinceProjection(const String &p, double &meridian, double &scale, String &name) {
-        if (p != "HN") return false; meridian = 105; scale = 0.9999; name = "Ha Noi"; return true;
+    bool getProvinceProjection(const String &p, double &meridian, double &scale, String &name, std::array<double, 3> &meridians) {
+        if (p != "HN" && p != "PHU_THO_VPHUC_HBINH") return false;
+        meridian = p == "HN" ? 105 : 104.75; scale = 0.9999; name = p;
+        meridians = p == "HN" ? std::array<double, 3>{105, 0, 0} : std::array<double, 3>{104.75, 105, 106}; return true;
     }
-    bool transformToVn2000(double lat, double lon, double alt, double, double, ProjectedPosition &r) {
-        transformedInput = lat; r = {lat + 0.01, lon, alt, 10, 20, 30}; return true;
+    bool transformToVn2000(double lat, double lon, double alt, double meridian, double, ProjectedPosition &r) {
+        transformedInput = lat; usedMeridian = meridian; r = {lat + 0.01, lon, alt, 10, 20, 30}; return true;
     }
     bool applyBaseCoordinates(double lat, double, double, JsonObjectConst) { ++writes; sentLatitude = lat; return true; }
     bool refreshReceiverReadback(String &error) { if (!readOk) error = "read failed"; return readOk; }
@@ -99,6 +102,15 @@ int main() {
     assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail) && agent.writes == writes);
     agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":"nan","lon":"105.75","alt":"10.5"}})";
     assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail) && agent.writes == writes);
+    agent.baseConfig_ = original; request["province_code"] = "PHU_THO_VPHUC_HBINH";
+    assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail) && agent.writes == writes);
+    assert(error == "province has multiple central meridians; specify payload.l0_deg");
+    request["l0_deg"] = 107; assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail) && agent.writes == writes);
+    request["l0_deg"] = 0; assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail) && agent.writes == writes);
+    request["l0_deg"] = "106"; assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
+    assert(agent.usedMeridian == 106);
+    request["l0_deg"] = 105; assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
+    assert(agent.usedMeridian == 105);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='esp-province-') as directory:

@@ -67,6 +67,8 @@ Kiểm tra lại sau các thay đổi đồng bộ: cây Git của `19d2de0` và
 
 Lệnh đổi tỉnh VN2000 được giữ theo lựa chọn của người dùng; firmware lưu tọa độ gốc, yêu cầu readback xác nhận và báo lỗi nếu lưu thất bại. CORS hiện yêu cầu xem lại trước khi áp dụng. Bản build `tdm240x_dev_general` dùng `no_ota.csv` và NVS cũ, khác bảng phân vùng CORS có `agent_state`; chưa thay bảng vì cần bảo toàn dữ liệu thiết bị.
 
+Danh mục 34 tỉnh trong firmware được đối chiếu với `coordinate_provinces.json` của CORS: Lai Châu dùng 103°; 17 tỉnh có nhiều kinh tuyến cũ yêu cầu lệnh gửi thêm `l0_deg` thuộc danh sách tương ứng. Lệnh thiếu lựa chọn hoặc chọn ngoài danh sách bị từ chối trước khi ghi receiver. Chạy `python3 test/host/compare_province_catalog.py /duong-dan/cors` để đối chiếu lại danh mục.
+
 Đã đối chiếu luồng NTRIP của CORS với ba mô-đun `ntrip_base`, `ntrip_common` và `ntrip_rover`. Giữ xử lý hiện tại: không kết thúc luồng chunked khi chờ dữ liệu, đóng riêng kết nối ghi thiếu, và phân biệt phiên Rover đang hoạt động với workflow đang khôi phục SOURCE. Các bài host kiểm tra bắt tay, hai SOURCE, ghi thiếu, Rover và khóa khi khôi phục đều đạt; chưa kiểm tra với caster thực.
 
 Các tệp không còn cùng đường dẫn đã được đối chiếu theo chức năng: quản lý mạng nằm trong `main.cpp`; nhận diện GNSS nằm trong `ntrip_base.cpp`; định tuyến log Unicore nằm trong `Unicore_Log.h`; NTRIP được tách thành ba mô-đun. `math_functions.c` phía CORS là tệp rỗng. Các hàm đọc datum RTCM được chuyển sang `Vn2000_Datum.cpp` và đã kiểm tra cùng dữ liệu tham chiếu Python.

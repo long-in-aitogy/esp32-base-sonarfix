@@ -341,7 +341,7 @@ Lệnh JSON có command, command_id và payload. original_config của EXECUTE_R
 | TRIGGER_AUTO_BASE | ip, port, user, password, mountpoint, sensor_type; các tùy chọn timeout, province_code, l0_deg, k0, enable_itrf_vn2000_transform. |
 | TRIGGER_BASE_REFERENCE_CHECK | Kết nối rover, reference_coords và cấu hình base đã lưu; đo so sánh, sau đó cố gắng khôi phục base cũ. |
 | STOP_AUTO_BASE | Yêu cầu hủy workflow; theo dõi phase stopped/failed và kết quả cleanup. |
-| APPLY_VN2000_PROVINCE | province_code và cấu hình tọa độ base hợp lệ; áp dụng phép chuyển tỉnh/kinh tuyến. |
+| APPLY_VN2000_PROVINCE | province_code và tọa độ base hợp lệ; với tỉnh có nhiều kinh tuyến cũ, cung cấp thêm l0_deg theo danh mục CORS. |
 | LOCK_DEVICE | Payload rỗng khóa cả thiết bị; locked_servers chọn server 1/2. |
 | UNLOCK_DEVICE | Xóa khóa toàn thiết bị và khóa server. |
 | CHECK_BASE_STATUS | Gửi poll trạng thái receiver; kết quả success chỉ xác nhận yêu cầu truy vấn đã gửi. |

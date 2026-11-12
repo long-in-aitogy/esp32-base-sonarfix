@@ -16,43 +16,45 @@
         const char *name;
         double centralMeridianDeg;
         double scale;
+        double alternate1 = 0.0;
+        double alternate2 = 0.0;
     };
 
     constexpr std::array<ProvinceProjection, 34> VN2000_PROVINCES = {{
-        {"AG_KG", "An Giang + Kien Giang", 104.75, 0.9999},
-        {"BN_BG", "Bac Ninh + Bac Giang", 107.0, 0.9999},
-        {"CM_BL", "Ca Mau + Bac Lieu", 104.5, 0.9999},
+        {"AG_KG", "An Giang + Kien Giang", 104.75, 0.9999, 104.5},
+        {"BN_BG", "Bac Ninh + Bac Giang", 107.0, 0.9999, 105.5},
+        {"CM_BL", "Ca Mau + Bac Lieu", 104.5, 0.9999, 105.0},
         {"CAO_BANG", "Cao Bang", 105.75, 0.9999},
         {"DAKLAK_PY", "Dak Lak + Phu Yen", 108.5, 0.9999},
         {"DIEN_BIEN", "Dien Bien", 103.0, 0.9999},
-        {"DNAI_BPHUOC", "Dong Nai + Binh Phuoc", 107.75, 0.9999},
-        {"DTHAP_TGIANG", "Dong Thap + Tien Giang", 105.0, 0.9999},
-        {"GLAI_BDINH", "Gia Lai + Binh Dinh", 108.25, 0.9999},
+        {"DNAI_BPHUOC", "Dong Nai + Binh Phuoc", 107.75, 0.9999, 106.25},
+        {"DTHAP_TGIANG", "Dong Thap + Tien Giang", 105.0, 0.9999, 105.75},
+        {"GLAI_BDINH", "Gia Lai + Binh Dinh", 108.25, 0.9999, 108.5},
         {"HA_TINH", "Ha Tinh", 105.5, 0.9999},
         {"HYEN_TBINH", "Hung Yen + Thai Binh", 105.5, 0.9999},
         {"KH_HOA_NTHUAN", "Khanh Hoa + Ninh Thuan", 108.25, 0.9999},
-        {"LAI_CHAU", "Lai Chau", 104.75, 0.9999},
+        {"LAI_CHAU", "Lai Chau", 103.0, 0.9999},
         {"LANG_SON", "Lang Son", 107.25, 0.9999},
         {"LCAI_YBAI", "Lao Cai + Yen Bai", 104.75, 0.9999},
-        {"LDONG_DNONG_BTHUAN", "Lam Dong + Dak Nong + Binh Thuan", 107.75, 0.9999},
+        {"LDONG_DNONG_BTHUAN", "Lam Dong + Dak Nong + Binh Thuan", 107.75, 0.9999, 108.5},
         {"NGHE_AN", "Nghe An", 104.75, 0.9999},
-        {"NBINH_HNAM_NDINH", "Ninh Binh + Ha Nam + Nam Dinh", 105.0, 0.9999},
-        {"PHU_THO_VPHUC_HBINH", "Phu Tho + Vinh Phuc + Hoa Binh", 104.75, 0.9999},
-        {"QNGAI_KTUM", "Quang Ngai + Kon Tum", 108.0, 0.9999},
+        {"NBINH_HNAM_NDINH", "Ninh Binh + Ha Nam + Nam Dinh", 105.0, 0.9999, 105.5},
+        {"PHU_THO_VPHUC_HBINH", "Phu Tho + Vinh Phuc + Hoa Binh", 104.75, 0.9999, 105.0, 106.0},
+        {"QNGAI_KTUM", "Quang Ngai + Kon Tum", 108.0, 0.9999, 107.5},
         {"QNINH", "Quang Ninh", 107.75, 0.9999},
-        {"QTRI_QBINH", "Quang Tri + Quang Binh", 106.0, 0.9999},
+        {"QTRI_QBINH", "Quang Tri + Quang Binh", 106.0, 0.9999, 106.25},
         {"SON_LA", "Son La", 104.0, 0.9999},
-        {"TNINH_LONGAN", "Tay Ninh + Long An", 105.75, 0.9999},
+        {"TNINH_LONGAN", "Tay Ninh + Long An", 105.75, 0.9999, 105.5},
         {"TNGUYEN_BKAN", "Thai Nguyen + Bac Kan", 106.5, 0.9999},
         {"THANH_HOA", "Thanh Hoa", 105.0, 0.9999},
-        {"CTHO_STRANG_HGIANG", "Can Tho + Soc Trang + Hau Giang", 105.0, 0.9999},
+        {"CTHO_STRANG_HGIANG", "Can Tho + Soc Trang + Hau Giang", 105.0, 0.9999, 105.5},
         {"DANANG_QNAM", "Da Nang + Quang Nam", 107.75, 0.9999},
         {"HA_NOI", "Ha Noi", 105.0, 0.9999},
-        {"HPHONG_HDUONG", "Hai Phong + Hai Duong", 105.75, 0.9999},
-        {"HCM_BRVT_BDUONG", "Ho Chi Minh + Ba Ria Vung Tau + Binh Duong", 105.75, 0.9999},
+        {"HPHONG_HDUONG", "Hai Phong + Hai Duong", 105.75, 0.9999, 105.5},
+        {"HCM_BRVT_BDUONG", "Ho Chi Minh + Ba Ria Vung Tau + Binh Duong", 105.75, 0.9999, 107.75},
         {"HUE", "Hue", 107.0, 0.9999},
-        {"TQUANG_HGIANG", "Tuyen Quang + Ha Giang", 106.0, 0.9999},
-        {"VLONG_BTRE_TVINH", "Vinh Long + Ben Tre + Tra Vinh", 105.5, 0.9999},
+        {"TQUANG_HGIANG", "Tuyen Quang + Ha Giang", 106.0, 0.9999, 105.5},
+        {"VLONG_BTRE_TVINH", "Vinh Long + Ben Tre + Tra Vinh", 105.5, 0.9999, 105.75},
     }};
 
     struct EcefCoordinate
@@ -198,7 +200,7 @@ bool BackendAgent::transformItrfToVn2000(double latitudeDeg, double longitudeDeg
 
 
 bool BackendAgent::getProvinceProjection(const String &code, double &centralMeridianDeg,
-                                         double &scale, String &name) const
+                                         double &scale, String &name, std::array<double, 3> &meridians) const
 {
     for (const ProvinceProjection &province : VN2000_PROVINCES)
     {
@@ -207,6 +209,7 @@ bool BackendAgent::getProvinceProjection(const String &code, double &centralMeri
             centralMeridianDeg = province.centralMeridianDeg;
             scale = province.scale;
             name = province.name;
+            meridians = {province.centralMeridianDeg, province.alternate1, province.alternate2};
             return true;
         }
     }
