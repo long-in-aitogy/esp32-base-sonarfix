@@ -45,14 +45,25 @@ uint32_t now = 1000;
 uint32_t millis() { return now; }
 template<class T, class L, class H> T constrain(T value, L low, H high) { return value < low ? T(low) : value > high ? T(high) : value; }
 int pdMS_TO_TICKS(int n) { return n; }
-void vTaskDelay(int ticks) { now += ticks; }
+uint32_t cancelAt = 0;
+bool *cancelFlag = nullptr;
+void vTaskDelay(int ticks) {
+    now += ticks;
+    if (cancelFlag && cancelAt && now >= cancelAt) *cancelFlag = true;
+}
 uint32_t disconnectAt = 0;
 bool sourceAvailable = true;
+const char *sourceError = "ERROR - NO STATION WITHIN 20 KM";
 const char *ntripRoverLastError() { return "caster disconnected"; }
 struct GnssTelemetrySnapshot {
     uint32_t lastGgaMs; std::array<char, 16> fixStatus; double latitude, longitude, altitude;
 };
-GnssTelemetrySnapshot getGnssTelemetrySnapshot() { return {now, {"RTK_FIXED"}, 21, 105, 10}; }
+bool hasFixed = true;
+uint32_t invalidSamplesAt = 0;
+GnssTelemetrySnapshot getGnssTelemetrySnapshot() {
+    return {now, hasFixed ? std::array<char, 16>{"RTK_FIXED"} : std::array<char, 16>{"RTK_FLOAT"},
+            invalidSamplesAt && now >= invalidSamplesAt ? NAN : 21.0, 105, 10};
+}
 uint32_t requestStarted = 0; bool provideLocation = false; int realLocation = 0;
 int xQueueReset(int) { requestStarted = now; return 1; }
 int xQueueReceive(int, void *out, int timeout) {
@@ -90,7 +101,8 @@ struct BackendAgent {
     uint32_t surveyInTargetSeconds_ = 0;
     String baseStartupState_, phase, phaseDetails;
     void markStatusDirty() {}
-    bool stopNtripRoverLocked() { return true; }
+    bool stopOk = true, roverModeOk = true, referenceRoverOk = true;
+    bool stopNtripRoverLocked() { return stopOk; }
     void setWorkflowProgress(const char *value, int, int, const String &details = String()) { phase = value; phaseDetails = details; }
     struct ProjectedPosition { double latitude, longitude, altitude; double northing = 0, easting = 0; };
     bool reachedWrite = false, transformOk = false, failFinalResult = false;
@@ -102,17 +114,20 @@ struct BackendAgent {
     bool restoreWorkflowBase(JsonObjectConst) { ++configWrites; return receiverOk; }
     bool saveStatePreferences() { return saveOk; }
     bool restartConfiguredNtrip() { return restartOk; }
-    bool applyRoverMode() { return true; }
+    bool applyRoverMode() { return roverModeOk; }
     int loopNtripRoverLocked() { return disconnectAt && now >= disconnectAt ? 504 : 200; }
     bool prepareAutoBaseConfig(JsonObject, String &, uint16_t &, String &, String &, String &, uint8_t &, uint32_t &, uint8_t &);
     bool startAutoBaseRover(const String &, uint16_t, const String &, const String &, const String &, uint8_t, String &error, String *selected) {
-        if (!sourceAvailable) { error = "ERROR - NO STATION WITHIN 20 KM"; return false; }
+        if (!sourceAvailable) { error = sourceError; return false; }
         if (selected) *selected = "station";
         return true;
     }
     bool prepareReferenceCheckConfig(JsonObject, JsonObject &, double &, double &, double &, double &, double &, double &,
                                      String &, uint16_t &, String &, String &, String &, uint32_t &, uint16_t &);
-    bool startReferenceRover(const String &, uint16_t, const String &, const String &, const String &, String &) { return true; }
+    bool startReferenceRover(const String &, uint16_t, const String &, const String &, const String &, String &error) {
+        if (!referenceRoverOk) error = "caster unavailable";
+        return referenceRoverOk;
+    }
     void setAgentState(const String &) {}
     String normalAgentState() { return "online"; }
     void publishConfigState(const char *) {}
@@ -327,14 +342,74 @@ int main() {
     assert(fallback.runAutoBaseWorkflow(fullRequest.as<JsonObject>()));
     finalConfig.clear(); assert(!deserializeJson(finalConfig, fallback.baseConfig_));
     assert(fallback.phase == "completed" && finalConfig["base_setup_method"] == "SURVEY_IN" && finalConfig["accuracy"] == 5);
+    for (const char *reason : {"ERROR - NO STATION WITHIN 5 KM", "caster unauthorized", "network transport is busy"}) {
+        now = 1000; sourceError = reason; BackendAgent rejected;
+        assert(!rejected.runAutoBaseWorkflow(fullRequest.as<JsonObject>()));
+        assert(rejected.phase == "failed" && rejected.baseConfig_ == previous && rejected.configWrites == 1);
+    }
+    sourceError = "ERROR - NO STATION WITHIN 20 KM";
+    now = 1000; BackendAgent fallbackReceiverFailure; fallbackReceiverFailure.receiverOk = false;
+    assert(!fallbackReceiverFailure.runAutoBaseWorkflow(fullRequest.as<JsonObject>()));
+    assert(fallbackReceiverFailure.phase == "failed" && fallbackReceiverFailure.baseConfig_ == previous);
+    now = 1000; BackendAgent fallbackSaveFailure; fallbackSaveFailure.saveOk = false;
+    assert(!fallbackSaveFailure.runAutoBaseWorkflow(fullRequest.as<JsonObject>()));
+    assert(fallbackSaveFailure.phase == "failed" && fallbackSaveFailure.baseConfig_ == previous);
     sourceAvailable = true;
+    fullRequest["ip"] = "vngeonet.vn";
+    fullRequest["enable_itrf_vn2000_transform"] = true;
+    now = 1000; sessionDatum.has1021 = false; BackendAgent missingDatum;
+    assert(!missingDatum.runAutoBaseWorkflow(fullRequest.as<JsonObject>()));
+    assert(missingDatum.phase == "failed" && missingDatum.baseConfig_ == previous && missingDatum.configWrites == 1);
+    finalResult.clear(); assert(!deserializeJson(finalResult, missingDatum.phaseDetails));
+    assert(finalResult["reason"] == "missing RTCM 1021 from this CORS session");
+    now = 1000; sessionDatum.has1021 = sessionDatum.has1025 = true;
+    sessionDatum.centralMeridianDeg = 105; sessionDatum.scale = 0.9999; datumTransformOk = false;
+    BackendAgent conversionFailure;
+    assert(!conversionFailure.runAutoBaseWorkflow(fullRequest.as<JsonObject>()));
+    assert(conversionFailure.phase == "failed" && conversionFailure.baseConfig_ == previous && conversionFailure.configWrites == 1);
+    finalResult.clear(); assert(!deserializeJson(finalResult, conversionFailure.phaseDetails));
+    assert(finalResult["reason"] == "VN2000 conversion failed; no candidate coordinates were installed");
+    datumTransformOk = true; fullRequest["ip"] = "other-caster.example";
+    fullRequest.remove("enable_itrf_vn2000_transform");
     fullRequest["port"] = 0; BackendAgent invalidAuto;
     assert(!invalidAuto.runAutoBaseWorkflow(fullRequest.as<JsonObject>()) && invalidAuto.configWrites == 0 && invalidAuto.phase == "failed");
     fullRequest["port"] = 2101;
+    now = 1000; BackendAgent roverFailure; roverFailure.roverModeOk = false;
+    assert(!roverFailure.runAutoBaseWorkflow(fullRequest.as<JsonObject>()));
+    assert(roverFailure.phase == "failed" && roverFailure.baseConfig_ == previous && roverFailure.configWrites == 1);
+    now = 1000; BackendAgent stopFailure; stopFailure.stopOk = false; stopFailure.roverModeOk = false;
+    assert(!stopFailure.runAutoBaseWorkflow(fullRequest.as<JsonObject>()));
+    assert(stopFailure.phase == "failed" && stopFailure.baseConfig_ == previous && stopFailure.configWrites == 0);
+    finalResult.clear(); assert(!deserializeJson(finalResult, stopFailure.phaseDetails));
+    assert(finalResult["cleanup_error"] == "could not safely restore base/NTRIP state");
     now = 1000; disconnectAt = 7000;
     BackendAgent disconnected;
     assert(!disconnected.runAutoBaseWorkflow(fullRequest.as<JsonObject>()));
     assert(disconnected.phase == "failed" && disconnected.baseConfig_ == previous && disconnected.configWrites == 1);
+    now = 1000; disconnectAt = 0; hasFixed = false;
+    fullRequest["timeout"] = 30;
+    BackendAgent noFix;
+    assert(!noFix.runAutoBaseWorkflow(fullRequest.as<JsonObject>()));
+    assert(noFix.phase == "failed" && noFix.baseConfig_ == previous && noFix.configWrites == 1);
+    hasFixed = true; now = 1000; invalidSamplesAt = 6000;
+    BackendAgent noSamples;
+    assert(!noSamples.runAutoBaseWorkflow(fullRequest.as<JsonObject>()));
+    assert(noSamples.phase == "failed" && noSamples.baseConfig_ == previous && noSamples.configWrites == 1);
+    invalidSamplesAt = 0; now = 1000;
+    BackendAgent cancelledWait; cancelFlag = &cancelledWait.workflowCancelRequested_; cancelAt = 2000;
+    assert(!cancelledWait.runAutoBaseWorkflow(fullRequest.as<JsonObject>()));
+    assert(cancelledWait.phase == "stopped" && cancelledWait.baseConfig_ == previous && cancelledWait.configWrites == 1);
+    now = 1000; BackendAgent cancelledAverage;
+    cancelFlag = &cancelledAverage.workflowCancelRequested_; cancelAt = 8000;
+    assert(!cancelledAverage.runAutoBaseWorkflow(fullRequest.as<JsonObject>()));
+    assert(cancelledAverage.phase == "stopped" && cancelledAverage.baseConfig_ == previous && cancelledAverage.configWrites == 1);
+    now = 1000; BackendAgent cancelledRestoreFailure; cancelledRestoreFailure.receiverOk = false;
+    cancelFlag = &cancelledRestoreFailure.workflowCancelRequested_; cancelAt = 2000;
+    assert(!cancelledRestoreFailure.runAutoBaseWorkflow(fullRequest.as<JsonObject>()));
+    assert(cancelledRestoreFailure.phase == "failed" && cancelledRestoreFailure.baseConfig_ == previous);
+    finalResult.clear(); assert(!deserializeJson(finalResult, cancelledRestoreFailure.phaseDetails));
+    assert(finalResult["cleanup_error"] == "could not safely restore base/NTRIP state");
+    cancelFlag = nullptr; cancelAt = 0; fullRequest.remove("timeout");
     now = 1000; disconnectAt = 0;
     BackendAgent allocationFailure; allocationFailure.failFinalResult = true;
     assert(!allocationFailure.runAutoBaseWorkflow(fullRequest.as<JsonObject>()));
@@ -350,6 +425,12 @@ int main() {
     referenceRequest["ip"] = "other-caster.example"; referenceRequest["port"] = 2101;
     referenceRequest["user"] = "user"; referenceRequest["password"] = "password"; referenceRequest["mountpoint"] = "station";
     referenceRequest["samples"] = 5;
+    now = 1000; BackendAgent referenceRoverFailure; referenceRoverFailure.roverModeOk = false;
+    assert(!referenceRoverFailure.runReferenceCheckWorkflow(referenceRequest.as<JsonObject>()));
+    assert(referenceRoverFailure.phase == "reference_check_failed" && referenceRoverFailure.configWrites == 1);
+    now = 1000; BackendAgent referenceCasterFailure; referenceCasterFailure.referenceRoverOk = false;
+    assert(!referenceCasterFailure.runReferenceCheckWorkflow(referenceRequest.as<JsonObject>()));
+    assert(referenceCasterFailure.phase == "reference_check_failed" && referenceCasterFailure.baseConfig_ == previous && referenceCasterFailure.configWrites == 1);
     now = 1000; BackendAgent reference;
     assert(reference.runReferenceCheckWorkflow(referenceRequest.as<JsonObject>()));
     assert(reference.phase == "reference_check_completed" && reference.baseConfig_ == previous && reference.configWrites == 1);
@@ -361,6 +442,19 @@ int main() {
     now = 1000; disconnectAt = 3000; BackendAgent referenceDisconnected;
     assert(!referenceDisconnected.runReferenceCheckWorkflow(referenceRequest.as<JsonObject>()));
     assert(referenceDisconnected.phase == "reference_check_failed" && referenceDisconnected.baseConfig_ == previous && referenceDisconnected.configWrites == 1);
+    now = 1000; disconnectAt = 0; hasFixed = false;
+    BackendAgent referenceNoFix;
+    assert(!referenceNoFix.runReferenceCheckWorkflow(referenceRequest.as<JsonObject>()));
+    assert(referenceNoFix.phase == "reference_check_failed" && referenceNoFix.baseConfig_ == previous && referenceNoFix.configWrites == 1);
+    hasFixed = true; now = 1000; invalidSamplesAt = 1000;
+    BackendAgent referenceNoSamples;
+    assert(!referenceNoSamples.runReferenceCheckWorkflow(referenceRequest.as<JsonObject>()));
+    assert(referenceNoSamples.phase == "reference_check_failed" && referenceNoSamples.baseConfig_ == previous && referenceNoSamples.configWrites == 1);
+    invalidSamplesAt = 0; now = 1000; BackendAgent referenceCancelled;
+    cancelFlag = &referenceCancelled.workflowCancelRequested_; cancelAt = 2000;
+    assert(!referenceCancelled.runReferenceCheckWorkflow(referenceRequest.as<JsonObject>()));
+    assert(referenceCancelled.phase == "stopped" && referenceCancelled.baseConfig_ == previous && referenceCancelled.configWrites == 1);
+    cancelFlag = nullptr; cancelAt = 0;
 }
 '''
 with tempfile.TemporaryDirectory(prefix='auto-base-transform-') as directory:

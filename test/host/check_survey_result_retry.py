@@ -39,6 +39,17 @@ int main() {
     agent.surveyInReadbackReady_ = false;
     agent.saveSurveyResult(doc.as<JsonObjectConst>(), "MODE BASE TIME 300");
     assert(agent.attempts == 3);
+    agent.surveyInReadbackReady_ = true; agent.surveyInReadbackHasPosition_ = false;
+    agent.saveSurveyResult(doc.as<JsonObjectConst>(), "MODE BASE TIME 300");
+    assert(agent.attempts == 3 && agent.surveyInResultPending_);
+    agent.surveyInReadbackHasPosition_ = true; agent.surveyInMonitoring_ = false;
+    agent.saveSurveyResult(doc.as<JsonObjectConst>(), "MODE BASE TIME 300");
+    assert(agent.attempts == 3 && agent.surveyInResultPending_);
+    agent.surveyInMonitoring_ = true; agent.saveOk = true;
+    agent.saveSurveyResult(doc.as<JsonObjectConst>(), "MODE BASE TIME 300");
+    DynamicJsonDocument saved(1536); assert(!deserializeJson(saved, agent.surveyInResult_));
+    assert(agent.attempts == 4 && !agent.surveyInResultPending_);
+    assert(saved["bestpos"]["position_type"] == "FIXEDPOS" && saved["mode_raw"] == "MODE BASE TIME 300");
 }
 '''
 with tempfile.TemporaryDirectory(prefix='esp-survey-retry-') as directory:

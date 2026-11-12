@@ -52,13 +52,19 @@ int main() {
     assert(saved["DEVICE_SERIAL"] == "esp-test" && saved["DEVICE_NAME"] == "station");
     assert(saved["PROVISIONED"] == "1" && saved["REMOTE_LOCK"] == "1" && saved["LOCK_SERVERS"] == "2");
     assert(saved["BASE_JSON"] == "base" && saved["SERVICE_JSON"] == "service" && saved["SURVEY_RESULT"] == "survey");
-    failedKey = "SERVICE_JSON"; assert(!agent.saveStatePreferences());
-    assert(opened == 3 && closed == 2 && commits == 2);
+    for (const char *key : {"DEVICE_SERIAL", "DEVICE_NAME", "SENSOR_TYPE", "PROVISIONED", "REMOTE_LOCK",
+                            "LOCK_SERVERS", "BASE_JSON", "SERVICE_JSON", "LICENSE_KEY", "CMD_RESULT",
+                            "PROGRESS_JSON", "SURVEY_RESULT"}) {
+        failedKey = key;
+        const int priorOpened = opened, priorClosed = closed, priorCommits = commits;
+        assert(!agent.saveStatePreferences());
+        assert(opened == priorOpened + 1 && closed == priorClosed + 1 && commits == priorCommits + 1);
+    }
     failedKey.clear(); commitOk = false; assert(!agent.saveStatePreferences());
-    assert(opened == 4 && closed == 3 && commits == 3);
+    assert(opened == 15 && closed == 14 && commits == 14);
     commitOk = true; useDedicatedBackendPrefs = true;
     assert(agent.saveStatePreferences() && partition == BACKEND_PREFS_PARTITION);
-    assert(opened == 5 && closed == 4 && commits == 4);
+    assert(opened == 16 && closed == 15 && commits == 15);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='backend-save-state-') as directory:
