@@ -71,3 +71,5 @@ Build bổ sung tại `d1ba249` với cả `BACKEND_WEBSOCKET_ENABLED=1` và `BA
 Đã đối chiếu WebSocket với CORS và giữ kiểm tra bắt tay, khung không hỗ trợ, giải phóng bộ đệm và xử lý ghi thiếu của `sync-functions`. Các kiểm tra handshake, khung dữ liệu, ghi điều khiển và bản tin trạng thái lớn đều đạt trên host và đã thêm vào CI.
 
 Với lệnh AutoNearest đã có địa chỉ CORS, `main` giữ cấu hình Base trước đó khi tác vụ đang chạy; CORS lưu `AUTO_CORS` ngay khi nhận lệnh. Giữ hành vi `main` để có thể khôi phục cấu hình cũ nếu tác vụ thất bại hoặc bị dừng. Với yêu cầu AutoNearest chưa có nguồn, firmware vẫn lưu yêu cầu và bản chụp cấu hình cũ để chờ nguồn.
+
+Kiểm tra lại tại `580ffc8`: 75 bài host không cần thiết bị đều đạt; hai bài dùng bộ tạo lệnh CORS thực cũng đạt, gồm kiểm tra accuracy 5 m cho Survey-In và Fixed LLA. Ba cấu hình firmware `general`, `general_debug` và `general_test` biên dịch thành công. Bộ tạo lệnh u-blox và báo cáo Auto Base dùng cùng cách tính tọa độ để giữ nguyên kết quả khi áp dụng lại. Chưa chạy kiểm tra flash hoặc xác nhận BESTPOS trên thiết bị thật; không có cổng ESP32 được kết nối. Các thay đổi CI mới chưa được chạy trên GitHub.
