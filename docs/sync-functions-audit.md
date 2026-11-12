@@ -46,4 +46,6 @@ Ngày 12/11/2026, 23 bài kiểm tra Python độc lập trong danh sách dướ
 
 Cần tiếp tục đối chiếu hành vi CORS hiện tại, đặc biệt lệnh đổi tỉnh VN2000: giao diện vẫn gửi lệnh nhưng bản CORS yêu cầu xem lại trước khi áp dụng; firmware này đang giữ hành vi cũ. Bản build `tdm240x_dev_general` dùng `no_ota.csv` và NVS cũ, khác bảng phân vùng CORS có `agent_state`; chưa thay bảng vì cần bảo toàn dữ liệu thiết bị.
 
+Đã đối chiếu luồng NTRIP của CORS với ba mô-đun `ntrip_base`, `ntrip_common` và `ntrip_rover`. Giữ xử lý hiện tại: không kết thúc luồng chunked khi chờ dữ liệu, đóng riêng kết nối ghi thiếu, và phân biệt phiên Rover đang hoạt động với workflow đang khôi phục SOURCE. Các bài host kiểm tra bắt tay, hai SOURCE, ghi thiếu, Rover và khóa khi khôi phục đều đạt; chưa kiểm tra với caster thực.
+
 Các bài host và build không thay thế nghiệm thu trên receiver thật: cần kiểm tra BESTPOS, accuracy cấu hình 5 m, nguồn RTCM, mất kết nối, khởi động lại và tọa độ ngoài thực địa.
