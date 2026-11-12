@@ -8,6 +8,7 @@
 #include "functions/ntrip/RTCM_Receiver.h"
 #include "functions/backend/Device_Token.h"
 #include "functions/gnss/Unicore_Identification.h"
+#include "functions/gnss/Ubx_Reply.h"
 #include "hardware/Connection_type.h"
 #include "hardware/Sim_handler.h"
 #include "hardware/Wifi_handler.h"
@@ -207,25 +208,16 @@ bool BackendAgent::probeUblox(Stream &stream)
     stream.write(ubxMonVer.data(), ubxMonVer.size());
 
     const uint32_t startMs = millis();
-    uint8_t ubxMatch = 0;
-    while (millis() - startMs < 400)
+    UbxReplyBuffer<512> reply;
+    while (millis() - startMs < 1000)
     {
         while (stream.available())
         {
-            const auto b = static_cast<uint8_t>(stream.read());
-            if (ubxMatch == 0 && b == 0xB5)
-                ubxMatch = 1;
-            else if (ubxMatch == 1 && b == 0x62)
-                ubxMatch = 2;
-            else if (ubxMatch == 2 && b == 0x0A)
-                ubxMatch = 3;
-            else if (ubxMatch == 3 && b == 0x04)
+            if (reply.feed(static_cast<uint8_t>(stream.read())) && reply.length >= 48
+                && reply.frame[2] == 0x0A && reply.frame[3] == 0x04)
                 return true;
-            else
-                ubxMatch = (b == 0xB5) ? 1 : 0;
         }
-        // Stop early after 150 ms if no partial UBX header or unread data remains.
-        if (millis() - startMs > 150 && ubxMatch == 0 && !stream.available())
+        if (millis() - startMs > 150 && reply.used == 0 && !stream.available())
             return false;
         delay(10);
     }
