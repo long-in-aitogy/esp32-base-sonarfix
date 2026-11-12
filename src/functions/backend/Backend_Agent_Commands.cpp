@@ -497,6 +497,9 @@ bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload,
     const JsonObject originalConfig = doc["original_config"].as<JsonObject>();
     const auto configuringBase = String(originalConfig["mode"] | "") == "BASE";
     const auto sensorType = originalConfig["sensor_type"] | sensorType_;
+    const auto chip = GnssCmdBuilder::sensorTypeFromString(sensorType);
+    const bool fixedBase = configuringBase && originalConfig["params"]["base_setup_method"] == "FIXED_LLA";
+    StartupPosition expected;
     String updatedConfig;
     if (!originalConfig.isNull() && !originalConfig["params"].isUnbound())
     {
@@ -517,6 +520,17 @@ bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload,
             error = "Base configuration exceeds memory capacity";
             detail = error;
             return false;
+        }
+        if (fixedBase)
+        {
+            GnssCmdBuilder::CommandList unused;
+            if (chip == GnssCmdBuilder::GnssSensorType::Invalid ||
+                !buildStartupCommands(baseDoc.as<JsonObjectConst>(), chip, true, unused, expected, error))
+            {
+                if (error.isEmpty()) error = "unsupported GNSS sensor_type";
+                detail = error;
+                return false;
+            }
         }
         serializeJson(baseDoc, updatedConfig);
     }
@@ -553,6 +567,15 @@ bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload,
     if (configuringBase)
     {
         sensorType_ = sensorType;
+        if (fixedBase && (!refreshReceiverReadback(error) || !verifyStartupReadback(chip, true, expected, error)))
+        {
+            baseStartupState_ = "error";
+            baseStartupError_ = error;
+            baseStartupAttempted_ = true;
+            markStatusDirty();
+            detail = error;
+            return false;
+        }
         baseStartupState_ = "configured";
         baseStartupError_ = "";
         baseStartupAttempted_ = true;
@@ -562,7 +585,21 @@ bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload,
     }
     if (!updatedConfig.isEmpty())
     {
+        const String previousConfig = baseConfig_;
         baseConfig_ = updatedConfig;
+        if (!saveStatePreferences())
+        {
+            baseConfig_ = previousConfig;
+            error = "receiver configured, but Base configuration could not be saved";
+            detail = error;
+            if (configuringBase)
+            {
+                baseStartupState_ = "error";
+                baseStartupError_ = error;
+                markStatusDirty();
+            }
+            return false;
+        }
         publishConfigState("base_config_state");
     }
     return true;
