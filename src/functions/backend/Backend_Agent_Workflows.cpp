@@ -715,12 +715,13 @@ bool BackendAgent::completeAutoBaseSetup(
     DynamicJsonDocument location(2048);
     double projectedHeight = rawAltitude;
     ProjectedPosition result{rawLatitude, rawLongitude, rawAltitude};
-    if (tcpStreamMutex && xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(requestedTransform ? MUTEX_TIMEOUT_MS * 4 : 0)) == pdTRUE)
+    if (tcpStreamMutex && xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS * 4)) == pdTRUE)
     {
         datum = ntripRoverDatum();
+        stopNtripRover();
         xSemaphoreGive(tcpStreamMutex);
     }
-    else if (requestedTransform)
+    else
     {
         failureReason = "cannot acquire rover transport for datum readback";
         return false;
@@ -745,11 +746,6 @@ bool BackendAgent::completeAutoBaseSetup(
             if (!autoBaseLocationQueue_)
             {
                 failureReason = "location reply queue could not be allocated";
-                return false;
-            }
-            if (!stopNtripRoverLocked())
-            {
-                failureReason = "cannot stop rover transport for location lookup";
                 return false;
             }
             xQueueReset(autoBaseLocationQueue_);

@@ -78,8 +78,10 @@ int xQueueReceive(int, void *out, int timeout) {
 bool allowLock = true;
 int xSemaphoreTake(int, int) { return allowLock ? 1 : 0; }
 void xSemaphoreGive(int) {}
+bool roverStopped = false;
+void stopNtripRover() { roverStopped = true; }
 Vn2000Datum sessionDatum;
-Vn2000Datum ntripRoverDatum() { return sessionDatum; }
+Vn2000Datum ntripRoverDatum() { roverStopped = false; return sessionDatum; }
 double coordinateNumber(JsonVariantConst v) {
     if (v.isNull()) return NAN;
     if (v.is<const char *>()) { const char *p = v.as<const char *>(); char *end = nullptr; double value = std::strtod(p, &end); return end != p && *end == 0 ? value : NAN; }
@@ -87,6 +89,7 @@ double coordinateNumber(JsonVariantConst v) {
 }
 bool datumTransformOk = true; int datumCalls = 0;
 bool transformVn2000(double lat, double lon, double alt, const Vn2000Datum &, Vn2000Result &out) {
+    assert(roverStopped);
     ++datumCalls; out.latitude = lat; out.longitude = lon; out.altitude = alt; return datumTransformOk;
 }
 MATCHER_PLACEHOLDER
@@ -301,7 +304,7 @@ int main() {
     assert(report["transform_applied"] == false && report["rtcm1025_used"] == false);
     assert(report["received_messages"]["1025"] == 2 && report["rtcm1025"]["raw_k0"] == 660000000);
     allowLock = false;
-    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     payload["enable_itrf_vn2000_transform"] = true;
     assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(error == "cannot acquire rover transport for datum readback");
