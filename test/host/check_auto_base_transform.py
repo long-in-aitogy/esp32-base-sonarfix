@@ -3,6 +3,8 @@ from pathlib import Path
 import subprocess
 import tempfile
 root = Path(__file__).resolve().parents[2]
+agent = (root / 'src/functions/backend/Backend_Agent.cpp').read_text()
+json_bool = agent[agent.index('    bool jsonBool('):agent.index('    String jsonString(')]
 workflow = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_text()
 begin = workflow.index('bool BackendAgent::completeAutoBaseSetup(')
 end = workflow.index('    setAgentState("auto_setup_base");', begin)
@@ -131,6 +133,17 @@ int main() {
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     report.clear(); assert(!deserializeJson(report, agent.reportJson));
     assert(report["transform_applied"] == false && report["projection_source"] == "not_used");
+    payload["enable_itrf_vn2000_transform"] = "false";
+    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    report.clear(); assert(!deserializeJson(report, agent.reportJson));
+    assert(report["transform_applied"] == false);
+    payload["enable_itrf_vn2000_transform"] = "off";
+    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    payload["enable_itrf_vn2000_transform"] = 0;
+    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    payload["enable_itrf_vn2000_transform"] = "on";
+    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    assert(error == "missing RTCM 1021 from this CORS session");
     payload["enable_itrf_vn2000_transform"] = true;
     assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(error == "missing RTCM 1021 from this CORS session");
@@ -216,7 +229,7 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='auto-base-transform-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(harness + validation + result_method + method + candidate + checks)
+    (path / 'check.cpp').write_text(harness + json_bool + validation + result_method + method + candidate + checks)
     subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / 'test/host'), '-I' + str(root / 'include'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)

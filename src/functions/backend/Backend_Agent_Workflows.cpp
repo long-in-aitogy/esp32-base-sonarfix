@@ -742,7 +742,7 @@ bool BackendAgent::completeAutoBaseSetup(
     host.trim();
     const bool vngeonet = strcasecmp(host.c_str(), "vngeonet.vn") == 0
         || strcasecmp(host.c_str(), "vngeonet.vn.") == 0 || host == "14.238.1.125";
-    const bool requestedTransform = vngeonet && (payload["enable_itrf_vn2000_transform"] | true);
+    const bool requestedTransform = vngeonet && jsonBool(payload, "enable_itrf_vn2000_transform", true);
     const char *projectionSource = "not_used";
     bool transformed = false;
     Vn2000Datum datum;
