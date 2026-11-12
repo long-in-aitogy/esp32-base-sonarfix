@@ -965,6 +965,10 @@ bool BackendAgent::completeAutoBaseSetup(
     report["projection_source"] = projectionSource;
     report["central_meridian_deg"] = numberText(centralMeridianDeg);
     report["k0"] = numberText(scale);
+    if (transformed && std::abs(scale - 0.9999) < 1e-9)
+        report["zone_width_deg"] = 3;
+    else if (transformed && std::abs(scale - 0.9996) < 1e-9)
+        report["zone_width_deg"] = 6;
     if (vngeonet && transformed)
     {
         report["zone_width_source"] = "inferred_from_k0";

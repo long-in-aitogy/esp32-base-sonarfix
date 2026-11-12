@@ -106,8 +106,17 @@ int main() {
     assert(report["source"]["mountpoint"] == "station" && report["projection_source"] == "rtcm1025");
     assert(report["parameter_source"] == "rtcm1021" && report["received_messages"]["1021"] == 2);
     assert(report["zone_width_source"] == "inferred_from_k0");
+    assert(report["zone_width_deg"] == 3);
     assert(std::abs(coordinateNumber(report["parameters"]["kT"]) - 1.00000008613) < 1e-15);
     assert(report["receiver_write_completed"] == false && report["auto_applied"] == false);
+    sessionDatum.scale = 0.9996;
+    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    report.clear(); assert(!deserializeJson(report, agent.reportJson));
+    assert(report["zone_width_deg"] == 6);
+    sessionDatum.scale = 0.9998;
+    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    report.clear(); assert(!deserializeJson(report, agent.reportJson));
+    assert(!report.containsKey("zone_width_deg"));
     payload["resN"] = "invalid";
     assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(error == "invalid CORS shift");
