@@ -14,7 +14,7 @@ harness = r'''
 #include <ArduinoJson.h>
 #include <cassert>
 constexpr uint8_t NTRIP_SERVER_COUNT = 2;
-struct NtripEndpoint { String host; bool configured = false; } endpoints[2];
+struct NtripEndpoint { String host; bool configured = false, enabled = true; } endpoints[2];
 NtripEndpoint &endpointFor(uint8_t i) { return endpoints[i]; }
 struct LocalNtripConfig {};
 LocalNtripConfig loadLocalNtripConfig() { return {}; }
@@ -43,6 +43,9 @@ int main() {
     loadEndpoints();
     assert(endpoints[0].configured && endpoints[0].host == "expected-caster");
     assert(!streamActive(0));
+    backendAgent.config = String("{\"legacy\":\"") + String(std::string(7000, 'x')) + "\"}";
+    loadEndpoints();
+    assert(!endpoints[0].enabled && !endpoints[1].enabled && !streamActive(0));
 }
 '''
 with tempfile.TemporaryDirectory(prefix='ntrip-config-capacity-') as directory:

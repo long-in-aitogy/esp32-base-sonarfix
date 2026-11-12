@@ -56,6 +56,7 @@ jobs:
           python3 test/host/check_raw_config_preflight.py
           python3 test/host/check_raw_batch.py
           python3 test/host/check_service_config.py
+          python3 test/host/check_service_startup_capacity.py
           python3 test/host/check_stream_persistence.py
           python3 test/host/check_control_failover_workflow.py
           python3 test/host/check_sim_recovery_workflow.py

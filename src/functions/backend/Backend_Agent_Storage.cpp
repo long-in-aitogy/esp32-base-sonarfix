@@ -231,7 +231,13 @@ void BackendAgent::loadPreferences()
 void BackendAgent::ensureDefaultServiceConfig()
 {
     DynamicJsonDocument parsed(CONFIG_DOCUMENT_SIZE);
-    if (deserializeJson(parsed, serviceConfig_) == DeserializationError::Ok && parsed.is<JsonObject>() && parsed.as<JsonObjectConst>().size() > 0)
+    const auto parseError = deserializeJson(parsed, serviceConfig_);
+    if (parseError == DeserializationError::NoMemory)
+    {
+        Serial.println("[BACKEND][NVS] SERVICE_JSON exceeds memory capacity; keeping saved configuration.");
+        return;
+    }
+    if (parseError == DeserializationError::Ok && parsed.is<JsonObject>() && parsed.as<JsonObjectConst>().size() > 0)
     {
         return;
     }

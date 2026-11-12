@@ -226,7 +226,14 @@ namespace ntrip_common
     {
         DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
         const auto serialized = backendAgent.serviceConfigJson();
-        const auto hasServiceConfig = deserializeJson(serviceDoc, serialized) == DeserializationError::Ok && serviceDoc.is<JsonObject>();
+        const auto parseError = deserializeJson(serviceDoc, serialized);
+        if (parseError == DeserializationError::NoMemory)
+        {
+            for (uint8_t index = 0; index < NTRIP_SERVER_COUNT; ++index)
+                endpointFor(index).enabled = false;
+            return;
+        }
+        const auto hasServiceConfig = parseError == DeserializationError::Ok && serviceDoc.is<JsonObject>();
         const JsonObjectConst service = serviceDoc.as<JsonObjectConst>();
 
         const LocalNtripConfig legacy = loadLocalNtripConfig();
@@ -243,7 +250,10 @@ namespace ntrip_common
         if (index >= NTRIP_SERVER_COUNT || backendDeviceLocked(index + 1) || !backendLicenseValid() || !backendDeviceProvisioned() || !backendBaseStartupConfigured())
             return false;
         DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
-        if (deserializeJson(serviceDoc, backendAgent.serviceConfigJson()) != DeserializationError::Ok || !serviceDoc.is<JsonObject>())
+        const auto parseError = deserializeJson(serviceDoc, backendAgent.serviceConfigJson());
+        if (parseError == DeserializationError::NoMemory)
+            return false;
+        if (parseError != DeserializationError::Ok || !serviceDoc.is<JsonObject>())
         {
             return index == 0;
         }
