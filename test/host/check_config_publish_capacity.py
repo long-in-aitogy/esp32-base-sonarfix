@@ -5,7 +5,7 @@ import tempfile
 
 root = Path(__file__).resolve().parents[2]
 agent = (root / 'src/functions/backend/Backend_Agent.cpp').read_text()
-copy = agent[agent.index('    void copyJsonObject('):agent.index('\n} // namespace BackendAgentInternal')]
+copy = agent[agent.index('    bool copyJsonObject('):agent.index('\n} // namespace BackendAgentInternal')]
 commands = (root / 'src/functions/backend/Backend_Agent_Commands.cpp').read_text()
 publish = commands[commands.index('void BackendAgent::publishConfigState('):commands.index('void BackendAgent::applyServiceStreamCommand(')]
 harness = r'''
@@ -18,8 +18,8 @@ struct Timestamp { long toInt() const { return 123; } };
 Timestamp epochString() { return {}; }
 bool mqttConnected() { return true; }
 struct Mqtt {
-    String payload;
-    bool publish(const char *, const char *value, bool) { payload = value; return true; }
+    String payload; unsigned count = 0;
+    bool publish(const char *, const char *value, bool) { payload = value; ++count; return true; }
 } mqtt;
 struct BackendAgent {
     String serialNumber_ = "station", baseConfig_, serviceConfig_;
@@ -52,6 +52,17 @@ int main() {
         assert(!deserializeJson(output, mqtt.payload));
         assert(output["type"] == kind && output["config"].size() == expectedCount);
     }
+    const unsigned published = mqtt.count;
+    agent.baseConfig_ = "{invalid";
+    agent.publishConfigState("base_config_state");
+    agent.baseConfig_ = "[1,2]";
+    agent.publishConfigState("base_config_state");
+    agent.baseConfig_ = String("{\"value\":\"") + String(CONFIG_DOCUMENT_SIZE + 1, 'x') + "\"}";
+    agent.publishConfigState("base_config_state");
+    assert(mqtt.count == published);
+    agent.baseConfig_ = "{}";
+    agent.publishConfigState("base_config_state");
+    assert(mqtt.count == published + 1);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='config-publish-') as directory:

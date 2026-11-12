@@ -103,16 +103,16 @@ namespace BackendAgentInternal
         return value.as<String>();
     }
 
-    void copyJsonObject(JsonDocument &target, const char *key, const String &serialized)
+    bool copyJsonObject(JsonDocument &target, const char *key, const String &serialized)
     {
         DynamicJsonDocument source(std::strcmp(key, "auto_base_progress") == 0 ? PROGRESS_DOCUMENT_SIZE : CONFIG_DOCUMENT_SIZE);
         if (deserializeJson(source, serialized) != DeserializationError::Ok || !source.is<JsonObject>())
         {
             target.createNestedObject(key);
-            return;
+            return false;
         }
         JsonObject destination = target.createNestedObject(key);
-        destination.set(source.as<JsonObjectConst>());
+        return destination.set(source.as<JsonObjectConst>()) && !target.overflowed();
     }
 
 } // namespace BackendAgentInternal

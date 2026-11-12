@@ -8,7 +8,7 @@ start=status.index('    DynamicJsonDocument doc(STATUS_DOCUMENT_SIZE',status.ind
 end=status.index(';',start)+1
 allocation=status[start:end]
 agent=(root/'src/functions/backend/Backend_Agent.cpp').read_text()
-copy=agent[agent.index('    void copyJsonObject('):agent.index('\n} // namespace BackendAgentInternal')]
+copy=agent[agent.index('    bool copyJsonObject('):agent.index('\n} // namespace BackendAgentInternal')]
 harness=r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>

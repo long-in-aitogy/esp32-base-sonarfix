@@ -164,17 +164,10 @@ void BackendAgent::publishConfigState(const char *kind)
     doc["serial"] = serialNumber_;
     doc["timestamp"] = epochString().toInt();
     doc["type"] = kind;
-    if (strcmp(kind, "base_config_state") == 0)
+    const String &config = strcmp(kind, "base_config_state") == 0 ? baseConfig_ : serviceConfig_;
+    if (!copyJsonObject(doc, "config", config) || doc.overflowed())
     {
-        copyJsonObject(doc, "config", baseConfig_);
-    }
-    else
-    {
-        copyJsonObject(doc, "config", serviceConfig_);
-    }
-    if (doc.overflowed())
-    {
-        Serial.printf("[BACKEND][ERROR] Cannot publish %s: configuration exceeds memory capacity\n", kind);
+        Serial.printf("[BACKEND][ERROR] Cannot publish %s: invalid configuration or insufficient memory\n", kind);
         return;
     }
     String output;

@@ -23,5 +23,5 @@ namespace BackendAgentInternal
     String epochString();
     bool jsonBool(JsonObjectConst object, const String &key, bool fallback);
     String jsonString(JsonObjectConst object, const String &key, const String &fallback = String());
-    void copyJsonObject(JsonDocument &target, const char *key, const String &serialized);
+    bool copyJsonObject(JsonDocument &target, const char *key, const String &serialized);
 } // namespace BackendAgentInternal
