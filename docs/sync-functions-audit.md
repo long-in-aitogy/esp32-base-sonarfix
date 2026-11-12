@@ -23,6 +23,8 @@ Tên bài kiểm tra chỉ chỉ ra phạm vi liên quan, không tự chứng mi
 
 Ngày 12/11/2026, 23 bài kiểm tra Python độc lập trong danh sách dưới đây đã chạy đạt trên firmware hiện tại. `check_cors_accuracy.py` được chạy riêng với mã backend CORS và binary host. Tên bài kiểm tra là bằng chứng kiểm tra liên quan, không chứng minh mọi hành vi của commit; các mục không có bài Python cần xem mã hoặc chạy bài C++ tương ứng.
 
+Kiểm tra lại sau các thay đổi đồng bộ: cây Git của `19d2de0` và `sync-functions` đều là `5c5890e`; so với điểm nhập đó, không có tệp nào bị xóa khỏi cây `main` hiện tại. Các bài nhận diện GNSS, MON-VER, BESTNAV, Rover và ghi NTRIP đều đạt. Điều này xác nhận điểm xuất phát và các luồng được kiểm thử, không thay thế việc xem xét hành vi trong các tệp đã sửa.
+
 | Commit | Nội dung | Bài kiểm tra gắn với commit |
 | --- | --- | --- |
 | `39bbbee` | fix(ntrip): preserve streams on repeated config | Không có bài trong commit |
