@@ -19,13 +19,19 @@ harness = r'''
 constexpr size_t VERIFICATION_DOCUMENT_SIZE = 12288;
 namespace GnssCmdBuilder { constexpr double BASE_ACCURACY_METERS = 5.0; }
 std::array<uint8_t,40> expectedMode{}, actualMode{};
-bool modeOk = true, outputOk = true, mismatch = false;
+bool modeOk = true, outputOk = true, mismatch = false, missingInterface = false;
 uint32_t millis() { return 100; }
 size_t decodeBase64(const String &text, uint8_t *out, size_t capacity) {
     if (text == "mode" && capacity >= 40) { memcpy(out, expectedMode.data(), 40); return 40; }
     if (text == "output" && capacity >= 15) {
         const uint8_t records[] = {1,0,0x74,0x10,1,0xbb,0,0x91,0x20,1,0x69,3,0x91,0x20,1};
         memcpy(out, records, sizeof(records)); return sizeof(records);
+    }
+    if (text == "port" && capacity >= 20) {
+        const uint8_t records[] = {5,0,0x52,0x10,1,1,0,0x74,0x10,1,0xbb,0,0x91,0x20,1,0x69,3,0x91,0x20,1};
+        memcpy(out, records, sizeof(records));
+        if (missingInterface) { out[0] = 4; out[1] = 0; out[2] = 0x74; out[3] = 0x10; }
+        return sizeof(records);
     }
     return 0;
 }
@@ -50,7 +56,7 @@ int main() {
     // Backend may request a different accuracy; firmware compares 5 m.
     expectedMode[20]=100;
     actualMode=expectedMode; actualMode[20]=0x50; actualMode[21]=0xc3;
-    DynamicJsonDocument request(512), result(12288); String error;
+    DynamicJsonDocument request(4096), result(12288); String error;
     request["tmode_b64"]="mode"; request["output_b64"]="output";
     BackendAgent agent;
     assert(agent.verifyGnssConfig(request.as<JsonObjectConst>(), "one", error));
@@ -61,6 +67,22 @@ int main() {
     mismatch=false; modeOk=false; result.clear();
     assert(agent.verifyGnssConfig(request.as<JsonObjectConst>(), "three", error));
     assert(!deserializeJson(result, agent.gnssVerification_) && result["state"] == "unread");
+    modeOk=true; result.clear();
+    JsonObject readback = request.createNestedObject("readback");
+    JsonArray fields = readback.createNestedArray("fields");
+    for (int i=0; i<4; ++i) fields.add(i);
+    JsonArray ports = readback.createNestedArray("ports");
+    for (const char *name : {"I2C", "UART1", "UART2", "USB", "SPI"}) {
+        JsonObject port = ports.createNestedObject(); port["name"]=name; port["output_b64"]="port";
+    }
+    assert(agent.verifyGnssConfig(request.as<JsonObjectConst>(), "ports", error));
+    assert(!deserializeJson(result, agent.gnssVerification_) && result["state"] == "match");
+    missingInterface=true; result.clear();
+    assert(agent.verifyGnssConfig(request.as<JsonObjectConst>(), "missing", error));
+    assert(!deserializeJson(result, agent.gnssVerification_) && result["state"] == "unread");
+    ports[4]["name"]="UART1";
+    assert(!agent.verifyGnssConfig(request.as<JsonObjectConst>(), "duplicate", error));
+    request.remove("readback");
     request["output_b64"]="bad";
     assert(!agent.verifyGnssConfig(request.as<JsonObjectConst>(), "four", error) && agent.gnssVerification_.isEmpty());
 }
