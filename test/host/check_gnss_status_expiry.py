@@ -36,7 +36,7 @@ int main() {
     assert(doc["gnss_quality"]["hacc_m"]==1.234 && doc["hacc"]==1234);
     assert(doc["gnss_dop"].is<JsonObject>() && doc["gnss_satellites"].is<JsonObject>() && doc["gnss_receiver"].is<JsonObject>());
     doc.clear(); agent.appendGnssStatus(doc,gnss,50000);
-    for (const char *key : {"hacc","gnss_quality","gnss_dop","gnss_satellites","gnss_receiver","gnss_rf"})
+    for (const char *key : {"hacc","gnss_quality","gnss_dop","gnss_satellites","gnss_receiver","gnss_rf","gnss_spectrum","gnss_rf_monitor"})
         assert(doc.containsKey(key) && doc[key].isNull());
     doc.clear(); agent.navigationMs_=1000; agent.navigation_.valid=false; agent.appendGnssStatus(doc,gnss,1000);
     assert(doc["gnss_quality"].is<JsonObject>() && doc.containsKey("hacc") && doc["hacc"].isNull());

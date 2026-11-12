@@ -289,6 +289,8 @@ void BackendAgent::appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapsh
     doc["gnss_satellites"] = nullptr;
     doc["gnss_receiver"] = nullptr;
     doc["gnss_rf"] = nullptr;
+    doc["gnss_spectrum"] = nullptr;
+    doc["gnss_rf_monitor"] = nullptr;
     if (sensorType_ == "Ublox" && receiverInfoMs_ && nowMs - receiverInfoMs_ <= 45000UL)
     {
         JsonObject receiver = doc.createNestedObject("gnss_receiver");
