@@ -2,14 +2,15 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Commands.cpp').read_text()
 begin = source.index('bool BackendAgent::executeAutoBaseCommand(')
 end = source.index('\nbool BackendAgent::', begin + 5)
-method = source[begin:end]
+method = mapped(root / 'src/functions/backend/Backend_Agent_Commands.cpp', source[begin:end])
 reference_begin = source.index('bool BackendAgent::executeReferenceCheckCommand(')
 reference_end = source.index('\nbool BackendAgent::', reference_begin + 5)
-method += source[reference_begin:reference_end]
+method += mapped(root / 'src/functions/backend/Backend_Agent_Commands.cpp', source[reference_begin:reference_end])
 harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -134,8 +135,8 @@ int main() {
 with tempfile.TemporaryDirectory(prefix='autobase-command-') as directory:
     path = Path(directory)
     (path / 'check.cpp').write_text(harness + method + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / 'test/host'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: source mode and automatic apply validated before starting workflow')

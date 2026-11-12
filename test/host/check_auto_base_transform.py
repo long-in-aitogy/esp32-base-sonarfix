@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 root = Path(__file__).resolve().parents[2]
 agent = (root / 'src/functions/backend/Backend_Agent.cpp').read_text()
 json_bool = agent[agent.index('    bool jsonBool('):agent.index('    String jsonString(')]
@@ -365,9 +366,15 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='auto-base-transform-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(harness + json_bool + validation + result_method + method + full_method + auto_config + sampling + run_method + reference_config + reference_methods + candidate + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    agent_path = root / 'src/functions/backend/Backend_Agent.cpp'
+    projection_path = root / 'src/functions/backend/Backend_Agent_Projection.cpp'
+    workflow_path = root / 'src/functions/backend/Backend_Agent_Workflows.cpp'
+    (path / 'check.cpp').write_text(harness + mapped(agent_path, json_bool) + mapped(projection_path, validation) +
+                                    result_method + method + full_method + mapped(workflow_path, auto_config) +
+                                    mapped(workflow_path, sampling) + run_method + mapped(workflow_path, reference_config) +
+                                    mapped(workflow_path, reference_methods) + candidate + checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / 'test/host'), '-I' + str(root / 'include'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: Auto Base and reference workflows, sampling, conversion and failure recovery')

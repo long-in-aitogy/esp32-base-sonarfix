@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent.cpp').read_text()
@@ -85,9 +86,10 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='backend-queues-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(harness + 'namespace BackendAgentInternal {\n' + packets + '\n}\nusing namespace BackendAgentInternal;\n' + agent + methods + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    source_path = root / 'src/functions/backend/Backend_Agent.cpp'
+    (path / 'check.cpp').write_text(harness + 'namespace BackendAgentInternal {\n' + packets + '\n}\nusing namespace BackendAgentInternal;\n' + agent + mapped(source_path, methods) + checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / 'test/host'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: bounded telemetry queues, outage preservation and MQTT/WebSocket delivery')

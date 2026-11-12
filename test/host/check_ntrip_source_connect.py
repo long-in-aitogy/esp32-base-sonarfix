@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 root = Path(__file__).resolve().parents[2]
 source=(root/'src/functions/ntrip/ntrip_base.cpp').read_text()
 method=source[source.index('bool connectEndpoint('):source.index('/** @brief Implements ntrip_common::updateBps.')]
@@ -51,7 +52,7 @@ int main() {
 }
 '''
 with tempfile.TemporaryDirectory(prefix='ntrip-source-connect-') as directory:
-    path=Path(directory); (path/'check.cpp').write_text(shim+harness+method+checks)
-    subprocess.run(['c++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',str(path/'check.cpp'),'-o',str(path/'check')],check=True)
-    subprocess.run([str(path/'check')],check=True)
+    path=Path(directory); (path/'check.cpp').write_text(shim+harness+mapped(root/'src/functions/ntrip/ntrip_base.cpp',method)+checks)
+    compile_cpp(['c++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',str(path/'check.cpp'),'-o',str(path/'check')],check=True)
+    run_cpp([str(path/'check')],check=True)
 print('PASS: dual SOURCE, incomplete writes, TCP failure and credential redaction')

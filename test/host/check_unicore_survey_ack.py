@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_text()
@@ -81,9 +82,9 @@ with tempfile.TemporaryDirectory(prefix='unicore-survey-ack-') as directory:
     path = Path(directory)
     shim = (root / 'test/host/Arduino.h').read_text().replace('    bool isEmpty()', '    int indexOf(const char *s) const { auto p = find(s); return p == npos ? -1 : int(p); }\n    bool isEmpty()').replace('    void toUpperCase()', '    void toLowerCase() { std::transform(begin(), end(), begin(), [](unsigned char c) { return std::tolower(c); }); }\n    void toUpperCase()')
     (path / 'Arduino.h').write_text(shim)
-    (path / 'check.cpp').write_text(harness + handler + checks)
-    subprocess.run(['c++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',
+    (path / 'check.cpp').write_text(harness + mapped(root / 'src/functions/backend/Backend_Agent_Workflows.cpp', handler) + checks)
+    compile_cpp(['c++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',
                     '-I'+str(path),'-I'+str(root/'include'),
                     str(path/'check.cpp'),'-o',str(path/'check')],check=True)
-    subprocess.run([str(path/'check')],check=True)
+    run_cpp([str(path/'check')],check=True)
 print('PASS: Unicore ACK, Survey-In state, UART failures and mutex cleanup')

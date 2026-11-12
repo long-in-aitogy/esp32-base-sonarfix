@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/main.cpp').read_text()
@@ -79,13 +80,14 @@ int main() {
 # Supply only a stub for diagnostic logging; it is covered separately.
 log_start = functions.index('static void logNetworkStatus(bool force)')
 log_end = functions.index('/** @brief Implements checkSimInternetFallback.', log_start)
-functions = functions[:log_start] + 'static void logNetworkStatus(bool) {}\n\n' + functions[log_end:]
+functions = (mapped(root / 'src/main.cpp', functions[:log_start]) + 'static void logNetworkStatus(bool) {}\n\n' +
+             mapped(root / 'src/main.cpp', functions[log_end:]))
 with tempfile.TemporaryDirectory(prefix='network-lifecycle-') as directory:
     path = Path(directory)
     shim = (root / 'test/host/Arduino.h').read_text().replace('    void println(const char *) {}', '    void println(const char *) {}\n    void println(const String &) {}')
     (path / 'Arduino.h').write_text(shim)
     (path / 'check.cpp').write_text(harness + functions + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(path), str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: SIM fallback, workflow protection, recovery probes and lost Wi-Fi route')

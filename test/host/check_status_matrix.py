@@ -4,6 +4,7 @@ import json
 import re
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 
 root = Path(__file__).resolve().parents[2]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
@@ -104,11 +105,14 @@ active = agent[agent.index('bool BackendAgent::effectiveStreamActive('):agent.in
 telemetry = snapshot + '\nGnssTelemetrySnapshot getGnssTelemetrySnapshot() { GnssTelemetrySnapshot s; s.hasData = true; s.lastDataMs = s.lastGgaMs = 9000; s.satellites = 20; return s; }\n'
 with tempfile.TemporaryDirectory(prefix='status-matrix-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + common + 'namespace BackendAgentInternal {\nString jsonString(JsonObjectConst, const String &, const String & = String());\n' + helpers + '\n}\n' + telemetry + header + status + active + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    agent_path = root / 'src/functions/backend/Backend_Agent.cpp'
+    status_path = root / 'src/functions/backend/Backend_Agent_Status.cpp'
+    (path / 'check.cpp').write_text(shim + common + 'namespace BackendAgentInternal {\nString jsonString(JsonObjectConst, const String &, const String & = String());\n' + mapped(agent_path, helpers) + '\n}\n' + telemetry + header + mapped(status_path, status, stripped_includes=True) + mapped(agent_path, active) + checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / 'include'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    actual = [json.loads(line) for line in subprocess.check_output([str(path / 'check')], text=True).splitlines()]
+    output = run_cpp([str(path / 'check')], text=True, stdout=subprocess.PIPE, check=True).stdout
+    actual = [json.loads(line) for line in output.splitlines()]
 
 assert len(actual) == 144
 states = ('online', 'configuring', 'rebooting', 'rebooting_for_reset', 'auto_setup_base', 'reference_check_queued')

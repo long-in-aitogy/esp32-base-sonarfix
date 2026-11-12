@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Commands.cpp').read_text()
@@ -68,10 +69,11 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='license-reference-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(harness + license_command + reference_command + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    source_path = root / 'src/functions/backend/Backend_Agent_Commands.cpp'
+    (path / 'check.cpp').write_text(harness + mapped(source_path, license_command) + mapped(source_path, reference_command) + checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / 'test/host'),
                     '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: license persistence rollback and reference workflow command')

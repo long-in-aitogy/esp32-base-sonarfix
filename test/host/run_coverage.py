@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import xml.etree.ElementTree as ET
 
@@ -18,6 +19,21 @@ suites = {
     'protocol': ['test/host/protocol_checks.cpp'],
 }
 files = {}
+
+
+def add_report(report):
+    lines = None
+    for record in report.splitlines():
+        if record.startswith('SF:'):
+            path = Path(record[3:]).resolve()
+            lines = None
+            if path.is_relative_to(root) and path.relative_to(root).parts[0] in ('src', 'include'):
+                lines = files.setdefault(path.relative_to(root).as_posix(), {})
+        elif lines is not None and record.startswith('DA:'):
+            number, count, *_ = record[3:].split(',')
+            lines[int(number)] = lines.get(int(number), False) or int(count) > 0
+
+
 with tempfile.TemporaryDirectory(prefix='esp32-coverage-') as directory:
     build = Path(directory)
     for name, sources in suites.items():
@@ -31,16 +47,15 @@ with tempfile.TemporaryDirectory(prefix='esp32-coverage-') as directory:
         subprocess.run([profdata, 'merge', '-sparse', str(raw), '-o', str(profile)], check=True)
         report = subprocess.check_output([cov, 'export', '-format=lcov',
                                           f'-instr-profile={profile}', str(binary)], text=True)
-        lines = None
-        for record in report.splitlines():
-            if record.startswith('SF:'):
-                path = Path(record[3:]).resolve()
-                lines = None
-                if path.is_relative_to(root) and path.relative_to(root).parts[0] in ('src', 'include'):
-                    lines = files.setdefault(path.relative_to(root).as_posix(), {})
-            elif lines is not None and record.startswith('DA:'):
-                number, count, *_ = record[3:].split(',')
-                lines[int(number)] = lines.get(int(number), False) or int(count) > 0
+        add_report(report)
+    for name in ('service_config', 'backend_queues', 'license_reference_commands', 'control_failover_workflow',
+                 'status_matrix', 'backend_save_state', 'autobase_command', 'auto_base_transform',
+                 'network_lifecycle', 'unicore_survey_ack', 'ntrip_source_connect'):
+        report = build / f'{name}.lcov'
+        environment = dict(os.environ, CXX=compiler, LLVM_PROFDATA=profdata, LLVM_COV=cov,
+                           HOST_COVERAGE_OUTPUT=str(report))
+        subprocess.run([sys.executable, str(root / f'test/host/check_{name}.py')], check=True, env=environment)
+        add_report(report.read_text())
 if not any(any(lines.values()) for lines in files.values()):
     raise SystemExit('No measured firmware lines in coverage report')
 coverage = ET.Element('coverage', version='1')

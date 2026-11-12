@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Commands.cpp').read_text()
 method = source[source.index('bool BackendAgent::executeServiceConfigCommand('):source.index('bool BackendAgent::executeRawCommand(')]
@@ -105,10 +106,13 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='service-config-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(harness + boolean + method + basic + stream + checks)
-    subprocess.run(['c++', '-std=c++17', '-fsanitize=address,undefined',
+    commands_path = root / 'src/functions/backend/Backend_Agent_Commands.cpp'
+    agent_path = root / 'src/functions/backend/Backend_Agent.cpp'
+    (path / 'check.cpp').write_text(harness + mapped(agent_path, boolean) + mapped(commands_path, method) +
+                                    mapped(commands_path, basic) + mapped(commands_path, stream) + checks)
+    compile_cpp(['c++', '-std=c++17', '-fsanitize=address,undefined',
                     '-I' + str(root / 'test/host'),
                     '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: service configuration and provisioning preserve active workflows')
