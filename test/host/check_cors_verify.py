@@ -33,11 +33,15 @@ constexpr size_t VERIFICATION_DOCUMENT_SIZE = 12288;
 namespace GnssCmdBuilder { constexpr double BASE_ACCURACY_METERS = 5.0; }
 std::array<uint8_t, 40> actualMode{};
 std::array<uint8_t, 32> actualValues{};
+bool modeReadable = true;
 uint32_t millis() { return 100; }
 '''
 boundary = r'''
 namespace UbloxReadback {
-bool readTmode(uint8_t *out, String &) { memcpy(out, actualMode.data(), actualMode.size()); return true; }
+bool readTmode(uint8_t *out, String &error) {
+    if (!modeReadable) { error = "timeout"; return false; }
+    memcpy(out, actualMode.data(), actualMode.size()); return true;
+}
 bool readOutputValues(const uint8_t *, size_t length, uint8_t *out, String &) {
     for (size_t i=0; i<length/5; ++i) out[i] = actualValues[i];
     return true;
@@ -51,18 +55,22 @@ struct BackendAgent {
 };
 '''
 checks = r'''
-int main() {
+int main(int argc, char **argv) {
+    assert(argc == 2);
     std::string line; std::getline(std::cin, line);
     DynamicJsonDocument request(8192), result(16384);
     assert(!deserializeJson(request, line));
     assert(decodeBase64(request["tmode_b64"] | "", actualMode.data(), actualMode.size()) == 40);
     actualMode[20]=0x50; actualMode[21]=0xc3; actualMode[22]=actualMode[23]=0;
     for (size_t i=0; i<actualValues.size(); ++i) actualValues[i] = request["readback"]["expected"][i].as<uint8_t>();
+    if (!std::strcmp(argv[1], "position")) actualMode[4] ^= 1;
+    if (!std::strcmp(argv[1], "output")) actualValues[0] ^= 1;
+    if (!std::strcmp(argv[1], "unread")) modeReadable = false;
     BackendAgent agent; String error;
     assert(agent.verifyGnssConfig(request.as<JsonObjectConst>(), "cors", error));
     assert(!deserializeJson(result, agent.gnssVerification_));
-    if (result["state"] != "match") std::cerr << agent.gnssVerification_.c_str() << '\n';
-    assert(result["state"] == "match" && result["details"]["ports"].size() == 5);
+    const char *expected = !std::strcmp(argv[1], "match") ? "match" : !modeReadable ? "unread" : "mismatch";
+    assert(result["state"] == expected && result["details"]["ports"].size() == 5);
     assert(result["details"]["fixed"]["expected"]["accuracy_m"] == 5.0);
 }
 '''
@@ -79,5 +87,6 @@ with tempfile.TemporaryDirectory(prefix='cors-verify-') as directory:
                       'accuracy': 3, 'gnss_options': {'ports': ['USB', 'UART2'], 'output_mode': 'rtcm_only', 'msm_level': msm,
                       'constellations': {'gps': True, 'glo': True, 'gal': gal, 'bds': bds}}}
             payload = builder.build_ublox_verification_payload(config, route_to_uart1=True)
-            subprocess.run([str(path / 'check')], input=json.dumps(payload) + '\n', text=True, check=True)
-print('PASS: 9 real CORS verification payloads match simulated 5 m u-blox readback')
+            for scenario in ('match', 'position', 'output', 'unread'):
+                subprocess.run([str(path / 'check'), scenario], input=json.dumps(payload) + '\n', text=True, check=True)
+print('PASS: 9 CORS payloads detect matching, mismatched and unread 5 m u-blox readback')
