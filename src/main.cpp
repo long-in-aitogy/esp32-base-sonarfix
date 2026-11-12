@@ -402,12 +402,9 @@ void loop()
 static bool tryWifiFallback(bool protocolsRunning)
 {
     Serial.println("[NETWORK] SIM khong truy cap duoc dich vu; thu Wi-Fi du phong da luu.");
-    if (!setupWiFi())
-        return false;
-    if (const auto reachable = probeMqttTransport(false); !reachable)
+    if (!setupWiFi([] { return probeMqttTransport(false); }))
     {
         Serial.println("[NETWORK] Wi-Fi chua truy cap duoc MQTT broker; giu SIM va se thu lai.");
-        WiFi.disconnect();
         return false;
     }
     activateNetwork(ConnectionType::WIFI, protocolsRunning);

@@ -5,7 +5,7 @@ import tempfile
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Storage_Status.cpp').read_text()
-method = source[source.index('bool clearUnusedWifi('):source.index('\nnamespace {\nbool readableNvsValue')]
+method = source[source.index('bool clearUnusedWifi('):source.index('\nbool saveMigratedWifi(')]
 harness = r'''
 #include <Arduino.h>
 #include <cassert>

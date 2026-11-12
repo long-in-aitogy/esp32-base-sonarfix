@@ -1,5 +1,6 @@
 #include "functions/backend/Storage_Status.h"
 #include "functions/backend/Backend_Agent_Internal.h"
+#include "hardware/Wifi_Credentials.h"
 #include <Preferences.h>
 #include <nvs.h>
 #include <esp_partition.h>
@@ -89,6 +90,26 @@ bool clearUnusedWifi(String &error) {
     return committed == ESP_OK;
 }
 
+
+bool saveMigratedWifi(const String &ssid, const String &password) {
+    if (!validWifiSsid(ssid) || !validWifiPassword(password)) return false;
+    Preferences active;
+    if (!active.begin("myPrefs", false)) return false;
+    const bool hadSsid = active.isKey("WIFI_SSID"), hadPassword = active.isKey("WIFI_PASS");
+    const String oldSsid = active.getString("WIFI_SSID", ""), oldPassword = active.getString("WIFI_PASS", "");
+    active.putString("WIFI_SSID", ssid);
+    active.putString("WIFI_PASS", password);
+    const bool saved = active.isKey("WIFI_SSID") && active.isKey("WIFI_PASS")
+        && active.getString("WIFI_SSID", "") == ssid && active.getString("WIFI_PASS", "") == password;
+    if (!saved) {
+        if (hadSsid) active.putString("WIFI_SSID", oldSsid); else active.remove("WIFI_SSID");
+        if (hadPassword) active.putString("WIFI_PASS", oldPassword); else active.remove("WIFI_PASS");
+    }
+    active.end();
+    if (!saved) return false;
+    String error;
+    return clearUnusedWifi(error);
+}
 
 namespace {
 bool readableNvsValue(const nvs_entry_info_t &entry) {
