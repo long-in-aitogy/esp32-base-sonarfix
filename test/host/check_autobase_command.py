@@ -41,8 +41,9 @@ int main() {
     request["ip"]="host"; request["port"]=2101; request["user"]="user";
     request["password"]="secret"; request["mountpoint"]="station";
     request["source_name"]="Station A"; request["source_serial"]="serial-a"; request["source_distance_m"]=12.5;
-    BackendAgent agent; String error, detail;
+    BackendAgent agent; agent.baseStartupState_="configured"; String error, detail;
     assert(agent.executeAutoBaseCommand(request, error, detail) && agent.started == 1);
+    assert(agent.baseStartupState_=="configured");
     DynamicJsonDocument progress(4096); assert(!deserializeJson(progress, agent.progress));
     assert(progress["source_name"] == "Station A" && progress["source_serial"] == "serial-a");
     assert(progress["source_distance_m"] == 12.5 && progress["note"] == "Collect RTK Fixed LLH; results wait for review.");
@@ -51,6 +52,7 @@ int main() {
     assert(error == "automatic apply is only supported for nearest CORS mode");
     request["source_mode"] = "nearest";
     assert(agent.executeAutoBaseCommand(request, error, detail) && agent.started == 2);
+    assert(agent.baseStartupState_=="auto_base_running");
     progress.clear(); assert(!deserializeJson(progress, agent.progress));
     assert(progress["note"] == "Collect RTK Fixed LLH and apply Base coordinates after quality checks.");
     DynamicJsonDocument pending(1024); pending["source_mode"]="nearest"; pending["auto_apply"]=true;
@@ -73,9 +75,9 @@ int main() {
     assert(boot.executeAutoBaseCommand(startup.as<JsonObject>(), error, detail));
     saved.clear(); assert(!deserializeJson(saved,boot.baseConfig_));
     assert(saved["auto_base_started_boot_id"]=="boot" && saved["auto_base_started_request_id"]=="request");
-    BackendAgent startFailed; startFailed.startOk=false;
+    BackendAgent startFailed; startFailed.startOk=false; startFailed.baseStartupState_="configured";
     assert(!startFailed.executeAutoBaseCommand(startup.as<JsonObject>(), error, detail));
-    assert(startFailed.baseConfig_==R"({"base_setup_method":"SURVEY_IN"})");
+    assert(startFailed.baseConfig_==R"({"base_setup_method":"SURVEY_IN"})" && startFailed.baseStartupState_=="configured");
     pending["ip"]="partial";
     BackendAgent partial;
     assert(!partial.executeAutoBaseCommand(pending.as<JsonObject>(), error, detail));

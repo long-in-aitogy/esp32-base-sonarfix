@@ -688,6 +688,12 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
     serializeJson(progress, progressJson);
     setAgentState("auto_setup_queued");
     setWorkflowProgress("queued", 0, 4, progressJson);
+    if (sourceMode == "nearest")
+    {
+        baseStartupState_ = "auto_base_running";
+        baseStartupError_.clear();
+        markStatusDirty();
+    }
     detail = "auto base workflow queued";
     return true;
 }
