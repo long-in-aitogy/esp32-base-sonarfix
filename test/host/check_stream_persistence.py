@@ -15,7 +15,10 @@ constexpr size_t CONFIG_DOCUMENT_SIZE = 1024;
 String normalizedStreamValue(String s, bool) { return s; }
 int streamServerId(JsonObjectConst) { return 0; }
 bool applyTargetedStreamState(JsonObject, int, bool, const String &, const String &) { return false; }
-void applyGlobalStreamState(JsonObject service, bool active, const String &) { service["stream_active"] = active; }
+void applyGlobalStreamState(JsonObject service, bool active, const String &mountpoint) {
+    service["stream_active"] = active;
+    if (active && !mountpoint.isEmpty()) service["active_mountpoint"] = mountpoint;
+}
 int setups = 0, connections = 0;
 void setupNTRIP() { ++setups; }
 void connectNTRIP() { ++connections; }
@@ -40,6 +43,12 @@ int main() {
     agent.saveOk = true;
     assert(agent.executeStreamCommand(request.as<JsonObject>(), error, detail));
     assert(agent.serviceConfig_ != previous && setups == 1 && connections == 1);
+    const String current = agent.serviceConfig_;
+    DynamicJsonDocument large(4096); large["active"] = true;
+    large["mountpoint"] = String(std::string(2000, 'x'));
+    assert(!agent.executeStreamCommand(large.as<JsonObject>(), error, detail));
+    assert(error == "service configuration exceeds memory capacity" && agent.serviceConfig_ == current);
+    assert(setups == 1 && connections == 1);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='stream-persistence-') as directory:
@@ -49,4 +58,4 @@ with tempfile.TemporaryDirectory(prefix='stream-persistence-') as directory:
                     '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     subprocess.run([str(path / 'check')], check=True)
-print('PASS: stream persistence failure restores configuration without reconnecting')
+print('PASS: stream persistence failure and oversized config preserve connections')
