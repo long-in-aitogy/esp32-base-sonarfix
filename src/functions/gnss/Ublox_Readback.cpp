@@ -1,5 +1,6 @@
 #include "functions/gnss/Ublox_Readback.h"
 #include "functions/gnss/Ubx_Reply.h"
+#include "functions/gnss/Ubx_Config_Verification.h"
 #include "functions/ntrip/RTCM_Receiver.h"
 #include "Prog_Config.h"
 #include <freertos/FreeRTOS.h>
@@ -15,8 +16,14 @@ namespace
 {
 
 /** @brief Implements query. */
-    bool query(uint8_t cls, uint8_t id, UbxReply &reply, String &error)
+    bool query(uint8_t cls, uint8_t id, UbxReply &reply, String &error,
+               const uint8_t *payload = nullptr, size_t length = 0)
     {
+        if (length > 4 + UbxConfigVerification::MAX_KEYS * 4 || (length && !payload))
+        {
+            error = "u-blox query exceeds readback limit";
+            return false;
+        }
         if (!rtcmBufferMutex || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
         {
             error = "GNSS command port is busy";
@@ -30,11 +37,21 @@ namespace
         }
         while (Serial1.available())
             bufferGnssQueryByte(static_cast<uint8_t>(Serial1.read()));
-        const std::array<uint8_t, 8> poll = {
-            0xB5, 0x62, cls, id, 0, 0, uint8_t(cls + id), uint8_t(4 * cls + 3 * id)};
+        std::array<uint8_t, 12 + UbxConfigVerification::MAX_KEYS * 4> poll = {
+            0xB5, 0x62, cls, id, static_cast<uint8_t>(length), 0};
+        if (length)
+            std::memcpy(poll.data() + 6, payload, length);
+        uint8_t a = 0, b = 0;
+        for (size_t i = 2; i < length + 6; ++i)
+        {
+            a += poll[i];
+            b += a;
+        }
+        poll[length + 6] = a;
+        poll[length + 7] = b;
         Serial.printf("[GNSS][READBACK][TX] UBX %02X/%02X; baud=%lu\n", cls, id,
                       static_cast<unsigned long>(Serial1.baudRate()));
-        const auto written = Serial1.write(poll.data(), poll.size()) == poll.size();
+        const auto written = Serial1.write(poll.data(), length + 8) == length + 8;
         Serial1.flush();
         const uint32_t started = millis();
         auto matched = false;
@@ -135,4 +152,26 @@ bool UbloxReadback::readDop(UbxDop &status, String &error)
         return true;
     error = "Invalid NAV-DOP response";
     return false;
+}
+
+bool UbloxReadback::readOutputValues(const uint8_t *expected, size_t length,
+                                     uint8_t *values, String &error)
+{
+    if (!values || !UbxConfigVerification::validExpected(expected, length))
+    {
+        error = "Invalid output verification keys";
+        return false;
+    }
+    std::array<uint8_t, 4 + UbxConfigVerification::MAX_KEYS * 4> payload{};
+    for (size_t i = 0; i < length / 5; ++i)
+        std::memcpy(payload.data() + 4 + i * 4, expected + i * 5, 4);
+    UbxReply reply;
+    if (!query(0x06, 0x8B, reply, error, payload.data(), 4 + length / 5 * 4))
+        return false;
+    if (!UbxConfigVerification::outputValues(expected, length, reply.frame.data() + 6, reply.length - 8, values))
+    {
+        error = "Incomplete or invalid CFG-VALGET response";
+        return false;
+    }
+    return true;
 }
