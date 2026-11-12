@@ -36,6 +36,24 @@ namespace
         }
         return value.is<double>() ? value.as<double>() : NAN;
     }
+    bool acceptAutoBaseLocationReply(JsonObjectConst response, const String &requestId,
+                                     double latitude, double longitude, double altitude,
+                                     JsonDocument &location)
+    {
+        if (response["request_id"].as<String>() != requestId)
+            return false;
+        JsonObjectConst result = response["location"].as<JsonObjectConst>();
+        JsonObjectConst echoed = result["input_coord"].as<JsonObjectConst>();
+        const double lat = coordinateNumber(echoed["lat"]);
+        const double lon = coordinateNumber(echoed["lon"]);
+        const double alt = coordinateNumber(echoed["alt"]);
+        if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(alt)
+            || std::abs(lat - latitude) > 1e-9 || std::abs(lon - longitude) > 1e-9
+            || std::abs(alt - altitude) > 0.00011)
+            return false;
+        location.set(result);
+        return !location.overflowed();
+    }
 } // namespace
 
 void BackendAgent::setWorkflowProgress(const String &phase, const uint8_t step,
@@ -778,8 +796,58 @@ bool BackendAgent::completeAutoBaseSetup(
         }
         else
         {
-            failureReason = "projection unavailable: RTCM 1025 or manual l0_deg and k0 required";
-            return false;
+            if (!autoBaseLocationQueue_)
+            {
+                failureReason = "location reply queue could not be allocated";
+                return false;
+            }
+            if (!stopNtripRoverLocked())
+            {
+                failureReason = "cannot stop rover transport for location lookup";
+                return false;
+            }
+            xQueueReset(autoBaseLocationQueue_);
+            const String requestId = statusBootId_ + ":" + String(millis());
+            StaticJsonDocument<384> requestDoc;
+            JsonObject request = requestDoc.createNestedObject("location_request");
+            request["request_id"] = requestId;
+            char value[32];
+            snprintf(value, sizeof(value), "%.17g", rawLatitude); request["lat"] = String(value);
+            snprintf(value, sizeof(value), "%.17g", rawLongitude); request["lon"] = String(value);
+            snprintf(value, sizeof(value), "%.17g", rawAltitude); request["alt"] = String(value);
+            String requestJson;
+            serializeJson(requestDoc, requestJson);
+            setWorkflowProgress("resolving_location", 4, 4, requestJson);
+            DynamicJsonDocument location(2048), received(2048);
+            AutoBaseLocationReply reply{};
+            const uint32_t started = millis();
+            bool located = false;
+            while (!workflowCancelRequested_ && millis() - started < 30000UL)
+            {
+                if (xQueueReceive(autoBaseLocationQueue_, &reply, pdMS_TO_TICKS(50)) == pdTRUE
+                    && deserializeJson(received, static_cast<const char *>(reply.json)) == DeserializationError::Ok
+                    && acceptAutoBaseLocationReply(received.as<JsonObjectConst>(), requestId,
+                                                   rawLatitude, rawLongitude, rawAltitude, location))
+                {
+                    located = true;
+                    break;
+                }
+            }
+            if (!located || workflowCancelRequested_)
+            {
+                failureReason = workflowCancelRequested_ ? "cancelled by user" : "backend location ACK timed out or did not match sampled LLH";
+                return false;
+            }
+            datum.centralMeridianDeg = coordinateNumber(location["l0_deg"]);
+            datum.scale = coordinateNumber(location["k0"]);
+            if (!std::isfinite(datum.centralMeridianDeg) || !std::isfinite(datum.scale))
+            {
+                failureReason = "province projection unresolved; RTCM 1025 or a unique server region is required";
+                return false;
+            }
+            provinceCode = location["province_code"] | String();
+            provinceName = location["province_name"] | String();
+            projectionSource = "server_catalog";
         }
         for (const char *key : {"resN", "resE", "resHS"})
         {
@@ -1108,7 +1176,7 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
     if (!completeAutoBaseSetup(payload, latitudes, longitudes, altitudes,
                                resultJson, failureReason))
     {
-        finish(false, false, failureReason);
+        finish(false, workflowCancelRequested_, failureReason);
         return false;
     }
     const bool autoApply = payload["auto_apply"] | false;

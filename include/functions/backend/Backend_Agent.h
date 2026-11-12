@@ -129,6 +129,8 @@ private:
     uint32_t surveyInTargetSeconds_ = 0;
     String statusBootId_;
 
+    struct AutoBaseLocationReply { char json[1536]; };
+    QueueHandle_t autoBaseLocationQueue_ = nullptr;
     QueueHandle_t nmeaQueue_ = nullptr;
     QueueHandle_t rtcmQueue_ = nullptr;
     std::unique_ptr<BackendAgentWebsocket> websocket_;

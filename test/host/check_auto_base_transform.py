@@ -19,7 +19,17 @@ harness = r'''
 #include <strings.h>
 #include "functions/backend/Vn2000_Datum.h"
 int tcpStreamMutex = 1; constexpr int MUTEX_TIMEOUT_MS = 1500, pdTRUE = 1;
+uint32_t now = 1000;
+uint32_t millis() { return now; }
 int pdMS_TO_TICKS(int n) { return n; }
+uint32_t requestStarted = 0; bool provideLocation = false;
+int xQueueReset(int) { requestStarted = now; return 1; }
+int xQueueReceive(int, void *out, int timeout) {
+    now += timeout;
+    if (!provideLocation) return 0;
+    std::snprintf(static_cast<char *>(out), 1536, R"({"request_id":"boot:%u","location":{"input_coord":{"lat":21,"lon":105,"alt":10},"l0_deg":105,"k0":0.9999}})", requestStarted);
+    provideLocation = false; return 1;
+}
 int xSemaphoreTake(int, int) { return 1; }
 void xSemaphoreGive(int) {}
 Vn2000Datum sessionDatum;
@@ -32,7 +42,14 @@ double coordinateNumber(JsonVariantConst v) {
 bool transformVn2000(double lat, double lon, double alt, const Vn2000Datum &, Vn2000Result &out) {
     out.latitude = lat; out.longitude = lon; out.altitude = alt; return true;
 }
+MATCHER_PLACEHOLDER
 struct BackendAgent {
+    struct AutoBaseLocationReply { char json[1536]; };
+    int autoBaseLocationQueue_ = 0;
+    String statusBootId_ = "boot";
+    bool workflowCancelRequested_ = false;
+    bool stopNtripRoverLocked() { return true; }
+    void setWorkflowProgress(const char *, int, int, const String &) {}
     struct ProjectedPosition { double latitude, longitude, altitude; double northing = 0, easting = 0; };
     bool reachedWrite = false, transformOk = false; int conversions = 0;
     bool resolveAutoBaseProjection(JsonObject, double, double &meridian, double &scale, String &, String &, String &) { meridian=105; scale=0.9999; return true; }
@@ -42,6 +59,8 @@ struct BackendAgent {
     bool completeAutoBaseSetup(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &, String &);
 };
 '''
+matcher = workflow[workflow.index('    bool acceptAutoBaseLocationReply('):workflow.index('} // namespace')]
+harness = harness.replace('MATCHER_PLACEHOLDER', matcher)
 checks = r'''
 int main() {
     BackendAgent agent; BackendAgent::ProjectedPosition result{21, 105, 10};
@@ -62,7 +81,16 @@ int main() {
     assert(error == "missing RTCM 1021 from this CORS session");
     sessionDatum.has1021 = true;
     assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
-    assert(error == "projection unavailable: RTCM 1025 or manual l0_deg and k0 required");
+    assert(error == "location reply queue could not be allocated");
+    agent.autoBaseLocationQueue_ = 1;
+    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
+    assert(error == "backend location ACK timed out or did not match sampled LLH");
+    agent.workflowCancelRequested_ = true;
+    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
+    assert(error == "cancelled by user");
+    agent.workflowCancelRequested_ = false;
+    provideLocation = true;
+    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
     sessionDatum.has1025 = true; sessionDatum.centralMeridianDeg = 105; sessionDatum.scale = 0.9999;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
     payload["resN"] = "invalid";

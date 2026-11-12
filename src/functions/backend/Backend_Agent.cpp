@@ -135,6 +135,8 @@ void BackendAgent::begin()
     loadPreferences();
     ensureDefaultServiceConfig();
 
+    if (!autoBaseLocationQueue_)
+        autoBaseLocationQueue_ = xQueueCreate(1, sizeof(AutoBaseLocationReply));
     if (!nmeaQueue_)
     {
         nmeaQueue_ = xQueueCreate(NMEA_QUEUE_LENGTH, sizeof(NmeaPacket));
@@ -633,7 +635,7 @@ void BackendAgent::handleControlAck(const String &source, const String &message,
 {
     if (retained)
         return;
-    DynamicJsonDocument doc(1024);
+    DynamicJsonDocument doc(4096);
     if (deserializeJson(doc, message) != DeserializationError::Ok)
         return;
     if (doc["type"] != "control_plane_ack")
@@ -643,6 +645,15 @@ void BackendAgent::handleControlAck(const String &source, const String &message,
     const int32_t sequence = doc["status_sequence"] | -1;
     if (sequence < 0)
         return;
+    const JsonObjectConst location = doc["auto_base_location"].as<JsonObjectConst>();
+    if (doc["serial"].as<String>() == serialNumber_ && autoBaseLocationQueue_
+        && workflowActive() && !location.isNull()
+        && measureJson(location) < sizeof(AutoBaseLocationReply::json))
+    {
+        AutoBaseLocationReply reply{};
+        serializeJson(location, reply.json, sizeof(reply.json));
+        xQueueOverwrite(autoBaseLocationQueue_, &reply);
+    }
     if (source == "mqtt")
     {
         if (sequence > lastMqttAckSequence_)
@@ -684,7 +695,7 @@ void BackendAgent::onMqttMessage(const char *topic, const uint8_t *payload, size
 
 void BackendAgent::handleWebsocketText(const String &message)
 {
-    DynamicJsonDocument envelope(1024);
+    DynamicJsonDocument envelope(4096);
     if (deserializeJson(envelope, message) != DeserializationError::Ok)
         return;
     if (envelope["type"] == "control_plane_ack")
