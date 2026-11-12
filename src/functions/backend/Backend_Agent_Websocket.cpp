@@ -218,8 +218,8 @@ void BackendAgentWebsocket::connectNow()
     const bool valid = mbedtls_sha1_ret(reinterpret_cast<const unsigned char *>(challenge.c_str()),
                                         challenge.length(), digest.data()) == 0
         && mbedtls_base64_encode(encoded.data(), encoded.size(), &encodedLength, digest.data(), digest.size()) == 0
-        && WebsocketProtocol::validUpgrade(std::string(response.c_str(), response.length()),
-                                           std::string(reinterpret_cast<const char *>(encoded.data()), encodedLength));
+        && WebsocketProtocol::validUpgrade(std::string_view(response.c_str(), response.length()),
+                                           std::string_view(reinterpret_cast<const char *>(encoded.data()), encodedLength));
     if (!valid)
     {
         client_->stop();

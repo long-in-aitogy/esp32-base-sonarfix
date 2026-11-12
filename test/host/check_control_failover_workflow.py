@@ -10,6 +10,7 @@ method = source[source.index('void BackendAgent::evaluateControlPlaneFailover()'
 ack = source[source.index('void BackendAgent::handleControlAck('):source.index('\nvoid BackendAgent::onMqttMessage(')]
 harness = r'''
 #include <Arduino.h>
+#include <array>
 #include <ArduinoJson.h>
 #include <cstdint>
 #include <cassert>
@@ -21,7 +22,7 @@ void setupNTRIP() { ++setups; }
 void connectNTRIP() { ++connections; }
 void xQueueOverwrite(int, const void *) {}
 struct BackendAgent {
-    struct AutoBaseLocationReply { char json[1536]; };
+    struct AutoBaseLocationReply { static constexpr size_t capacity = 1536; std::array<char, capacity> json{}; };
     int autoBaseLocationQueue_ = 0;
     String statusBootId_ = "boot", serialNumber_ = "station";
     uint32_t lastControlCheckMs_ = 0, recoveryStartedMs_ = 0, controlPlaneArmedMs_ = 0;

@@ -16,7 +16,7 @@ bool BackendAgent::verifyUnicoreConfig(JsonObjectConst payload, const String &co
     gnssVerification_.clear();
     const JsonArrayConst expectedLogs = payload["logs"].as<JsonArrayConst>();
     const String reference = payload["altitude_reference"] | "LEGACY";
-    double wanted[3];
+    std::array<double, 3> wanted{};
     size_t coordinate = 0;
     for (const char *key : {"lat", "lon", "alt"}) {
         const JsonVariantConst input = payload["coords"][key];
@@ -117,7 +117,7 @@ bool BackendAgent::verifyUnicoreConfig(JsonObjectConst payload, const String &co
     if (logsRead) for (const auto &log : logs) {
         JsonObject observed = observedLogs.createNestedObject();
         observed["port"] = String("COM") + String(log.port);
-        observed["name"] = log.name;
+        observed["name"] = log.name.data();
         if (log.period > 0) observed["period"] = log.period;
         else observed["period"] = nullptr;
     }
@@ -137,15 +137,15 @@ bool BackendAgent::verifyUnicoreConfig(JsonObjectConst payload, const String &co
             group["checked"] = group["checked"].as<unsigned>() + 1;
             bool matches = false;
             for (const auto &log : logs)
-                if (log.port == comparePort && name == log.name && std::abs(log.period - 1) <= 1e-6) matches = true;
+                if (log.port == comparePort && name == log.name.data() && std::abs(log.period - 1) <= 1e-6) matches = true;
             if (!matches) group["mismatched"] = group["mismatched"].as<unsigned>() + 1;
         }
         for (const auto &log : logs) {
             if (log.port != comparePort || log.period == 0) continue;
             bool expected = false;
-            for (const String &name : names) if (name == log.name) expected = true;
+            for (const String &name : names) if (name == log.name.data()) expected = true;
             if (!expected) {
-                JsonObject group = groups[std::strncmp(log.name, "RTCM", 4) ? "diagnostics" : "rtcm"];
+                JsonObject group = groups[std::strncmp(log.name.data(), "RTCM", 4) ? "diagnostics" : "rtcm"];
                 group["checked"] = group["checked"].as<unsigned>() + 1;
                 group["mismatched"] = group["mismatched"].as<unsigned>() + 1;
             }

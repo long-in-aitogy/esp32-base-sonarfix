@@ -299,7 +299,7 @@ void Vn2000Session::decode(size_t length) {
         next.has1025 = bits.ok;
         next.projectionFrameBytes = length;
         for (size_t i = 0; i < length && i < 32; ++i)
-            snprintf(next.projectionFrameHex + i * 2, 3, "%02x", frame_[i]);
+            snprintf(next.projectionFrameHex.data() + i * 2, 3, "%02x", frame_[i]);
     } else return;
     if (!bits.ok) return;
     next.count1021 = datum_.count1021;

@@ -131,7 +131,7 @@ private:
     uint32_t surveyInTargetSeconds_ = 0;
     String statusBootId_;
 
-    struct AutoBaseLocationReply { char json[1536]; };
+    struct AutoBaseLocationReply { static constexpr size_t capacity = 1536; std::array<char, capacity> json{}; };
     QueueHandle_t autoBaseLocationQueue_ = nullptr;
     QueueHandle_t nmeaQueue_ = nullptr;
     QueueHandle_t rtcmQueue_ = nullptr;

@@ -32,7 +32,7 @@ struct Vn2000Datum {
     int64_t projectionLongitudeRaw = 0;
     uint32_t projectionScaleRaw = 0;
     uint16_t projectionFrameBytes = 0;
-    char projectionFrameHex[65] = {};
+    std::array<char, 65> projectionFrameHex{};
 };
 
 class Vn2000Session {

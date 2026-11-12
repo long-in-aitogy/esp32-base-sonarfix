@@ -43,7 +43,7 @@ void check(const std::vector<uint8_t> &packet, uint32_t scale, double expectedSc
     assert(datum.has1025 && datum.projectionType == 1);
     assert(datum.projectionScaleRaw == scale && std::abs(datum.scale - expectedScale) < 1e-12);
     assert(datum.projectionLongitudeRaw == 9545454545LL);
-    assert(datum.projectionFrameBytes == packet.size() && std::string(datum.projectionFrameHex) == hex);
+    assert(datum.projectionFrameBytes == packet.size() && std::string(datum.projectionFrameHex.data()) == hex);
     auto corrupt=packet; corrupt.back() ^= 1; session.reset(); session.feed(corrupt.data(),corrupt.size());
     assert(!session.datum().has1025);
 }

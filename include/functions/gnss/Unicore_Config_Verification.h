@@ -1,5 +1,6 @@
 #pragma once
 #include "functions/gnss/Unicore_Log.h"
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -8,7 +9,7 @@
 #include <vector>
 
 namespace UnicoreConfigVerification {
-struct Log { char name[24] = {}; uint8_t port = 0; double period = 0; };
+struct Log { std::array<char, 24> name{}; uint8_t port = 0; double period = 0; };
 
 // MODE reports the configured Fixed LLA values, in the same units sent by mode base.
 inline bool parseFixedMode(const char *mode, double &lat, double &lon, double &alt) {
@@ -32,30 +33,31 @@ inline uint8_t comparisonPort(uint8_t configured, const std::vector<Log> &logs) 
 }
 
 inline bool parseLogLine(const char *line, Log &log) {
-    char tokens[6][24] = {};
+    std::array<std::array<char, 24>, 6> tokens{};
     const int fields = std::sscanf(line, "%23s %23s %23s %23s %23s %23s",
-                                   tokens[0], tokens[1], tokens[2], tokens[3], tokens[4], tokens[5]);
+                                   tokens[0].data(), tokens[1].data(), tokens[2].data(),
+                                   tokens[3].data(), tokens[4].data(), tokens[5].data());
     for (auto &token : tokens)
         for (char &c : token) if (c >= 'a' && c <= 'z') c -= 'a' - 'A';
-    const int start = std::strcmp(tokens[0], "LOG") == 0 ? 1 : 0;
+    const int start = std::strcmp(tokens[0].data(), "LOG") == 0 ? 1 : 0;
     if (fields - start < 3 || fields - start > 4) return false;
-    const bool portFirst = std::strncmp(tokens[start], "COM", 3) == 0;
-    const char *port = tokens[start + (portFirst ? 0 : 1)];
-    const char *name = tokens[start + (portFirst ? 1 : 0)];
-    if (strnlen(port, sizeof(tokens[0])) != 4 || std::strncmp(port, "COM", 3) || port[3] < '1' || port[3] > '3'
-        || strnlen(name, sizeof(tokens[0])) < 2 || name[0] < 'A' || name[0] > 'Z') return false;
+    const bool portFirst = std::strncmp(tokens[start].data(), "COM", 3) == 0;
+    const char *port = tokens[start + (portFirst ? 0 : 1)].data();
+    const char *name = tokens[start + (portFirst ? 1 : 0)].data();
+    if (strnlen(port, tokens[0].size()) != 4 || std::strncmp(port, "COM", 3) || port[3] < '1' || port[3] > '3'
+        || strnlen(name, tokens[0].size()) < 2 || name[0] < 'A' || name[0] > 'Z') return false;
     for (const char *c = name; *c; ++c) if (!(*c >= 'A' && *c <= 'Z') && !(*c >= '0' && *c <= '9')) return false;
     static_assert(sizeof(log.name) == sizeof(tokens[0]));
-    std::memcpy(log.name, name, sizeof(log.name));
+    std::memcpy(log.name.data(), name, log.name.size());
     log.port = port[3] - '0';
-    if (const char *trigger = tokens[start + 2]; !std::strcmp(trigger, "ONCE")) {
+    if (const char *trigger = tokens[start + 2].data(); !std::strcmp(trigger, "ONCE")) {
         if (fields - start != 3) return false;
     } else {
         const bool ontime = !std::strcmp(trigger, "ONTIME");
         if (fields - start != (ontime ? 4 : 3)) return false;
         char *tail = nullptr;
-        log.period = std::strtod(tokens[start + (ontime ? 3 : 2)], &tail);
-        if (!tail || tail == tokens[start + (ontime ? 3 : 2)] || *tail
+        log.period = std::strtod(tokens[start + (ontime ? 3 : 2)].data(), &tail);
+        if (!tail || tail == tokens[start + (ontime ? 3 : 2)].data() || *tail
             || !std::isfinite(log.period) || log.period <= 0) return false;
     }
     return true;
@@ -93,22 +95,22 @@ inline bool parseLogs(const char *text, size_t length, std::vector<Log> &logs) {
         const char *lineEnd = cursor;
         while (lineEnd < end && *lineEnd != '\r' && *lineEnd != '\n') ++lineEnd;
         if (lineEnd - cursor > 159) return false;
-        char line[160] = {};
-        std::memcpy(line, cursor, lineEnd - cursor);
+        std::array<char, 160> line{};
+        std::memcpy(line.data(), cursor, lineEnd - cursor);
         cursor = lineEnd;
         if (count < 0) {
             char *tail = nullptr;
-            count = std::strtol(line, &tail, 10);
+            count = std::strtol(line.data(), &tail, 10);
             while (tail && *tail == ' ') ++tail;
-            if (!tail || tail == line || *tail || count < 0 || count > 64) return false;
+            if (!tail || tail == line.data() || *tail || count < 0 || count > 64) return false;
             logs.reserve(count);
             continue;
         }
         if (logs.size() >= static_cast<size_t>(count)) return false;
         Log log;
-        if (!parseLogLine(line, log)) return false;
+        if (!parseLogLine(line.data(), log)) return false;
         for (const Log &existing : logs)
-            if (existing.port == log.port && !std::strcmp(existing.name, log.name)) return false;
+            if (existing.port == log.port && !std::strcmp(existing.name.data(), log.name.data())) return false;
         logs.push_back(log);
     }
     return count >= 0 && logs.size() == static_cast<size_t>(count);

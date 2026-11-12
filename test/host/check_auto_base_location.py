@@ -11,6 +11,7 @@ a=agent.index('void BackendAgent::handleControlAck('); b=agent.index('\nvoid Bac
 handler=agent[a:b]
 harness=r'''
 #include <Arduino.h>
+#include <array>
 #include <ArduinoJson.h>
 #include <cassert>
 #include <cmath>
@@ -20,7 +21,7 @@ uint32_t millis() { return 1000; }
 char queued[1536]{}; int pushes=0;
 void xQueueOverwrite(int, const void *data) { memcpy(queued,data,sizeof(queued)); ++pushes; }
 struct BackendAgent {
-    struct AutoBaseLocationReply { char json[1536]; };
+    struct AutoBaseLocationReply { static constexpr size_t capacity = 1536; std::array<char, capacity> json{}; };
     int autoBaseLocationQueue_=1;
     String statusBootId_="boot", serialNumber_="station";
     int32_t lastMqttAckSequence_=-1,lastWebsocketAckSequence_=-1;

@@ -773,7 +773,7 @@ bool BackendAgent::completeAutoBaseSetup(
             while (!workflowCancelRequested_ && millis() - started < 30000UL)
             {
                 if (xQueueReceive(autoBaseLocationQueue_, &reply, pdMS_TO_TICKS(50)) == pdTRUE
-                    && deserializeJson(received, static_cast<const char *>(reply.json)) == DeserializationError::Ok
+                    && deserializeJson(received, static_cast<const char *>(reply.json.data())) == DeserializationError::Ok
                     && acceptAutoBaseLocationReply(received.as<JsonObjectConst>(), requestId,
                                                    rawLatitude, rawLongitude, rawAltitude, location))
                 {
@@ -899,7 +899,7 @@ bool BackendAgent::completeAutoBaseSetup(
         projection["k0"] = numberText(datum.scale);
         projection["false_easting"] = numberText(datum.falseEasting);
         projection["false_northing"] = numberText(datum.falseNorthing);
-        projection["frame_hex"] = datum.projectionFrameHex;
+        projection["frame_hex"] = datum.projectionFrameHex.data();
         projection["frame_bytes"] = datum.projectionFrameBytes;
         projection["frame_truncated"] = datum.projectionFrameBytes > 32;
     }

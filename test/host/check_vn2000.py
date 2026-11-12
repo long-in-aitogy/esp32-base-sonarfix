@@ -137,7 +137,7 @@ for encoded, raw_scale, scale in projection_vectors:
         assert(std::abs(projection.scale - %.4f) < 1e-12);
         assert(projection.projectionLongitudeRaw == 9545454545LL && projection.projectionType == 1);
         assert(projection.projectionFrameBytes == sizeof(packet));
-        assert(std::string(projection.projectionFrameHex) == "%s");
+        assert(std::string(projection.projectionFrameHex.data()) == "%s");
     }''' % (data, raw_scale, scale, encoded))
 harness = harness.replace('FIXED_PROJECTIONS', '\n'.join(checks) + '\n    session.reset();')
 with tempfile.TemporaryDirectory(prefix='esp-vn2000-') as directory:

@@ -95,7 +95,7 @@ bool transformVn2000(double lat, double lon, double alt, const Vn2000Datum &, Vn
 }
 MATCHER_PLACEHOLDER
 struct BackendAgent {
-    struct AutoBaseLocationReply { char json[1536]; };
+    struct AutoBaseLocationReply { static constexpr size_t capacity = 1536; std::array<char, capacity> json{}; };
     int autoBaseLocationQueue_ = 0;
     String statusBootId_ = "boot";
     bool workflowCancelRequested_ = false;
@@ -260,7 +260,7 @@ int main() {
     sessionDatum.has1025 = true; sessionDatum.centralMeridianDeg = 105; sessionDatum.scale = 0.9999;
     sessionDatum.projectionLongitudeRaw = 9545454545LL; sessionDatum.projectionFrameBytes = 31;
     sessionDatum.projectionType = 1; sessionDatum.projectionScaleRaw = 690000000;
-    std::strcpy(sessionDatum.projectionFrameHex, "d30019401070400000000471e827a3490484000ee6b28000000000002264a8");
+    std::strcpy(sessionDatum.projectionFrameHex.data(), "d30019401070400000000471e827a3490484000ee6b28000000000002264a8");
     sessionDatum.kT = 1.00000008613; sessionDatum.count1021 = 2;
     datumTransformOk = false;
     assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
@@ -282,16 +282,16 @@ int main() {
     assert(applied["conversion_report"]["rtcm1025"]["raw_k0"] == 690000000);
     assert(applied["conversion_report"]["rtcm1025"]["raw_l0"] == "9545454545");
     assert(applied["conversion_report"]["rtcm1025"]["frame_bytes"] == 31);
-    assert(applied["conversion_report"]["rtcm1025"]["frame_hex"] == sessionDatum.projectionFrameHex);
+    assert(applied["conversion_report"]["rtcm1025"]["frame_hex"] == sessionDatum.projectionFrameHex.data());
     assert(applied["conversion_report"]["rtcm1025"]["frame_truncated"] == false);
     assert(applied["conversion_report"]["receiver_write_completed"] == true);
     sessionDatum.scale = 0.9996; sessionDatum.projectionScaleRaw = 660000000;
-    std::strcpy(sessionDatum.projectionFrameHex, "d30019401070400000000471e827a33ab668000ee6b2800000000000e9a16f");
+    std::strcpy(sessionDatum.projectionFrameHex.data(), "d30019401070400000000471e827a33ab668000ee6b2800000000000e9a16f");
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     report.clear(); assert(!deserializeJson(report, agent.reportJson));
     assert(report["zone_width_deg"] == 6);
     assert(report["rtcm1025"]["raw_k0"] == 660000000);
-    assert(report["rtcm1025"]["frame_hex"] == sessionDatum.projectionFrameHex);
+    assert(report["rtcm1025"]["frame_hex"] == sessionDatum.projectionFrameHex.data());
     sessionDatum.scale = 0.9998;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     report.clear(); assert(!deserializeJson(report, agent.reportJson));

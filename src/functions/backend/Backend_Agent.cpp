@@ -648,10 +648,10 @@ void BackendAgent::handleControlAck(const String &source, const String &message,
     const JsonObjectConst location = doc["auto_base_location"].as<JsonObjectConst>();
     if (autoBaseLocationQueue_
         && workflowActive() && !location.isNull()
-        && measureJson(location) < sizeof(AutoBaseLocationReply::json))
+        && measureJson(location) < AutoBaseLocationReply::capacity)
     {
         AutoBaseLocationReply reply{};
-        serializeJson(location, reply.json, sizeof(reply.json));
+        serializeJson(location, reply.json.data(), reply.json.size());
         xQueueOverwrite(autoBaseLocationQueue_, &reply);
     }
     if (source == "mqtt")
