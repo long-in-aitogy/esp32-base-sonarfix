@@ -85,6 +85,15 @@ namespace
         Serial.printf("[GNSS][READBACK][RX] UBX %02X/%02X; bytes=%lu; elapsed_ms=%lu; reply=%s\n",
                       cls, id, static_cast<unsigned long>(receivedBytes),
                       static_cast<unsigned long>(millis() - started), result);
+#if PROGRAM_DEBUG
+        if (matched)
+        {
+            Serial.printf("[GNSS][READBACK][RAW] UBX %02X/%02X payload=", cls, id);
+            for (size_t i = 6; i < reply.length - 2; ++i)
+                Serial.printf("%02X", reply.frame[i]);
+            Serial.println();
+        }
+#endif
         if (!matched)
             error = written ? "u-blox base readback timeout" : "u-blox query write failed";
         return matched;
