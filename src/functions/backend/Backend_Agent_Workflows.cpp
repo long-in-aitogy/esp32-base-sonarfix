@@ -325,8 +325,8 @@ bool BackendAgent::waitForRoverGga(const uint32_t startedMs)
         }
         vTaskDelay(pdMS_TO_TICKS(100));
     }
-    Serial.println("[AUTO BASE][ERROR] Chip o Rover nhung khong co GGA moi trong 10s");
-    return false;
+    Serial.println("[AUTO BASE] Rover mode confirmed; waiting for GNSS GGA position");
+    return !workflowCancelRequested_;
 }
 
 bool BackendAgent::configureUbloxRover()

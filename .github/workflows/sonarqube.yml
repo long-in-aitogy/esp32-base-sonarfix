@@ -76,6 +76,7 @@ jobs:
           python3 test/host/check_connection_preference.py
           python3 test/host/check_network_status.py
           python3 test/host/check_network_lifecycle.py
+          python3 test/host/check_ublox_rover_gga.py
           python3 test/host/check_wifi_migration.py
           python3 test/host/check_wifi_recovery.py
           python3 test/host/check_wifi_commands.py
