@@ -170,6 +170,7 @@ bool BackendAgent::transformItrfToVn2000(double latitudeDeg, double longitudeDeg
     auto longitudeRad = 0.0;
     auto transformedHeight = 0.0;
     ecefToLlh(transformed, latitudeRad, longitudeRad, transformedHeight);
+    result.projectedHeight = transformedHeight;
     const auto centralMeridianRad = centralMeridianDeg * 3.14159265358979323846 / 180.0;
     blhToUtm(centralMeridianRad, scale, latitudeRad, longitudeRad,
              transformedHeight, result.northing, result.easting);

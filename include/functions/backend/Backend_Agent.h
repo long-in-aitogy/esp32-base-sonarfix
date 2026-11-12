@@ -245,6 +245,7 @@ private:
         double altitude;
         double northing = 0.0;
         double easting = 0.0;
+        double projectedHeight = 0.0;
     };
     bool transformToVn2000(double latitude, double longitude, double altitude,
                            double centralMeridianDeg, double scale, ProjectedPosition &result);

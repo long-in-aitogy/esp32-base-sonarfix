@@ -911,7 +911,16 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
     if (!base["gnss_options"].is<JsonObject>())
         base.createNestedObject("gnss_options");
     base["gnss_options"]["output_mode"] = "rtcm_only";
-    base.remove("conversion_report");
+    if (base.containsKey("conversion_report"))
+    {
+        base.remove("conversion_report");
+        if (!baseDoc.garbageCollect())
+        {
+            error = "cannot allocate province configuration";
+            return false;
+        }
+        base = baseDoc.as<JsonObject>();
+    }
     JsonObject coordinates = base["coords"].as<JsonObject>();
     if (coordinates.isNull())
         coordinates = base["coords"].to<JsonObject>();
@@ -936,6 +945,19 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
     base["projection_source"] = "manual_province_override";
     base["vn2000_northing"] = result.northing;
     base["vn2000_easting"] = result.easting;
+    JsonObject report = base.createNestedObject("conversion_report");
+    report["transform_applied"] = true;
+    report["projection_source"] = "manual";
+    report["parameter_source"] = "legacy_fixed";
+    report["province_code"] = province;
+    report["province_name"] = provinceName;
+    report["central_meridian_deg"] = centralMeridianDeg;
+    report["k0"] = scale;
+    report["input_coord"].set(base["auto_base_raw_itrf_llh"]);
+    report["calculated_coord"].set(coordinates);
+    report["projected_coord"]["north"] = numberText(result.northing);
+    report["projected_coord"]["east"] = numberText(result.easting);
+    report["projected_coord"]["h"] = numberText(result.projectedHeight);
     if (baseDoc.overflowed())
     {
         error = "Base configuration exceeds memory capacity";

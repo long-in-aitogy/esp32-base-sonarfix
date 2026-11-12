@@ -22,7 +22,7 @@ void enforceBaseAccuracy(JsonObject base) {
     if (!base["coords"]["accuracy"].isNull()) base["coords"]["accuracy"] = 5;
 }
 struct BackendAgent {
-    struct ProjectedPosition { double latitude, longitude, altitude, northing = 0, easting = 0; };
+    struct ProjectedPosition { double latitude, longitude, altitude, northing = 0, easting = 0, projectedHeight = 0; };
     struct StartupPosition { double latitude, longitude, altitude; bool ellipsoid = false; };
     String baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":21,"lon":105,"alt":10,"accuracy":3}})";
     String sensorType_ = "Ublox";
@@ -35,7 +35,7 @@ struct BackendAgent {
         if (p != "HN") return false; meridian = 105; scale = 0.9999; name = "Ha Noi"; return true;
     }
     bool transformToVn2000(double lat, double lon, double alt, double, double, ProjectedPosition &r) {
-        transformedInput = lat; r = {lat + 0.01, lon, alt, 10, 20}; return true;
+        transformedInput = lat; r = {lat + 0.01, lon, alt, 10, 20, 30}; return true;
     }
     bool applyBaseCoordinates(double lat, double, double, JsonObjectConst) { ++writes; sentLatitude = lat; return true; }
     bool refreshReceiverReadback(String &error) { if (!readOk) error = "read failed"; return readOk; }
@@ -78,7 +78,9 @@ int main() {
     assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
     assert(agent.transformedInput == 21.25 && agent.sentLatitude == 21.26);
     saved.clear(); assert(!deserializeJson(saved, agent.baseConfig_));
-    assert(saved["conversion_report"].isNull() && saved["central_meridian_deg"] == 105);
+    assert(saved["conversion_report"]["projection_source"] == "manual" && saved["conversion_report"]["central_meridian_deg"] == 105);
+    assert(saved["conversion_report"]["projected_coord"]["h"].as<double>() == 30);
+    assert(saved["conversion_report"]["projected_coord"]["north"].as<double>() == 10);
     agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","itrf_vn2000_transform_applied":true,"coords":{"lat":"21.08","lon":"105.78","alt":"10.5"},"auto_base_raw_itrf_llh":{"lat":"21.084989583712345","lon":"105.78665644691234","alt":"10.5"}})";
     assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
     assert(std::abs(agent.transformedInput - 21.084989583712345) < 1e-13);
