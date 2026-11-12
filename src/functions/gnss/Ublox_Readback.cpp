@@ -16,7 +16,8 @@ namespace
 {
 
 /** @brief Implements query. */
-    bool query(uint8_t cls, uint8_t id, UbxReply &reply, String &error,
+    template <size_t Capacity>
+    bool query(uint8_t cls, uint8_t id, UbxReplyBuffer<Capacity> &reply, String &error,
                const uint8_t *payload = nullptr, size_t length = 0)
     {
         if (length > 4 + UbxConfigVerification::MAX_KEYS * 4 || (length && !payload))

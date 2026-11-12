@@ -4,9 +4,10 @@
 #include <cstdint>
 
 // Bounded UBX reply reader for configuration exchanges, including checksum.
-struct UbxReply
+template <size_t Capacity = 256>
+struct UbxReplyBuffer
 {
-    std::array<uint8_t, 256> frame = {};
+    std::array<uint8_t, Capacity> frame = {};
     size_t used = 0;
     size_t expected = 0;
     size_t length = 0;
@@ -46,3 +47,5 @@ struct UbxReply
         return a == frame[length - 2] && b == frame[length - 1];
     }
 };
+
+using UbxReply = UbxReplyBuffer<>;
