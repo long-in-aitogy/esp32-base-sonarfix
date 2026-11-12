@@ -167,9 +167,8 @@ namespace UnicoreCommands
     static String coordinateText(double value)
     {
         double scaled = value * 1e10;
-        const double integer = std::round(scaled);
         // Preserve exact grid points affected by floating-point representation.
-        if (std::abs(scaled - integer) <= 4 * std::numeric_limits<double>::epsilon() * std::fmax(1.0, std::abs(scaled)))
+        if (const double integer = std::round(scaled); std::abs(scaled - integer) <= 4 * std::numeric_limits<double>::epsilon() * std::fmax(1.0, std::abs(scaled)))
             scaled = integer;
         return String(std::trunc(scaled) / 1e10, 10);
     }

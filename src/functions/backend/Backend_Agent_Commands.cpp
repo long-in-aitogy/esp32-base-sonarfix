@@ -49,10 +49,9 @@ namespace
                               const String &mountpoint)
     {
         const auto prefix = String("server") + String(id);
-        const auto onDemand = jsonBool(
-            service, prefix + "_stream_on_demand",
-            jsonBool(service, "stream_on_demand", false));
-        if (!active && !onDemand)
+        if (const auto onDemand = jsonBool(
+                service, prefix + "_stream_on_demand",
+                jsonBool(service, "stream_on_demand", false)); !active && !onDemand)
             return;
         const String activeKey = prefix + "_stream_active";
         service[activeKey] = active;
@@ -939,9 +938,8 @@ bool BackendAgent::executeStopWorkflowCommand(String &error, String &detail)
         JsonObjectConst coords = base["coords"].as<JsonObjectConst>();
         if (coords.isNull())
             coords = base;
-        const bool hasSavedBase = base["base_setup_method"] == "SURVEY_IN"
-            || (!coords["lat"].isNull() && !coords["lon"].isNull() && !coords["alt"].isNull());
-        if (hasSavedBase)
+        if (const bool hasSavedBase = base["base_setup_method"] == "SURVEY_IN"
+                || (!coords["lat"].isNull() && !coords["lon"].isNull() && !coords["alt"].isNull()); hasSavedBase)
         {
             if (!restoreWorkflowBase(base) || !restartConfiguredNtrip(true))
             {

@@ -48,8 +48,7 @@ namespace
         JsonObjectConst echoed = result["input_coord"].as<JsonObjectConst>();
         const double lat = coordinateNumber(echoed["lat"]);
         const double lon = coordinateNumber(echoed["lon"]);
-        const double alt = coordinateNumber(echoed["alt"]);
-        if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(alt)
+        if (const double alt = coordinateNumber(echoed["alt"]); !std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(alt)
             || std::abs(lat - latitude) > 1e-9 || std::abs(lon - longitude) > 1e-9
             || std::abs(alt - altitude) > 0.00011)
             return false;
@@ -385,8 +384,7 @@ bool BackendAgent::restoreWorkflowBase(JsonObjectConst base)
         coords = base;
     const double lat = coordinateNumber(coords["lat"]);
     const double lon = coordinateNumber(coords["lon"]);
-    const double alt = coordinateNumber(coords["alt"]);
-    if ((method.isEmpty() || method == "AUTO_CORS")
+    if (const double alt = coordinateNumber(coords["alt"]); (method.isEmpty() || method == "AUTO_CORS")
         && !std::isfinite(lat) && !std::isfinite(lon) && !std::isfinite(alt))
     {
         if (!applyRoverMode())
@@ -404,8 +402,7 @@ bool BackendAgent::restoreWorkflowBase(JsonObjectConst base)
     {
         const double duration = base["survey_in_duration"].isNull() ? 120 : coordinateNumber(base["survey_in_duration"]);
         const double accuracy = GnssCmdBuilder::BASE_ACCURACY_METERS;
-        const double maxDuration = sensorType_ == "Unicorecomm" ? 3600 : 604800;
-        if (!std::isfinite(duration) || duration < 1 || duration > maxDuration || std::floor(duration) != duration
+        if (const double maxDuration = sensorType_ == "Unicorecomm" ? 3600 : 604800; !std::isfinite(duration) || duration < 1 || duration > maxDuration || std::floor(duration) != duration
             || !std::isfinite(accuracy) || accuracy < 0.001 || accuracy > 10000)
             return fail("invalid saved Survey-In parameters");
         GnssOptions options;
@@ -1526,12 +1523,10 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload)
     String mountpoint;
     uint32_t timeoutSeconds = 0;
     uint16_t requestedSamples = 0;
-    const auto validConfig = prepareReferenceCheckConfig(
-        payload, reference, referenceLatitude, referenceLongitude, referenceAltitude,
-        restoreLatitude, restoreLongitude, restoreAltitude, host, port, username, password,
-        mountpoint, timeoutSeconds, requestedSamples);
-
-    if (!validConfig)
+    if (const auto validConfig = prepareReferenceCheckConfig(
+            payload, reference, referenceLatitude, referenceLongitude, referenceAltitude,
+            restoreLatitude, restoreLongitude, restoreAltitude, host, port, username, password,
+            mountpoint, timeoutSeconds, requestedSamples); !validConfig)
     {
         setAgentState(normalAgentState());
         setWorkflowProgress("reference_check_failed", 0, 4, R"({"reason":"missing or invalid reference/CORS configuration"})");

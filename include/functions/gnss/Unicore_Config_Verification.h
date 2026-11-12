@@ -14,8 +14,7 @@ struct Log { std::array<char, 24> name{}; uint8_t port = 0; double period = 0; }
 // MODE reports the configured Fixed LLA values, in the same units sent by mode base.
 inline bool parseFixedMode(const char *mode, double &lat, double &lon, double &alt) {
     if (!mode || std::strncmp(mode, "MODE BASE ", 10) != 0) return false;
-    int end = 0;
-    if (std::sscanf(mode + 10, "%lf %lf %lf %n", &lat, &lon, &alt, &end) != 3
+    if (int end = 0; std::sscanf(mode + 10, "%lf %lf %lf %n", &lat, &lon, &alt, &end) != 3
         || !end || mode[10 + end] != '\0') return false;
     return std::isfinite(lat) && std::isfinite(lon) && std::isfinite(alt)
         && std::abs(lat) <= 90 && std::abs(lon) <= 180 && alt >= -12000 && alt <= 100000;
@@ -32,6 +31,25 @@ inline uint8_t comparisonPort(uint8_t configured, const std::vector<Log> &logs) 
     return port;
 }
 
+inline bool validLogName(const char *name, size_t capacity) {
+    if (strnlen(name, capacity) < 2 || name[0] < 'A' || name[0] > 'Z') return false;
+    for (const char *c = name; *c; ++c)
+        if (!(*c >= 'A' && *c <= 'Z') && !(*c >= '0' && *c <= '9')) return false;
+    return true;
+}
+
+inline bool parseLogPeriod(const std::array<std::array<char, 24>, 6> &tokens,
+                           int start, int fields, double &period) {
+    const char *trigger = tokens[start + 2].data();
+    if (!std::strcmp(trigger, "ONCE")) return fields - start == 3;
+    const bool ontime = !std::strcmp(trigger, "ONTIME");
+    if (fields - start != (ontime ? 4 : 3)) return false;
+    const char *text = tokens[start + (ontime ? 3 : 2)].data();
+    char *tail = nullptr;
+    period = std::strtod(text, &tail);
+    return tail && tail != text && !*tail && std::isfinite(period) && period > 0;
+}
+
 inline bool parseLogLine(const char *line, Log &log) {
     std::array<std::array<char, 24>, 6> tokens{};
     const int fields = std::sscanf(line, "%23s %23s %23s %23s %23s %23s",
@@ -45,22 +63,11 @@ inline bool parseLogLine(const char *line, Log &log) {
     const char *port = tokens[start + (portFirst ? 0 : 1)].data();
     const char *name = tokens[start + (portFirst ? 1 : 0)].data();
     if (strnlen(port, tokens[0].size()) != 4 || std::strncmp(port, "COM", 3) || port[3] < '1' || port[3] > '3'
-        || strnlen(name, tokens[0].size()) < 2 || name[0] < 'A' || name[0] > 'Z') return false;
-    for (const char *c = name; *c; ++c) if (!(*c >= 'A' && *c <= 'Z') && !(*c >= '0' && *c <= '9')) return false;
+        || !validLogName(name, tokens[0].size())) return false;
     static_assert(sizeof(log.name) == sizeof(tokens[0]));
     std::memcpy(log.name.data(), name, log.name.size());
     log.port = port[3] - '0';
-    if (const char *trigger = tokens[start + 2].data(); !std::strcmp(trigger, "ONCE")) {
-        if (fields - start != 3) return false;
-    } else {
-        const bool ontime = !std::strcmp(trigger, "ONTIME");
-        if (fields - start != (ontime ? 4 : 3)) return false;
-        char *tail = nullptr;
-        log.period = std::strtod(tokens[start + (ontime ? 3 : 2)].data(), &tail);
-        if (!tail || tail == tokens[start + (ontime ? 3 : 2)].data() || *tail
-            || !std::isfinite(log.period) || log.period <= 0) return false;
-    }
-    return true;
+    return parseLogPeriod(tokens, start, fields, log.period);
 }
 
 inline bool parseLogs(const char *text, size_t length, std::vector<Log> &logs) {
