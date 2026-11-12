@@ -20,7 +20,7 @@ harness = r'''
 constexpr int WIFI_STA=1, ESP_OK=0, NVS_READONLY=1;
 constexpr const char *WIFI_SSID="fallback";
 using nvs_handle_t=int;
-String profiles, tried;
+String profiles, tried, triedPassword;
 std::map<String, String> saved;
 bool writeOk=true, connected=true, cleanupOk=true, failPasswordOnce=false; unsigned cleaned=0;
 struct { void persistent(bool) {} void mode(int) {} } WiFi;
@@ -41,8 +41,8 @@ void nvs_close(nvs_handle_t) {}
 bool validWifiSsid(const String &ssid) { return !ssid.isEmpty() && ssid.size()<=32; }
 bool validWifiPassword(const String &password) { return password.isEmpty() || (password.size()>=8 && password.size()<=63); }
 bool clearUnusedWifi(String &) { ++cleaned; if (cleanupOk) profiles.clear(); return cleanupOk; }
-bool connectWifi(const String &ssid, const String &, bool (*validate)()) {
-    tried=ssid; return connected && ssid!="bad" && (!validate || validate());
+bool connectWifi(const String &ssid, const String &password, bool (*validate)()) {
+    tried=ssid; triedPassword=password; return connected && ssid!="bad" && (!validate || validate());
 }
 '''
 checks = r'''
@@ -55,8 +55,8 @@ int main() {
     assert(saved["WIFI_SSID"]=="good" && saved["WIFI_PASS"]=="abcdefgh" && !profiles.isEmpty() && cleaned==1);
     connected=false; assert(!setupWiFi(nullptr)); assert(!profiles.isEmpty() && cleaned==1);
     connected=true; auto reject=[] { return false; }; assert(!setupWiFi(reject)); assert(!profiles.isEmpty() && cleaned==1);
-    profiles.clear(); assert(setupWiFi(nullptr)); assert(tried=="good" && cleaned==1);
-    saved.clear(); assert(setupWiFi(nullptr)); assert(tried=="fallback" && saved.count("WIFI_SSID") && cleaned==2);
+    profiles.clear(); assert(setupWiFi(nullptr)); assert(tried=="good" && triedPassword=="abcdefgh" && cleaned==1);
+    saved.clear(); assert(setupWiFi(nullptr)); assert(tried=="fallback" && triedPassword=="123456789" && saved.count("WIFI_SSID") && cleaned==2);
     assert(!saveMigratedWifi("", "abcdefgh"));
     assert(!saveMigratedWifi("network", "short"));
 }
