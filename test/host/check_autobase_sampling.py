@@ -6,6 +6,7 @@ import tempfile
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_text()
 methods = source[source.index('bool BackendAgent::waitForAutoBaseFix('):source.index('String BackendAgent::buildAutoBaseResult(')]
+methods += source[source.index('bool BackendAgent::waitForReferenceFix('):source.index('String BackendAgent::buildReferenceCheckResult(')]
 harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -26,7 +27,7 @@ struct GnssTelemetrySnapshot {
     double latitude, longitude, altitude;
 };
 GnssTelemetrySnapshot getGnssTelemetrySnapshot() {
-    GnssTelemetrySnapshot s{mode == 1 ? 1000U : now, {}, 21, 105, 12};
+    GnssTelemetrySnapshot s{mode == 1 ? 1000U : mode == 5 ? (now < 2000 ? 1000U : 2000U) : now, {}, 21, 105, 12};
     std::snprintf(s.fixStatus.data(), s.fixStatus.size(), "%s", mode == 2 ? "RTK_FLOAT" : "RTK_FIXED");
     if (mode == 3) s.latitude = NAN;
     return s;
@@ -37,6 +38,8 @@ struct BackendAgent {
     void setWorkflowProgress(const String &, int, int, const String &) {}
     bool waitForAutoBaseFix(uint32_t, uint8_t, bool &, String &, const String &);
     bool collectAutoBaseSamples(int, std::vector<double> &, std::vector<double> &, std::vector<double> &, bool &, String &, const String &);
+    bool waitForReferenceFix(uint32_t, String &);
+    bool collectReferenceSamples(uint16_t, std::vector<double> &, std::vector<double> &, std::vector<double> &, String &);
 };
 '''
 checks = r'''
@@ -62,6 +65,13 @@ int main() {
     assert(!agent.collectAutoBaseSamples(60, lat, lon, alt, cancelled, error, "station") && error == "caster disconnected");
     mode = 0; agent.workflowCancelRequested_ = true; cancelled = false;
     assert(!agent.collectAutoBaseSamples(60, lat, lon, alt, cancelled, error, "station") && cancelled);
+    agent.workflowCancelRequested_ = false; mode = 0; now = 1000;
+    assert(agent.waitForReferenceFix(3, error));
+    lat.clear(); lon.clear(); alt.clear();
+    assert(agent.collectReferenceSamples(5, lat, lon, alt, error) && lat.size() == 5);
+    mode = 5; now = 1000; lat.clear(); lon.clear(); alt.clear();
+    assert(!agent.collectReferenceSamples(5, lat, lon, alt, error));
+    assert(error == "insufficient valid reference samples" && lat.size() == 2);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='autobase-sampling-') as directory:
@@ -71,4 +81,4 @@ with tempfile.TemporaryDirectory(prefix='autobase-sampling-') as directory:
                     '-I' + str(root / 'include'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     subprocess.run([str(path / 'check')], check=True)
-print('PASS: actual Auto Base RTK waiting, samples, stale data, cancellation and disconnect')
+print('PASS: Auto Base and reference sampling reject stale or duplicate RTK data')

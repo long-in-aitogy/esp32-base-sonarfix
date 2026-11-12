@@ -1462,6 +1462,7 @@ bool BackendAgent::collectReferenceSamples(const uint16_t requestedSamples,
     longitudes.reserve(requestedSamples);
     altitudes.reserve(requestedSamples);
     const uint32_t averageStartedMs = millis();
+    uint32_t lastSampleGgaMs = 0;
     uint32_t nextSecondMs = averageStartedMs;
     const uint32_t averagingSeconds = requestedSamples > 60U ? requestedSamples : 60U;
     while (millis() - averageStartedMs < averagingSeconds * 1000UL && latitudes.size() < requestedSamples)
@@ -1482,8 +1483,9 @@ bool BackendAgent::collectReferenceSamples(const uint16_t requestedSamples,
             nextSecondMs = now + 1000UL;
             const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
             const auto usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus.data());
-            if (usable && std::isfinite(snapshot.latitude) && std::isfinite(snapshot.longitude) && std::isfinite(snapshot.altitude) && snapshot.latitude >= -90.0 && snapshot.latitude <= 90.0 && snapshot.longitude >= -180.0 && snapshot.longitude <= 180.0)
+            if (usable && snapshot.lastGgaMs != lastSampleGgaMs && std::isfinite(snapshot.latitude) && std::isfinite(snapshot.longitude) && std::isfinite(snapshot.altitude) && snapshot.latitude >= -90.0 && snapshot.latitude <= 90.0 && snapshot.longitude >= -180.0 && snapshot.longitude <= 180.0)
             {
+                lastSampleGgaMs = snapshot.lastGgaMs;
                 latitudes.push_back(snapshot.latitude);
                 longitudes.push_back(snapshot.longitude);
                 altitudes.push_back(snapshot.altitude);
