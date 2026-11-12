@@ -756,6 +756,11 @@ bool BackendAgent::executeReferenceCheckCommand(JsonObject payload, String &erro
 bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
                                           String &detail)
 {
+    if (workflowActive())
+    {
+        error = "cannot change province during an active workflow";
+        return false;
+    }
     auto province = payload["province_code"] | String();
     province.toUpperCase();
     double centralMeridianDeg = 0.0;
@@ -765,6 +770,11 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
     const auto baseParsed = deserializeJson(baseDoc, baseConfig_) == DeserializationError::Ok && baseDoc.is<JsonObject>();
     JsonObject base = baseDoc.as<JsonObject>();
     JsonObject rawCoordinates = base["auto_base_raw_itrf_llh"].as<JsonObject>();
+    if (rawCoordinates.isNull() && base["itrf_vn2000_transform_applied"] == true)
+    {
+        error = "original coordinates are missing; cannot transform again";
+        return false;
+    }
     if (rawCoordinates.isNull())
         rawCoordinates = base["coords"].as<JsonObject>();
     if (rawCoordinates.isNull())
@@ -789,10 +799,12 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
         error = "base coordinates are missing or cannot be transformed";
         return false;
     }
-    if (!applyBaseCoordinates(result.latitude, result.longitude, result.altitude, base))
+    if (base["auto_base_raw_itrf_llh"].isNull())
     {
-        error = "cannot apply transformed coordinates to GNSS";
-        return false;
+        JsonObject raw = base.createNestedObject("auto_base_raw_itrf_llh");
+        raw["lat"] = rawLatitude;
+        raw["lon"] = rawLongitude;
+        raw["alt"] = rawAltitude;
     }
     if (!base["gnss_options"].is<JsonObject>())
         base.createNestedObject("gnss_options");
@@ -803,6 +815,10 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
     coordinates["lat"] = result.latitude;
     coordinates["lon"] = result.longitude;
     coordinates["alt"] = result.altitude;
+    base["base_setup_method"] = "FIXED_LLA";
+    base["mode"] = "BASE";
+    base["accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
+    enforceBaseAccuracy(base);
     base["itrf_vn2000_transform_applied"] = true;
     base["central_meridian_deg"] = centralMeridianDeg;
     base["k0"] = scale;
@@ -811,9 +827,47 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
     base["projection_source"] = "manual_province_override";
     base["vn2000_northing"] = result.northing;
     base["vn2000_easting"] = result.easting;
+    if (baseDoc.overflowed())
+    {
+        error = "Base configuration exceeds memory capacity";
+        return false;
+    }
+    if (!applyBaseCoordinates(result.latitude, result.longitude, result.altitude, base))
+    {
+        error = "cannot apply transformed coordinates to GNSS";
+        baseStartupState_ = "error";
+        baseStartupError_ = error;
+        markStatusDirty();
+        return false;
+    }
+    const auto chip = GnssCmdBuilder::sensorTypeFromString(sensorType_);
+    StartupPosition expected;
+    expected.latitude = result.latitude;
+    expected.longitude = result.longitude;
+    expected.altitude = result.altitude;
+    expected.ellipsoid = chip == GnssCmdBuilder::GnssSensorType::Ublox || base["altitude_reference"] == "ELLIPSOID";
+    if (!refreshReceiverReadback(error) || !verifyStartupReadback(chip, true, expected, error))
+    {
+        baseStartupState_ = "error";
+        baseStartupError_ = error;
+        markStatusDirty();
+        return false;
+    }
+    const String previousConfig = baseConfig_;
     baseConfig_.clear();
     serializeJson(baseDoc, baseConfig_);
-    saveStatePreferences();
+    if (!saveStatePreferences())
+    {
+        baseConfig_ = previousConfig;
+        error = "receiver confirmed coordinates, but Base configuration could not be saved";
+        baseStartupState_ = "error";
+        baseStartupError_ = error;
+        markStatusDirty();
+        return false;
+    }
+    baseStartupState_ = "configured";
+    baseStartupError_.clear();
+    markStatusDirty();
     publishConfigState("base_config_state");
     setWorkflowProgress("reprojected", 4, 4);
     detail = "VN2000 province transform applied";
