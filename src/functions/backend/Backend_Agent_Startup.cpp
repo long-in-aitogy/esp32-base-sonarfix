@@ -275,7 +275,13 @@ bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
     }
     if (method == "AUTO_CORS")
     {
-        baseStartupState_ = "preserved";
+        JsonObjectConst coords = base["coords"].as<JsonObjectConst>();
+        if (coords.isNull())
+            coords = base;
+        const bool hasCoordinates = std::isfinite(configNumber(coords["lat"], NAN))
+            && std::isfinite(configNumber(coords["lon"], NAN))
+            && std::isfinite(configNumber(coords["alt"], NAN));
+        baseStartupState_ = hasCoordinates ? "preserved" : "awaiting_configuration";
         markStatusDirty();
         return true;
     }
