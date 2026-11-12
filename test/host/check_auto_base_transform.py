@@ -97,7 +97,6 @@ bool BackendAgent::applyCandidate(String &failureReason) {
     ProjectedPosition result{21, 105, 10};
     DynamicJsonDocument report(CONFIG_DOCUMENT_SIZE);
     if (deserializeJson(report, reportJson)) return false;
-    const double rawLatitude=21, rawLongitude=105, rawAltitude=10;
     const bool transformed=true;
     const double centralMeridianDeg=105, scale=0.9999;
     const char *projectionSource="rtcm1025";

@@ -12,11 +12,12 @@ harness = r'''
 #include <ArduinoJson.h>
 #include "functions/gnss/gnss_cmd_builder.h"
 #include <cassert>
+#include <cmath>
 constexpr size_t CONFIG_DOCUMENT_SIZE = 6144;
 struct Position { double latitude = 21.25, longitude = 105.75, altitude = 10.5, northing = 1, easting = 2; };
 struct BackendAgent {
     String baseConfig_, published;
-    bool saveOk = true, restartOk = true, restoreOk = true, largeReport = false;
+    bool saveOk = true, restartOk = true, restoreOk = true, largeReport = false, precise = false;
     int saves = 0, failSave = 0;
     int publishes = 0, stops = 0, writes = 0;
     bool stopNtripRoverLocked() { ++stops; return true; }
@@ -26,7 +27,8 @@ struct BackendAgent {
         assert(config["mode"] == "BASE" && config["coordinate_source"] == "AUTO_CORS");
         assert(config["auto_cors_source_mode"] == "nearest" && config["coords"]["altitude_reference"] == "ELLIPSOID");
         assert(config["gnss_options"]["output_mode"] == "rtcm_only");
-        assert(config["coords"]["lat"] == 21.25 && config["coords"]["alt"] == 10.5);
+        assert(std::abs(config["coords"]["lat"].as<double>() - (precise ? 21.0849895837 : 21.25)) < 1e-10);
+        assert(config["coords"]["alt"].as<double>() == 10.5);
         assert(config["accuracy"] == 5);
         return restoreOk;
     }
@@ -35,7 +37,14 @@ struct BackendAgent {
     void publishConfigState(const char *kind) { ++publishes; published = kind; }
     bool apply(String &failureReason) {
         Position result;
+        if (precise) { result.latitude = 21.0849895837; result.longitude = 105.7866564469; }
         DynamicJsonDocument report(CONFIG_DOCUMENT_SIZE);
+        report["output_coord"]["lat"] = precise ? "21.0849895837" : "21.2500000000";
+        report["output_coord"]["lon"] = precise ? "105.7866564469" : "105.7500000000";
+        report["output_coord"]["alt"] = "10.5000";
+        report["input_coord"]["lat"] = "21.084989583712345";
+        report["input_coord"]["lon"] = "105.78665644691234";
+        report["input_coord"]["alt"] = "11";
         report["source"]["mountpoint"] = "station";
         if (largeReport) report["detail"] = String(900, 'n');
         const double rawLatitude = 21, rawLongitude = 105, rawAltitude = 11;
@@ -78,10 +87,19 @@ int main() {
     assert(result["conversion_report"]["receiver_write_completed"] == true && result["conversion_report"]["auto_applied"] == true);
     assert(result["auto_cors_source_mode"] == "nearest" && result["coords"]["altitude_reference"] == "ELLIPSOID");
     assert(result["accuracy"] == 5 && result["survey_in_accuracy"] == 5 && result["coords"]["accuracy"] == 5);
-    assert(result["gnss_options"]["msm_level"] == "7" && result["coords"]["lat"] == 21.25);
+    assert(result["gnss_options"]["msm_level"] == "7" && result["coords"]["lat"].as<double>() == 21.25);
     assert(result["gnss_options"]["constellations"]["qzss"] == true);
     assert(result["gnss_options"]["constellations"]["glo"] == false);
     assert(result["gnss_options"]["constellations"]["sbas"] == false);
+    BackendAgent highPrecision;
+    highPrecision.baseConfig_ = "{}"; highPrecision.precise = true;
+    assert(highPrecision.apply(error));
+    result.clear(); assert(!deserializeJson(result, highPrecision.baseConfig_));
+    assert(result["coords"]["lat"] == "21.0849895837" && result["coords"]["lon"] == "105.7866564469");
+    assert(std::abs(result["coords"]["lat"].as<double>() - result["conversion_report"]["output_coord"]["lat"].as<double>()) < 1e-12);
+    assert(std::abs(result["coords"]["lon"].as<double>() - result["conversion_report"]["output_coord"]["lon"].as<double>()) < 1e-12);
+    assert(result["auto_base_raw_itrf_llh"]["lat"] == "21.084989583712345");
+    assert(result["auto_base_raw_itrf_llh"]["lon"] == "105.78665644691234");
     BackendAgent withSnapshot;
     DynamicJsonDocument pending(4096);
     pending["base_setup_method"]="AUTO_CORS";

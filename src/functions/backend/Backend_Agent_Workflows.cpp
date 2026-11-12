@@ -1009,9 +1009,9 @@ bool BackendAgent::completeAutoBaseSetup(
         return false;
     }
     JsonObject coordinates = baseConfig.createNestedObject("coords");
-    coordinates["lat"] = result.latitude;
-    coordinates["lon"] = result.longitude;
-    coordinates["alt"] = result.altitude;
+    coordinates["lat"] = report["output_coord"]["lat"];
+    coordinates["lon"] = report["output_coord"]["lon"];
+    coordinates["alt"] = report["output_coord"]["alt"];
     coordinates["accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
     coordinates["altitude_reference"] = "ELLIPSOID";
     baseConfig["altitude_reference"] = "ELLIPSOID";
@@ -1046,9 +1046,9 @@ bool BackendAgent::completeAutoBaseSetup(
     baseConfig["vn2000_northing"] = result.northing;
     baseConfig["vn2000_easting"] = result.easting;
     JsonObject raw = baseConfig.createNestedObject("auto_base_raw_itrf_llh");
-    raw["lat"] = rawLatitude;
-    raw["lon"] = rawLongitude;
-    raw["alt"] = rawAltitude;
+    raw["lat"] = report["input_coord"]["lat"];
+    raw["lon"] = report["input_coord"]["lon"];
+    raw["alt"] = report["input_coord"]["alt"];
     baseConfig["conversion_report"].set(report.as<JsonObjectConst>());
     if (baseConfig.overflowed())
     {
