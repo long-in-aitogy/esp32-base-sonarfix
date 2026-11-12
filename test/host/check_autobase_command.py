@@ -19,12 +19,12 @@ void stopNtrip() { assert(transportHeld); }
 void stopNtripRover() { assert(transportHeld); }
 struct BackendAgent {
     String statusBootId_="boot", sensorType_ = "Ublox", baseConfig_ = R"({"base_setup_method":"SURVEY_IN"})", baseStartupState_, baseStartupError_;
-    bool roverOk=true, saveOk=true, startOk=true;
+    bool roverOk=true, saveOk=true, startOk=true; int published=0, saves=0, failOnSave=0;
     bool applyRoverMode() { return roverOk; }
-    bool saveStatePreferences() { return saveOk; }
+    bool saveStatePreferences() { ++saves; return saveOk && saves != failOnSave; }
     bool restoreWorkflowBase(JsonObjectConst) { baseStartupState_="configured"; return true; }
     bool restartConfiguredNtrip(bool locked) { assert(locked && transportHeld); return true; }
-    void publishConfigState(const char *) {}
+    void publishConfigState(const char *) { ++published; }
     void markStatusDirty() {}
     void setWorkflowProgress(const char *, int, int) {}
     bool running = false; int started = 0; String progress;
@@ -76,8 +76,23 @@ int main() {
     saved.clear(); assert(!deserializeJson(saved,boot.baseConfig_));
     assert(saved["auto_base_started_boot_id"]=="boot" && saved["auto_base_started_request_id"]=="request");
     BackendAgent startFailed; startFailed.startOk=false; startFailed.baseStartupState_="configured";
+    startup["sensor_type"] = "Unicorecomm";
     assert(!startFailed.executeAutoBaseCommand(startup.as<JsonObject>(), error, detail));
     assert(startFailed.baseConfig_==R"({"base_setup_method":"SURVEY_IN"})" && startFailed.baseStartupState_=="configured");
+    assert(startFailed.sensorType_ == "Ublox" && startFailed.published == 0);
+    BackendAgent rollbackFailed; rollbackFailed.startOk=false; rollbackFailed.failOnSave=2;
+    assert(!rollbackFailed.executeAutoBaseCommand(startup.as<JsonObject>(), error, detail));
+    assert(error == "cannot restore previous Base configuration after workflow start failed");
+    assert(rollbackFailed.sensorType_ == "Ublox" && rollbackFailed.published == 0);
+    BackendAgent saveFailed; saveFailed.saveOk=false;
+    assert(!saveFailed.executeAutoBaseCommand(startup.as<JsonObject>(), error, detail));
+    assert(saveFailed.sensorType_ == "Ublox" && saveFailed.published == 0);
+    startup.remove("sensor_type");
+    request["source_mode"] = "manual"; request["auto_apply"] = false; request["sensor_type"] = "Unicorecomm";
+    BackendAgent manualFailed; manualFailed.startOk = false;
+    assert(!manualFailed.executeAutoBaseCommand(request, error, detail));
+    assert(manualFailed.sensorType_ == "Ublox" && manualFailed.published == 0);
+    request.remove("sensor_type");
     pending["ip"]="partial";
     BackendAgent partial;
     assert(!partial.executeAutoBaseCommand(pending.as<JsonObject>(), error, detail));

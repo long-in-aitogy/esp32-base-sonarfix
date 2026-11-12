@@ -711,7 +711,7 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
         error = "missing or invalid CORS connection fields";
         return false;
     }
-    sensorType_ = sensorType;
+    const String previousSensor = sensorType_;
     const String previousConfig = baseConfig_;
     const bool startupAuto = payload["startup_auto"] == true && sourceMode == "nearest";
     if (startupAuto)
@@ -731,26 +731,36 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
         }
         baseConfig_.clear();
         serializeJson(saved, baseConfig_);
+        sensorType_ = sensorType;
         if (!saveStatePreferences())
         {
             baseConfig_ = previousConfig;
+            sensorType_ = previousSensor;
             error = "cannot save nearest CORS startup mode";
             return false;
         }
-        publishConfigState("base_config_state");
     }
+    else
+        sensorType_ = sensorType;
     String workflowPayload;
     serializeJson(payload, workflowPayload);
     if (!startWorkflow("auto_base", workflowPayload))
     {
+        sensorType_ = previousSensor;
         if (startupAuto)
         {
             baseConfig_ = previousConfig;
-            saveStatePreferences();
+            if (!saveStatePreferences())
+            {
+                error = "cannot restore previous Base configuration after workflow start failed";
+                return false;
+            }
         }
         error = "cannot start auto base workflow";
         return false;
     }
+    if (startupAuto)
+        publishConfigState("base_config_state");
     DynamicJsonDocument progress(CONFIG_DOCUMENT_SIZE);
     progress["ntrip_host"] = payload["ip"];
     progress["ntrip_port"] = payload["port"];

@@ -37,6 +37,7 @@ jobs:
           python3 test/host/check_projection_native.py
           python3 test/host/check_auto_nearest_workflow.py
           python3 test/host/check_autobase_config.py
+          python3 test/host/check_autobase_command.py
           python3 test/host/check_workflow_restore.py
           python3 test/host/check_workflow_connection_config.py
 
