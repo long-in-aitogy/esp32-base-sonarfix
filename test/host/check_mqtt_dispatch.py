@@ -13,6 +13,8 @@ harness=r'''
 #include <vector>
 using byte=uint8_t;
 constexpr const char *TOPIC_SUB_CMD="legacy";
+String configuredTopic = TOPIC_SUB_CMD;
+String &mqttCommandTopic() { return configuredTopic; }
 unsigned dispatched=0, backendMessages=0, shutdowns=0, restarts=0;
 bool restartRequested=false;
 enum cmd_action_t { CMD_ACTION_NONE, CMD_ACTION_ESP_RESTART };
@@ -36,7 +38,12 @@ int main() {
     backendAgent.locked=false; mqttCallback(topic,command,sizeof(command)); assert(dispatched==0);
     std::vector<byte> oversized(1025,'A'); mqttCallback(topic,oversized.data(),oversized.size()); assert(dispatched==0);
     mqttCallback(topic,command,sizeof(command)-1); assert(dispatched==1);
-    restartRequested=true; mqttCallback(topic,command,sizeof(command)-1); assert(dispatched==2 && shutdowns==1 && restarts==1);
+    configuredTopic="custom/topic"; char customTopic[]="custom/topic";
+    mqttCallback(topic,command,sizeof(command)-1); assert(dispatched==1);
+    backendAgent.locked=true; mqttCallback(customTopic,command,sizeof(command)-1); assert(dispatched==1);
+    backendAgent.locked=false;
+    mqttCallback(customTopic,command,sizeof(command)-1); assert(dispatched==2);
+    restartRequested=true; mqttCallback(customTopic,command,sizeof(command)-1); assert(dispatched==3 && shutdowns==1 && restarts==1);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='mqtt-dispatch-') as directory:

@@ -58,6 +58,12 @@ namespace
     return serverHost;
   }
 
+  String &mqttCommandTopic()
+  {
+    static String topic = TOPIC_SUB_CMD;
+    return topic;
+  }
+
   uint32_t lastMqttConnectAttemptMs = 0;
 }
 
@@ -77,7 +83,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
   backendAgent.onMqttMessage(topic, payload, length);
 
   // Dispatch plain-text ATG commands separately from JSON device commands.
-  if (strcmp(topic, TOPIC_SUB_CMD) == 0)
+  if (strcmp(topic, mqttCommandTopic().c_str()) == 0)
   {
     if (backendAgent.isLocked() || length > 1024 || memchr(payload, '\0', length))
     {
@@ -172,7 +178,7 @@ int connectMQTT()
     prefs.begin("myPrefs", false);
     auto mqttUser = prefs.getString("MQTT_USER", String(MQTT_USER));
     auto mqttPass = prefs.getString("MQTT_PASS", String(MQTT_PASS));
-    auto topicSubCmd = prefs.getString("TPC_SUB_CMD", String(TOPIC_SUB_CMD));
+    mqttCommandTopic() = prefs.getString("TPC_SUB_CMD", String(TOPIC_SUB_CMD));
     prefs.end();
     const auto statusTopic = String("pi/devices/") + backendAgent.serial() + "/status";
     const auto lwtPayload = backendAgent.lwtPayload();
@@ -186,7 +192,7 @@ int connectMQTT()
       const auto commandSubSent = mqtt.subscribe(commandTopic.c_str(), 1);
       const auto commandsSubSent = mqtt.subscribe(commandsTopic.c_str(), 1);
       const auto legacySubSent = mqtt.subscribe(legacyCommandTopic.c_str(), 1);
-      const auto oldSubSent = mqtt.subscribe(topicSubCmd.c_str());
+      const auto oldSubSent = mqtt.subscribe(mqttCommandTopic().c_str());
       mqtt.subscribe((String("pi/devices/") + backendAgent.serial() + "/control_ack").c_str(), 1);
       Serial.printf("[MQTT] SUBSCRIBE command=%s, commands=%s, legacy=%s, old=%s\n",
                     commandSubSent ? "OK" : "LOI", commandsSubSent ? "OK" : "LOI",
