@@ -389,8 +389,11 @@ void loop()
         if (isWifiConnection() && WiFiClass::status() != WL_CONNECTED)
         {
             digitalWrite(LED_PIN, HIGH);
-            setupWiFi();
-            digitalWrite(LED_PIN, LOW);
+            mqtt.disconnect();
+            stopNtrip();
+            backendAgent.onNetworkChanged();
+            if (setupWiFi())
+                digitalWrite(LED_PIN, LOW);
         }
         xSemaphoreGive(tcpStreamMutex);
     }
