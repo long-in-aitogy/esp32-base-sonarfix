@@ -69,3 +69,5 @@ Build bổ sung tại `d1ba249` với cả `BACKEND_WEBSOCKET_ENABLED=1` và `BA
 Đã đối chiếu đọc cấu hình u-blox với CORS và giữ kiểm tra đầu vào, lỗi mã hóa và giới hạn tuổi dữ liệu của `main`. Kiểm tra MON-VER, TMODE3, VALGET, NAV-SAT, NAV-PVT/NAV-DOP và bộ đệm phản hồi đã đạt trên host và được thêm vào CI.
 
 Đã đối chiếu WebSocket với CORS và giữ kiểm tra bắt tay, khung không hỗ trợ, giải phóng bộ đệm và xử lý ghi thiếu của `sync-functions`. Các kiểm tra handshake, khung dữ liệu, ghi điều khiển và bản tin trạng thái lớn đều đạt trên host và đã thêm vào CI.
+
+Với lệnh AutoNearest đã có địa chỉ CORS, `main` giữ cấu hình Base trước đó khi tác vụ đang chạy; CORS lưu `AUTO_CORS` ngay khi nhận lệnh. Giữ hành vi `main` để có thể khôi phục cấu hình cũ nếu tác vụ thất bại hoặc bị dừng. Với yêu cầu AutoNearest chưa có nguồn, firmware vẫn lưu yêu cầu và bản chụp cấu hình cũ để chờ nguồn.

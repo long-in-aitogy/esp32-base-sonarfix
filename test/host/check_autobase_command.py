@@ -54,6 +54,7 @@ int main() {
     request["source_mode"] = "nearest";
     assert(agent.executeAutoBaseCommand(request, error, detail) && agent.started == 2);
     assert(agent.baseStartupState_=="auto_base_running");
+    assert(agent.baseConfig_ == R"({"base_setup_method":"SURVEY_IN"})" && agent.published == 0);
     progress.clear(); assert(!deserializeJson(progress, agent.progress));
     assert(progress["note"] == "Collect RTK Fixed LLH and apply Base coordinates after quality checks.");
     DynamicJsonDocument pending(1024); pending["source_mode"]="nearest"; pending["auto_apply"]=true;
