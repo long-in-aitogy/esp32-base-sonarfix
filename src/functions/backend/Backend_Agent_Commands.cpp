@@ -471,6 +471,11 @@ bool BackendAgent::executeServiceConfigCommand(JsonObject payload, String &error
     serializeJson(serviceDoc, updatedServiceConfig);
     if (updatedServiceConfig != serviceConfig_)
     {
+        if (workflowActive())
+        {
+            error = "cannot change service config during an active base workflow";
+            return false;
+        }
         const String previousServiceConfig = serviceConfig_;
         serviceConfig_ = updatedServiceConfig;
         if (!saveStatePreferences())
@@ -1063,6 +1068,11 @@ bool BackendAgent::executeStreamCommand(JsonObject payload, String &error,
     if (payload["active"].isUnbound())
     {
         error = "missing payload.active";
+        return false;
+    }
+    if (workflowActive())
+    {
+        error = "cannot change streams during an active base workflow";
         return false;
     }
     applyServiceStreamCommand(payload);

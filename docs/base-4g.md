@@ -127,6 +127,10 @@ tăng, dùng `ATG GNSS BASE ALL CURRENT ON` để bật toàn bộ danh sách RT
    chủ NTRIP. Theo dõi trạng thái GNSS, tọa độ, RTK FIX, vệ tinh, tốc độ RTCM,
    kết nối từng máy chủ và `last_command_result` trên hệ thống hiện có.
 
+Khi Auto Base hoặc đối chiếu tọa độ đang chạy, firmware từ chối thay đổi cấu hình
+dịch vụ hoặc trạng thái stream để không ngắt phiên Rover. Gửi lại lệnh sau khi
+workflow hoàn tất hoặc dừng; cấu hình dịch vụ không đổi vẫn được chấp nhận.
+
 Không cần tạo dashboard hoặc API riêng cho ESP32. Các topic sử dụng:
 
 ```text
