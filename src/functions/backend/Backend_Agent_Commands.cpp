@@ -674,15 +674,26 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
         // Command callbacks run under tcpStreamMutex in the MQTT task.
         stopNtrip();
         stopNtripRover();
+        const auto restorePrevious = [&]()
+        {
+            sensorType_ = previousSensor;
+            return restoreWorkflowBase(previous.as<JsonObjectConst>()) && restartConfiguredNtrip(true);
+        };
+        const auto reportRestoreError = [&](const char *reason)
+        {
+            baseStartupState_ = "error";
+            baseStartupError_ = reason;
+            markStatusDirty();
+            error = reason;
+        };
         sensorType_ = sensorType;
         baseStartupState_ = "awaiting_auto_base";
         if (!applyRoverMode())
         {
-            sensorType_ = previousSensor;
-            DynamicJsonDocument previous(CONFIG_DOCUMENT_SIZE);
-            deserializeJson(previous, previousConfig);
-            if (restoreWorkflowBase(previous.as<JsonObjectConst>())) restartConfiguredNtrip(true);
-            error = "cannot switch GNSS receiver to Rover mode";
+            if (!restorePrevious())
+                reportRestoreError("cannot restore previous Base/NTRIP after AutoNearest failure");
+            else
+                error = "cannot switch GNSS receiver to Rover mode";
             return false;
         }
         baseConfig_.clear();
@@ -691,11 +702,14 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
         {
             baseConfig_ = previousConfig;
             sensorType_ = previousSensor;
-            saveStatePreferences();
-            DynamicJsonDocument previous(CONFIG_DOCUMENT_SIZE);
-            deserializeJson(previous, previousConfig);
-            if (restoreWorkflowBase(previous.as<JsonObjectConst>())) restartConfiguredNtrip(true);
-            error = "cannot save nearest CORS request";
+            const bool savedPrevious = saveStatePreferences();
+            const bool restored = restorePrevious();
+            if (!restored)
+                reportRestoreError("cannot restore previous Base/NTRIP after AutoNearest failure");
+            else if (!savedPrevious)
+                reportRestoreError("cannot restore previous Base configuration after AutoNearest save failed");
+            else
+                error = "cannot save nearest CORS request";
             return false;
         }
         baseStartupError_.clear();

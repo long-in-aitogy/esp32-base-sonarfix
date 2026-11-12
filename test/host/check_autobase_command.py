@@ -19,11 +19,12 @@ void stopNtrip() { assert(transportHeld); }
 void stopNtripRover() { assert(transportHeld); }
 struct BackendAgent {
     String statusBootId_="boot", sensorType_ = "Ublox", baseConfig_ = R"({"base_setup_method":"SURVEY_IN"})", baseStartupState_, baseStartupError_;
-    bool roverOk=true, saveOk=true, startOk=true; int published=0, saves=0, failOnSave=0;
+    bool roverOk=true, saveOk=true, startOk=true, restoreOk=true, restartOk=true;
+    int published=0, saves=0, failOnSave=0, restarts=0;
     bool applyRoverMode() { return roverOk; }
     bool saveStatePreferences() { ++saves; return saveOk && saves != failOnSave; }
-    bool restoreWorkflowBase(JsonObjectConst) { baseStartupState_="configured"; return true; }
-    bool restartConfiguredNtrip(bool locked) { assert(locked && transportHeld); return true; }
+    bool restoreWorkflowBase(JsonObjectConst) { if (restoreOk) baseStartupState_="configured"; return restoreOk; }
+    bool restartConfiguredNtrip(bool locked) { assert(locked && transportHeld); ++restarts; return restartOk; }
     void publishConfigState(const char *) { ++published; }
     void markStatusDirty() {}
     void setWorkflowProgress(const char *, int, int) {}
@@ -69,6 +70,15 @@ int main() {
     BackendAgent failed; failed.roverOk=false;
     assert(!failed.executeAutoBaseCommand(pending.as<JsonObject>(), error, detail));
     assert(failed.baseConfig_==R"({"base_setup_method":"SURVEY_IN"})" && failed.baseStartupState_=="configured");
+    BackendAgent restoreFailed; restoreFailed.roverOk=false; restoreFailed.restoreOk=false;
+    assert(!restoreFailed.executeAutoBaseCommand(pending.as<JsonObject>(), error, detail));
+    assert(error == "cannot restore previous Base/NTRIP after AutoNearest failure" && restoreFailed.baseStartupState_ == "error" && restoreFailed.restarts == 0);
+    BackendAgent restartFailed; restartFailed.roverOk=false; restartFailed.restartOk=false;
+    assert(!restartFailed.executeAutoBaseCommand(pending.as<JsonObject>(), error, detail));
+    assert(error == "cannot restore previous Base/NTRIP after AutoNearest failure" && restartFailed.baseStartupState_ == "error" && restartFailed.restarts == 1);
+    BackendAgent nvsFailed; nvsFailed.saveOk=false;
+    assert(!nvsFailed.executeAutoBaseCommand(pending.as<JsonObject>(), error, detail));
+    assert(error == "cannot restore previous Base configuration after AutoNearest save failed" && nvsFailed.baseStartupState_ == "error");
     DynamicJsonDocument startup(1024); startup["source_mode"]="nearest"; startup["auto_apply"]=true; startup["startup_auto"]=true;
     BackendAgent boot;
     boot.baseConfig_=R"({"base_setup_method":"AUTO_CORS","auto_base_request_id":"request"})";
