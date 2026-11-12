@@ -30,11 +30,17 @@ constexpr size_t CONFIG_DOCUMENT_SIZE = 6144, AUTO_BASE_RESULT_SIZE = 6144, PROG
 uint32_t now = 1000;
 uint32_t millis() { return now; }
 int pdMS_TO_TICKS(int n) { return n; }
-uint32_t requestStarted = 0; bool provideLocation = false;
+uint32_t requestStarted = 0; bool provideLocation = false; int realLocation = 0;
 int xQueueReset(int) { requestStarted = now; return 1; }
 int xQueueReceive(int, void *out, int timeout) {
     now += timeout;
     if (!provideLocation) return 0;
+    // Responses captured from the CORS backend's administrative-boundary resolver.
+    if (realLocation == 1) {
+        std::snprintf(static_cast<char *>(out), 1536, R"({"request_id":"boot:%u","location":{"input_coord":{"lat":21.08499,"lon":105.78666,"alt":-7.9815},"source":"administrative_boundaries_34","province_code":"01","province_name":"Thành phố Hà Nội","projection_options":[{"region":"Hà Nội","l0_deg":105,"k0":0.9999,"zone_width_deg":3}],"l0_deg":105,"k0":0.9999,"state":"resolved","zone_width_deg":3}})", requestStarted);
+    } else if (realLocation == 2) {
+        std::snprintf(static_cast<char *>(out), 1536, R"({"request_id":"boot:%u","location":{"input_coord":{"lat":21,"lon":105,"alt":10},"source":"administrative_boundaries_34","province_code":"25","province_name":"Tỉnh Phú Thọ","projection_options":[{"region":"Phú Thọ","l0_deg":104.75,"k0":0.9999,"zone_width_deg":3},{"region":"Vĩnh Phúc","l0_deg":105,"k0":0.9999,"zone_width_deg":3},{"region":"Hoà Bình","l0_deg":106,"k0":0.9999,"zone_width_deg":3}],"l0_deg":null,"k0":null,"state":"projection_ambiguous"}})", requestStarted);
+    } else
     std::snprintf(static_cast<char *>(out), 1536, R"({"request_id":"boot:%u","location":{"input_coord":{"lat":21,"lon":105,"alt":10},"l0_deg":105,"k0":0.9999,"province_name":"Hà Nội","projection_options":[{"region":"A","l0_deg":105,"k0":0.9999},{"region":"B","l0_deg":105,"k0":0.9999},{"region":"C","l0_deg":105,"k0":0.9999}]}})", requestStarted);
     provideLocation = false; return 1;
 }
@@ -148,6 +154,21 @@ int main() {
     assert(!deserializeJson(applied, agent.baseConfig_));
     assert(applied["conversion_report"]["location"]["province_name"] == "Hà Nội");
     assert(applied["conversion_report"]["location"]["projection_options"].size() == 3);
+    // Exercise actual CORS replies: a unique projection applies; ambiguous options do not.
+    realLocation = 1; provideLocation = true;
+    std::vector<double> hanoiLat{21.08499}, hanoiLon{105.78666}, hanoiAlt{-7.9815};
+    assert(agent.completeAutoBaseSetup(payload, hanoiLat, hanoiLon, hanoiAlt, resultJson, error, "station"));
+    report.clear(); assert(!deserializeJson(report, agent.reportJson));
+    assert(report["location"]["province_name"] == "Thành phố Hà Nội");
+    assert(report["location"]["projection_options"].size() == 1);
+    assert(agent.applyCandidate(error));
+    applied.clear(); assert(!deserializeJson(applied, agent.baseConfig_));
+    assert(applied["conversion_report"]["location"]["state"] == "resolved");
+    realLocation = 2; provideLocation = true; agent.reachedWrite = false;
+    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    assert(error == "province projection unresolved; RTCM 1025 or a unique server region is required");
+    assert(!agent.reachedWrite);
+    realLocation = 0;
     sessionDatum.has1025 = true; sessionDatum.centralMeridianDeg = 105; sessionDatum.scale = 0.9999;
     sessionDatum.kT = 1.00000008613; sessionDatum.count1021 = 2;
     datumTransformOk = false;
