@@ -15,6 +15,7 @@ harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <cassert>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
