@@ -972,7 +972,22 @@ bool BackendAgent::completeAutoBaseSetup(
     }
     if (!(payload["auto_apply"] | false))
         return true;
-    resultJson.clear();
+    report["receiver_write_completed"] = true;
+    report["auto_applied"] = true;
+    if (report.overflowed())
+    {
+        failureReason = "Auto Base report exceeds memory capacity";
+        return false;
+    }
+    resultJson = buildAutoBaseResult(
+        result.latitude, result.longitude, result.altitude, rawLatitude, rawLongitude, rawAltitude,
+        transformed, true, latitudes.size(), projectionSource,
+        provinceCode, provinceName, centralMeridianDeg, scale, report.as<JsonObjectConst>());
+    if (resultJson.isEmpty())
+    {
+        failureReason = "cannot allocate Auto Base result";
+        return false;
+    }
 
     setAgentState("auto_setup_base");
     DynamicJsonDocument baseProgress(2048);
@@ -1068,8 +1083,6 @@ bool BackendAgent::completeAutoBaseSetup(
         return false;
     }
 
-    report["receiver_write_completed"] = true;
-    report["auto_applied"] = true;
     baseConfig["conversion_report"]["receiver_write_completed"] = true;
     baseConfig["conversion_report"]["auto_applied"] = true;
     const String previousConfig = baseConfig_;
@@ -1092,15 +1105,6 @@ bool BackendAgent::completeAutoBaseSetup(
     }
     publishConfigState("base_config_state");
     setAgentState(normalAgentState());
-    resultJson = buildAutoBaseResult(
-        result.latitude, result.longitude, result.altitude, rawLatitude, rawLongitude, rawAltitude,
-        transformed, transportRestored, latitudes.size(), projectionSource,
-        provinceCode, provinceName, centralMeridianDeg, scale, report.as<JsonObjectConst>());
-    if (resultJson.isEmpty())
-    {
-        failureReason = "cannot allocate Auto Base result";
-        return false;
-    }
     Serial.printf("[AUTO BASE] KET QUA: THANH CONG; samples=%u; lat=%.10f; lon=%.10f; alt=%.4f\n",
                   static_cast<unsigned>(latitudes.size()), result.latitude, result.longitude,
                   result.altitude);

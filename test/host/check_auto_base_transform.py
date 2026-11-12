@@ -70,7 +70,7 @@ struct BackendAgent {
     bool stopNtripRoverLocked() { return true; }
     void setWorkflowProgress(const char *, int, int, const String &) {}
     struct ProjectedPosition { double latitude, longitude, altitude; double northing = 0, easting = 0; };
-    bool reachedWrite = false, transformOk = false; int conversions = 0;
+    bool reachedWrite = false, transformOk = false, failFinalResult = false; int conversions = 0;
     String sensorType_ = "Ublox";
     String reportJson;
     String baseConfig_ = R"({"base_setup_method":"SURVEY_IN","survey_in_duration":300})";
@@ -85,6 +85,7 @@ struct BackendAgent {
     String buildAutoBaseResult(double lat, double lon, double alt, double rawLat, double rawLon, double rawAlt,
                                bool transformed, bool restarted, size_t count, const String &source,
                                const String &code, const String &name, double meridian, double scale, JsonObjectConst report) {
+        if (restarted && failFinalResult) return String();
         reportJson.clear(); serializeJson(report, reportJson);
         return buildRealAutoBaseResult(lat, lon, alt, rawLat, rawLon, rawAlt, transformed, restarted,
                                        count, source, code, name, meridian, scale, report);
@@ -224,6 +225,10 @@ int main() {
     payload["l0_deg"] = 105; payload["k0"] = 0.9999;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     payload["auto_apply"] = true;
+    agent.failFinalResult = true; agent.reachedWrite = false;
+    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    assert(!agent.reachedWrite && error == "cannot allocate Auto Base result");
+    agent.failFinalResult = false;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(agent.reachedWrite);
     payload["auto_apply"] = false; payload["enable_itrf_vn2000_transform"] = false;
