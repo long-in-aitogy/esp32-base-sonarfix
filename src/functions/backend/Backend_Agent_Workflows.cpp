@@ -1345,12 +1345,12 @@ bool BackendAgent::prepareReferenceCheckConfig(
     if (storedCoordinates.isNull())
         storedCoordinates = storedBaseObject;
 
-    referenceLatitude = reference["lat"] | NAN;
-    referenceLongitude = reference["lon"] | NAN;
-    referenceAltitude = reference["alt"] | NAN;
-    restoreLatitude = storedCoordinates["lat"] | NAN;
-    restoreLongitude = storedCoordinates["lon"] | NAN;
-    restoreAltitude = storedCoordinates["alt"] | NAN;
+    referenceLatitude = coordinateNumber(reference["lat"]);
+    referenceLongitude = coordinateNumber(reference["lon"]);
+    referenceAltitude = coordinateNumber(reference["alt"]);
+    restoreLatitude = coordinateNumber(storedCoordinates["lat"]);
+    restoreLongitude = coordinateNumber(storedCoordinates["lon"]);
+    restoreAltitude = coordinateNumber(storedCoordinates["alt"]);
     host = payload["ip"] | String();
     host.trim();
     const int requestedPort = payload["port"] | 0;
@@ -1479,7 +1479,7 @@ String BackendAgent::buildReferenceCheckResult(JsonObject reference, const doubl
                                                const double measuredAltitude,
                                                const size_t sampleCount)
 {
-    const auto meanLatitudeRad = (measuredLatitude + (reference["lat"] | NAN)) * 3.14159265358979323846 / 360.0;
+    const auto meanLatitudeRad = (measuredLatitude + coordinateNumber(reference["lat"])) * 3.14159265358979323846 / 360.0;
     DynamicJsonDocument result(2048);
     result["reference_coord"]["lat"] = reference["lat"];
     result["reference_coord"]["lon"] = reference["lon"];
@@ -1487,9 +1487,9 @@ String BackendAgent::buildReferenceCheckResult(JsonObject reference, const doubl
     result["measured_coord"]["lat"] = measuredLatitude;
     result["measured_coord"]["lon"] = measuredLongitude;
     result["measured_coord"]["alt"] = measuredAltitude;
-    result["delta_n_m"] = (measuredLatitude - (reference["lat"] | NAN)) * 3.14159265358979323846 / 180.0 * 6378137.0;
-    result["delta_e_m"] = (measuredLongitude - (reference["lon"] | NAN)) * 3.14159265358979323846 / 180.0 * 6378137.0 * cos(meanLatitudeRad);
-    result["delta_u_m"] = measuredAltitude - (reference["alt"] | NAN);
+    result["delta_n_m"] = (measuredLatitude - coordinateNumber(reference["lat"])) * 3.14159265358979323846 / 180.0 * 6378137.0;
+    result["delta_e_m"] = (measuredLongitude - coordinateNumber(reference["lon"])) * 3.14159265358979323846 / 180.0 * 6378137.0 * cos(meanLatitudeRad);
+    result["delta_u_m"] = measuredAltitude - coordinateNumber(reference["alt"]);
     result["sample_count"] = sampleCount;
     String resultJson;
     serializeJson(result, resultJson);

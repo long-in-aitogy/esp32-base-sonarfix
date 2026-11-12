@@ -10,6 +10,10 @@ for name in ('prepareAutoBaseConfig', 'prepareReferenceCheckConfig'):
     start = source.index('bool BackendAgent::' + name + '(')
     end = source.index('\nbool BackendAgent::', start + 5)
     methods.append(source[start:end])
+start = source.index('String BackendAgent::buildReferenceCheckResult(')
+end = source.index('\nbool BackendAgent::runReferenceCheckWorkflow(', start)
+methods.append(source[start:end])
+number = source[source.index('    double coordinateNumber('):source.index('    bool acceptAutoBaseLocationReply(')]
 harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -21,6 +25,7 @@ struct BackendAgent {
     String baseConfig_ = R"({"base_setup_method":"SURVEY_IN"})";
     bool prepareAutoBaseConfig(JsonObject, String &, uint16_t &, String &, String &, String &, uint8_t &, uint32_t &, uint8_t &);
     bool prepareReferenceCheckConfig(JsonObject, JsonObject &, double &, double &, double &, double &, double &, double &, String &, uint16_t &, String &, String &, String &, uint32_t &, uint16_t &);
+    String buildReferenceCheckResult(JsonObject, double, double, double, size_t);
 };
 '''
 checks = r'''
@@ -44,6 +49,18 @@ int main() {
         assert(agent.prepareReferenceCheckConfig(payload, reference, lat, lon, alt, oldLat, oldLon, oldAlt, host, port, user, password, mountpoint, timeout, samples) == valid);
         assert(host == "caster.example" && port == (valid ? input : 0));
     }
+    agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":"21.25","lon":"105.75","alt":"10.5"}})";
+    payload["port"] = 2101;
+    payload["reference_coords"]["lat"] = "21.25";
+    payload["reference_coords"]["lon"] = "105.75";
+    payload["reference_coords"]["alt"] = "10.5";
+    assert(agent.prepareReferenceCheckConfig(payload, reference, lat, lon, alt, oldLat, oldLon, oldAlt, host, port, user, password, mountpoint, timeout, samples));
+    assert(lat == 21.25 && lon == 105.75 && alt == 10.5 && oldLat == lat && oldLon == lon && oldAlt == alt);
+    DynamicJsonDocument result(2048);
+    assert(!deserializeJson(result, agent.buildReferenceCheckResult(reference, 21.25, 105.75, 11.5, 60)));
+    assert(result["delta_n_m"] == 0 && result["delta_e_m"] == 0 && result["delta_u_m"] == 1);
+    payload["reference_coords"]["lat"] = "21bad";
+    assert(!agent.prepareReferenceCheckConfig(payload, reference, lat, lon, alt, oldLat, oldLon, oldAlt, host, port, user, password, mountpoint, timeout, samples));
     payload["ip"] = "   "; payload["port"] = 2101;
     assert(!agent.prepareAutoBaseConfig(payload, host, port, user, password, mountpoint, version, timeout, streak));
     assert(!agent.prepareReferenceCheckConfig(payload, reference, lat, lon, alt, oldLat, oldLon, oldAlt, host, port, user, password, mountpoint, timeout, samples));
@@ -51,7 +68,7 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='workflow-connection-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(harness + '\n'.join(methods) + checks)
+    (path / 'check.cpp').write_text(harness + number + '\n'.join(methods) + checks)
     subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / 'test/host'),
                     '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
