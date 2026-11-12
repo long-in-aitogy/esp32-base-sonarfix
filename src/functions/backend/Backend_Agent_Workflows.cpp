@@ -8,6 +8,7 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <strings.h>
 #include <vector>
 
 #include "functions/gnss/Ubx_Reply.h"
@@ -745,27 +746,82 @@ bool BackendAgent::completeAutoBaseSetup(
     double scale = 0.0;
     String provinceName;
     String provinceCode;
-    if (!resolveAutoBaseProjection(payload, rawLongitude, centralMeridianDeg, scale,
-                                   provinceName, provinceCode, failureReason))
-    {
-        return false;
-    }
-
-    auto transformed = false;
+    String host = payload["ip"] | String();
+    host.trim();
+    const bool vngeonet = strcasecmp(host.c_str(), "vngeonet.vn") == 0
+        || strcasecmp(host.c_str(), "vngeonet.vn.") == 0 || host == "14.238.1.125";
+    const bool requestedTransform = payload["enable_itrf_vn2000_transform"] | true;
+    const char *projectionSource = "not_used";
+    bool transformed = false;
     ProjectedPosition result{rawLatitude, rawLongitude, rawAltitude};
-    if (payload["enable_itrf_vn2000_transform"] | true)
+    if (vngeonet && requestedTransform)
     {
-        transformed = transformToVn2000(rawLatitude, rawLongitude, rawAltitude,
-                                        centralMeridianDeg, scale, result);
-        if (!transformed)
+        if (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS * 4)) != pdTRUE)
+        {
+            failureReason = "cannot acquire rover transport for datum readback";
+            return false;
+        }
+        Vn2000Datum datum = ntripRoverDatum();
+        xSemaphoreGive(tcpStreamMutex);
+        if (!datum.has1021)
+        {
+            failureReason = "missing RTCM 1021 from this CORS session";
+            return false;
+        }
+        if (datum.has1025)
+            projectionSource = "rtcm1025";
+        else if (!payload["l0_deg"].isNull() && !payload["k0"].isNull())
+        {
+            datum.centralMeridianDeg = coordinateNumber(payload["l0_deg"]);
+            datum.scale = coordinateNumber(payload["k0"]);
+            projectionSource = "manual";
+        }
+        else
+        {
+            failureReason = "projection unavailable: RTCM 1025 or manual l0_deg and k0 required";
+            return false;
+        }
+        for (const char *key : {"resN", "resE", "resHS"})
+        {
+            const double value = payload[key].isNull() ? 0 : coordinateNumber(payload[key]);
+            if (!std::isfinite(value))
+            {
+                failureReason = "invalid CORS shift";
+                return false;
+            }
+            if (!std::strcmp(key, "resN")) datum.resN = value;
+            else if (!std::strcmp(key, "resE")) datum.resE = value;
+            else datum.resHS = value;
+        }
+        Vn2000Result converted;
+        if (!transformVn2000(rawLatitude, rawLongitude, rawAltitude, datum, converted))
         {
             failureReason = "VN2000 conversion failed; no candidate coordinates were installed";
             return false;
         }
+        result = {converted.latitude, converted.longitude, converted.altitude, converted.north, converted.east};
+        centralMeridianDeg = datum.centralMeridianDeg;
+        scale = datum.scale;
+        transformed = true;
     }
-
-    const auto requestedProvince = payload["province_code"] | String();
-    const char *projectionSource = requestedProvince.isEmpty() ? "lon_fallback" : "manual_province";
+    else
+    {
+        if (!resolveAutoBaseProjection(payload, rawLongitude, centralMeridianDeg, scale,
+                                       provinceName, provinceCode, failureReason))
+            return false;
+        const auto requestedProvince = payload["province_code"] | String();
+        projectionSource = requestedProvince.isEmpty() ? "lon_fallback" : "manual_province";
+        if (requestedTransform)
+        {
+            transformed = transformToVn2000(rawLatitude, rawLongitude, rawAltitude,
+                                            centralMeridianDeg, scale, result);
+            if (!transformed)
+            {
+                failureReason = "VN2000 conversion failed; no candidate coordinates were installed";
+                return false;
+            }
+        }
+    }
     if (!(payload["auto_apply"] | false))
     {
         resultJson = buildAutoBaseResult(

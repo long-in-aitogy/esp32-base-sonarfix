@@ -16,6 +16,22 @@ harness = r'''
 #include <cassert>
 #include <cmath>
 #include <vector>
+#include <strings.h>
+#include "functions/backend/Vn2000_Datum.h"
+int tcpStreamMutex = 1; constexpr int MUTEX_TIMEOUT_MS = 1500, pdTRUE = 1;
+int pdMS_TO_TICKS(int n) { return n; }
+int xSemaphoreTake(int, int) { return 1; }
+void xSemaphoreGive(int) {}
+Vn2000Datum sessionDatum;
+Vn2000Datum ntripRoverDatum() { return sessionDatum; }
+double coordinateNumber(JsonVariantConst v) {
+    if (v.isNull()) return NAN;
+    if (v.is<const char *>()) { const char *p = v.as<const char *>(); char *end = nullptr; double value = std::strtod(p, &end); return end != p && *end == 0 ? value : NAN; }
+    return v.as<double>();
+}
+bool transformVn2000(double lat, double lon, double alt, const Vn2000Datum &, Vn2000Result &out) {
+    out.latitude = lat; out.longitude = lon; out.altitude = alt; return true;
+}
 struct BackendAgent {
     struct ProjectedPosition { double latitude, longitude, altitude; double northing = 0, easting = 0; };
     bool reachedWrite = false, transformOk = false; int conversions = 0;
@@ -40,6 +56,22 @@ int main() {
     payload["enable_itrf_vn2000_transform"] = false;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
     assert(!agent.reachedWrite && resultJson == "measured" && agent.conversions == 1);
+    payload["ip"] = "VNGEONET.VN";
+    payload["enable_itrf_vn2000_transform"] = true;
+    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
+    assert(error == "missing RTCM 1021 from this CORS session");
+    sessionDatum.has1021 = true;
+    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
+    assert(error == "projection unavailable: RTCM 1025 or manual l0_deg and k0 required");
+    sessionDatum.has1025 = true; sessionDatum.centralMeridianDeg = 105; sessionDatum.scale = 0.9999;
+    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
+    payload["resN"] = "invalid";
+    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
+    assert(error == "invalid CORS shift");
+    payload.remove("resN");
+    sessionDatum.has1025 = false;
+    payload["l0_deg"] = 105; payload["k0"] = 0.9999;
+    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
     payload["auto_apply"] = true;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
     assert(agent.reachedWrite);
@@ -49,7 +81,7 @@ with tempfile.TemporaryDirectory(prefix='auto-base-transform-') as directory:
     path = Path(directory)
     (path / 'check.cpp').write_text(harness + validation + method + checks)
     subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
-                    '-I' + str(root / 'test/host'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
+                    '-I' + str(root / 'test/host'), '-I' + str(root / 'include'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     subprocess.run([str(path / 'check')], check=True)
 print('PASS: invalid projection and conversion failure never apply candidate coordinates')
