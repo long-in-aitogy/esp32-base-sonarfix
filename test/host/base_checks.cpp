@@ -11,6 +11,8 @@
 #include "functions/gnss/unicore_commands.h"
 #include "functions/gnss/Ubx_Base_Status.h"
 #include <cassert>
+#include <cstdio>
+#include <cstdlib>
 #include <iostream>
 #include <string>
 
@@ -61,6 +63,21 @@ void checkUbloxModes(const CommandList &survey, const CommandList &fixed, const 
     const auto measured = buildBaseFixedLlaCommand(-84.54808557036529, 105, 650.1759102147155, 5, GnssSensorType::Ublox, options);
     const auto restored = buildBaseFixedLlaCommand(-84.548085570, 105, 650.1759, 5, GnssSensorType::Ublox, options);
     assert(measured[0] == restored[0]);
+    for (const auto &position : {std::array<double, 3>{21.084989583712345, 105.78665644691234, -7.93456},
+                                 {-84.54808557036529, -179.999999999, 650.1759102147155},
+                                 {90, 180, 100000}, {-90, -180, -12000}, {0, 0, 0}})
+    {
+        const auto original = buildBaseFixedLlaCommand(position[0], position[1], position[2], 5, GnssSensorType::Ublox, options);
+        UbxBaseStatus readback;
+        assert(readback.tmode(original[0].data() + 6, 40));
+        char lat[32], lon[32], alt[32];
+        std::snprintf(lat, sizeof(lat), "%.9f", readback.latitude);
+        std::snprintf(lon, sizeof(lon), "%.9f", readback.longitude);
+        std::snprintf(alt, sizeof(alt), "%.4f", readback.height);
+        const auto replay = buildBaseFixedLlaCommand(std::strtod(lat, nullptr), std::strtod(lon, nullptr),
+                                                      std::strtod(alt, nullptr), 5, GnssSensorType::Ublox, options);
+        assert(original[0] == replay[0]);
+    }
     const auto all = buildBaseAllRtcmOutputCommand("UART1", true, GnssSensorType::Ublox);
     assert(all.size() == 2);
     assert(roverSettingEnabled(all, 0x20910369U)); // RTCM 1094 on UART1.
