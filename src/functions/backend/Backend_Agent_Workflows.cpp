@@ -410,8 +410,7 @@ bool BackendAgent::restoreWorkflowBase(JsonObjectConst base)
         const JsonObjectConst output = base["gnss_options"];
         options.outputMode = String(output["output_mode"] | "rtcm_only") == "rtcm_only"
             ? OutputMode::RtcmOnly : OutputMode::DiagnosticsRtcm;
-        const String level = output["msm_level"].isNull() ? "both" : output["msm_level"].as<String>();
-        if (level == "7") options.msmLevel = MsmLevel::Msm7;
+        if (const String level = output["msm_level"].isNull() ? "both" : output["msm_level"].as<String>(); level == "7") options.msmLevel = MsmLevel::Msm7;
         else if (level == "4") options.msmLevel = MsmLevel::Msm4;
         else options.msmLevel = MsmLevel::Both;
         const JsonObjectConst systems = output["constellations"];

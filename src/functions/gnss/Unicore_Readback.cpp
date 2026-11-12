@@ -27,28 +27,29 @@ namespace UnicoreReadback
                 candidate += value;
             else if (value == '\r' || value == '\n')
             {
-                if (multiline && candidate.startsWith(prefix))
+                if (!multiline || !candidate.startsWith(prefix))
                 {
-                    candidate += value;
-                    if (candidate.endsWith("\r\n\r\n") || candidate.endsWith("\n\n"))
-                    {
+                    if (candidate.startsWith(prefix))
                         response = candidate;
-                        return true;
-                    }
-                    size_t end = candidate.length();
-                    while (end && (candidate[end - 1] == '\r' || candidate[end - 1] == '\n' || candidate[end - 1] == ' '))
-                        --end;
-                    if (end >= 9 && candidate[end - 9] == '*')
-                    {
-                        candidate.remove(end);
-                        response = candidate;
-                        return true;
-                    }
-                    return false;
+                    candidate = "";
+                    return !response.isEmpty();
                 }
-                if (candidate.startsWith(prefix))
+                candidate += value;
+                if (candidate.endsWith("\r\n\r\n") || candidate.endsWith("\n\n"))
+                {
                     response = candidate;
-                candidate = "";
+                    return true;
+                }
+                size_t end = candidate.length();
+                while (end && (candidate[end - 1] == '\r' || candidate[end - 1] == '\n' || candidate[end - 1] == ' '))
+                    --end;
+                if (end >= 9 && candidate[end - 9] == '*')
+                {
+                    candidate.remove(end);
+                    response = candidate;
+                    return true;
+                }
+                return false;
             }
             else if (!candidate.isEmpty() && candidate.length() < (multiline ? 4095U : 383U))
                 candidate += value;

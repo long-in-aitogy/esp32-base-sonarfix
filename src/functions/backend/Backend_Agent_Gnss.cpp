@@ -5,6 +5,7 @@
 #include "Prog_Config.h"
 #include "functions/gnss/Ublox_Readback.h"
 #include "functions/gnss/Ubx_Config_Verification.h"
+#include <algorithm>
 #include <array>
 #include <cinttypes>
 #include <cstdio>
@@ -12,11 +13,11 @@
 
 using namespace BackendAgentInternal;
 
-bool BackendAgent::verifyUnicoreConfig(JsonObjectConst payload, const String &commandId, String &error) {
-    gnssVerification_.clear();
+namespace {
+bool readUnicoreExpectations(JsonObjectConst payload, std::array<double, 3> &wanted,
+                             uint8_t &selectedPort, String &error) {
     const JsonArrayConst expectedLogs = payload["logs"].as<JsonArrayConst>();
     const String reference = payload["altitude_reference"] | "LEGACY";
-    std::array<double, 3> wanted{};
     size_t coordinate = 0;
     for (const char *key : {"lat", "lon", "alt"}) {
         const JsonVariantConst input = payload["coords"][key];
@@ -40,27 +41,57 @@ bool BackendAgent::verifyUnicoreConfig(JsonObjectConst payload, const String &co
         error = "Invalid Unicore verification expectation"; return false;
     }
     const String requestedPort = payload["port"] | "CURRENT";
-    uint8_t selectedPort = 0;
     if (requestedPort != "CURRENT") {
         if (requestedPort != "COM1" && requestedPort != "COM2" && requestedPort != "COM3") {
             error = "Invalid Unicore comparison port"; return false;
         }
         selectedPort = requestedPort[3] - '0';
     }
-    std::vector<String> names;
-    names.reserve(expectedLogs.size());
     for (JsonVariantConst item : expectedLogs) {
         const char *name = item.as<const char *>();
-        const size_t length = name ? strnlen(name, 24) : 0;
-        if (length < 2 || length == 24 || name[0] < 'A' || name[0] > 'Z') {
+        if (!name || strnlen(name, 24) == 24 || !UnicoreConfigVerification::validLogName(name, 24)) {
             error = "Invalid Unicore output name"; return false;
         }
-        for (const char *c = name; *c; ++c)
-            if (!(*c >= 'A' && *c <= 'Z') && !(*c >= '0' && *c <= '9')) {
-                error = "Invalid Unicore output name"; return false;
-            }
-        names.emplace_back(name);
     }
+    return true;
+}
+bool containsExpectedLog(JsonArrayConst expectedLogs, const char *name) {
+    for (JsonVariantConst item : expectedLogs)
+        if (std::strcmp(item.as<const char *>(), name) == 0) return true;
+    return false;
+}
+void compareUnicoreLogs(JsonObject groups, JsonArrayConst expectedLogs,
+                        const std::vector<UnicoreConfigVerification::Log> &logs, uint8_t comparePort) {
+    for (JsonVariantConst item : expectedLogs) {
+        const char *name = item.as<const char *>();
+        JsonObject group = groups[std::strncmp(name, "RTCM", 4) == 0 ? "rtcm" : "diagnostics"];
+        group["checked"] = group["checked"].as<unsigned>() + 1;
+        const bool matches = std::any_of(logs.begin(), logs.end(), [&](const auto &log) {
+            return log.port == comparePort && std::strcmp(name, log.name.data()) == 0
+                && std::abs(log.period - 1) <= 1e-6;
+        });
+        if (!matches) group["mismatched"] = group["mismatched"].as<unsigned>() + 1;
+    }
+    for (const auto &log : logs) {
+        if (log.port != comparePort || log.period == 0) continue;
+        const bool expected = containsExpectedLog(expectedLogs, log.name.data());
+        if (!expected) {
+            JsonObject group = groups[std::strncmp(log.name.data(), "RTCM", 4) ? "diagnostics" : "rtcm"];
+            group["checked"] = group["checked"].as<unsigned>() + 1;
+            group["mismatched"] = group["mismatched"].as<unsigned>() + 1;
+        }
+    }
+    for (const char *name : {"diagnostics", "rtcm"})
+        if (groups[name]["checked"].as<unsigned>() == 0) groups[name]["checked"] = 1;
+}
+} // namespace
+
+bool BackendAgent::verifyUnicoreConfig(JsonObjectConst payload, const String &commandId, String &error) {
+    gnssVerification_.clear();
+    const JsonArrayConst expectedLogs = payload["logs"].as<JsonArrayConst>();
+    std::array<double, 3> wanted{};
+    uint8_t selectedPort = 0;
+    if (!readUnicoreExpectations(payload, wanted, selectedPort, error)) return false;
     DynamicJsonDocument result(VERIFICATION_DOCUMENT_SIZE);
     result["command_id"] = commandId;
     JsonObject details = result.createNestedObject("details");
@@ -135,26 +166,7 @@ bool BackendAgent::verifyUnicoreConfig(JsonObjectConst payload, const String &co
             : "UM có bản tin trên nhiều cổng COM; cần khai báo cổng nối GNSS để đối chiếu.";
     }
     if (logsRead) {
-        for (const String &name : names) {
-            JsonObject group = groups[name.startsWith("RTCM") ? "rtcm" : "diagnostics"];
-            group["checked"] = group["checked"].as<unsigned>() + 1;
-            bool matches = false;
-            for (const auto &log : logs)
-                if (log.port == comparePort && name == log.name.data() && std::abs(log.period - 1) <= 1e-6) matches = true;
-            if (!matches) group["mismatched"] = group["mismatched"].as<unsigned>() + 1;
-        }
-        for (const auto &log : logs) {
-            if (log.port != comparePort || log.period == 0) continue;
-            bool expected = false;
-            for (const String &name : names) if (name == log.name.data()) expected = true;
-            if (!expected) {
-                JsonObject group = groups[std::strncmp(log.name.data(), "RTCM", 4) ? "diagnostics" : "rtcm"];
-                group["checked"] = group["checked"].as<unsigned>() + 1;
-                group["mismatched"] = group["mismatched"].as<unsigned>() + 1;
-            }
-        }
-        for (const char *name : {"diagnostics", "rtcm"})
-            if (groups[name]["checked"].as<unsigned>() == 0) groups[name]["checked"] = 1;
+        compareUnicoreLogs(groups, expectedLogs, logs, comparePort);
     } else {
         groups["diagnostics"]["unread"] = 1;
         groups["rtcm"]["unread"] = 1;

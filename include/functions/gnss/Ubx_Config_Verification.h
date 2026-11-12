@@ -14,8 +14,8 @@ inline bool validExpected(const uint8_t *records, size_t length) {
     for (size_t i = 0; i < length; i += 5) {
         const uint32_t key = UbxBaseStatus::u32(records + i);
         // Only exact one-byte output protocol/rate keys; no wildcard queries.
-        const bool enabled = key == enabledKey(0) || key == enabledKey(1) || key == enabledKey(2) || key == enabledKey(3) || key == enabledKey(4);
-        if ((!enabled && key >> 16 != 0x2091 && key >> 16 != 0x1072 && key >> 16 != 0x1074
+        if (const bool enabled = key == enabledKey(0) || key == enabledKey(1) || key == enabledKey(2) || key == enabledKey(3) || key == enabledKey(4);
+            (!enabled && key >> 16 != 0x2091 && key >> 16 != 0x1072 && key >> 16 != 0x1074
              && key >> 16 != 0x1076 && key >> 16 != 0x1078 && key >> 16 != 0x107A)
             || (key & 0xFFFF) == 0xFFFF || records[i + 4] > 1) return false;
         for (size_t j = 0; j < i; j += 5)

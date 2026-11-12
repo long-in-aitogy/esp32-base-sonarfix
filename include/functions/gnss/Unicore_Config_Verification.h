@@ -70,6 +70,17 @@ inline bool parseLogLine(const char *line, Log &log) {
     return parseLogPeriod(tokens, start, fields, log.period);
 }
 
+inline bool validLogEnvelope(std::string_view input, size_t checksum) {
+    if (checksum != std::string_view::npos)
+        return validUnicoreLogChecksum(input.data(), input.size());
+    if (input.substr(input.size() - 2) != "\n\n" && input.substr(input.size() - 4) != "\r\n\r\n")
+        return false;
+    for (char value : input)
+        if ((static_cast<unsigned char>(value) < 32 && value != '\r' && value != '\n' && value != '\t')
+            || static_cast<unsigned char>(value) >= 127) return false;
+    return true;
+}
+
 inline bool parseLogs(const char *text, size_t length, std::vector<Log> &logs) {
     logs.clear();
     if (!text || length < 12 || length > 4096) return false;
@@ -81,14 +92,7 @@ inline bool parseLogs(const char *text, size_t length, std::vector<Log> &logs) {
     const char *cursor = text + separator;
     const bool hasChecksum = checksum != std::string_view::npos;
     const char *end = text + (hasChecksum ? checksum : length);
-    if (hasChecksum) {
-        if (!validUnicoreLogChecksum(text, length)) return false;
-    } else {
-        if (input.substr(length - 2) != "\n\n" && input.substr(length - 4) != "\r\n\r\n") return false;
-        for (const char *c = text; c < end; ++c)
-            if ((static_cast<unsigned char>(*c) < 32 && *c != '\r' && *c != '\n' && *c != '\t')
-                || static_cast<unsigned char>(*c) >= 127) return false;
-    }
+    if (!validLogEnvelope(input, checksum)) return false;
     if (cursor >= end) return false;
     ++cursor;
     long count = -1;

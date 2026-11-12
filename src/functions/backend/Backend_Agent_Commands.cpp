@@ -153,9 +153,10 @@ void BackendAgent::recordCommandResult(const String &command, const String &sour
     serializeJson(doc, lastCommandResult_);
     const bool readOnly = command == "VERIFY_GNSS_CONFIG";
     const bool saved = readOnly || saveStatePreferences();
+    const char *saveResult = saved ? "OK" : "LOI";
+    if (readOnly) saveResult = "SKIPPED (read-only)";
     Serial.printf("[BACKEND][CMD] %s id=%s source=%s status=%s; NVS=%s\n",
-                  command.c_str(), commandId.c_str(), source.c_str(), status.c_str(),
-                  readOnly ? "SKIPPED (read-only)" : saved ? "OK" : "LOI");
+                  command.c_str(), commandId.c_str(), source.c_str(), status.c_str(), saveResult);
 }
 
 void BackendAgent::publishConfigState(const char *kind)

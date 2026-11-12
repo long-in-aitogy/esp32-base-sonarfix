@@ -5,9 +5,10 @@ import tempfile
 from host_coverage import compile_cpp, mapped, run_cpp
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Gnss.cpp').read_text()
+helper = source[source.index('namespace {\nbool readUnicoreExpectations('):source.index('bool BackendAgent::verifyUnicoreConfig(')]
 begin = source.index('bool BackendAgent::verifyUnicoreConfig(')
 end = source.index('\nnamespace\n{', begin)
-method = source[begin:end]
+method = helper + source[begin:end]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
 shim = shim.replace('    bool isEmpty() const', '''    bool startsWith(const String &value) const { return compare(0, value.size(), value) == 0; }
     bool isEmpty() const''')

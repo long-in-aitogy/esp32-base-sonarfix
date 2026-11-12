@@ -15,8 +15,9 @@ spec = importlib.util.spec_from_file_location('cors_command_builder', builder_pa
 builder = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(builder)
 source = (root / 'src/functions/backend/Backend_Agent_Gnss.cpp').read_text()
+helper = source[source.index('namespace {\nbool readUnicoreExpectations('):source.index('bool BackendAgent::verifyUnicoreConfig(')]
 a = source.index('bool BackendAgent::verifyUnicoreConfig(')
-method = source[a:source.index('\nnamespace\n{', a)]
+method = helper + source[a:source.index('\nnamespace\n{', a)]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
 shim = shim.replace('    bool isEmpty() const', '    bool startsWith(const String &value) const { return compare(0, value.size(), value) == 0; }\n    bool isEmpty() const')
 harness = r'''
