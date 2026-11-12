@@ -111,7 +111,7 @@ Build bổ sung tại `d1ba249` với cả `BACKEND_WEBSOCKET_ENABLED=1` và `BA
 
 Các trường `bestpos`, `mode_kind`, `mode_raw`, `position_type` và `state` mà CORS dùng trong workflow được nhánh đích xử lý trong `Backend_Agent_Gnss.cpp` và bước kiểm tra khởi động. Các bài readback và trạng thái kiểm tra giá trị mô phỏng; kiểm tra tên trường không chứng minh mọi trạng thái receiver thực.
 
-Đối chiếu lại commit CORS `7db656b`: cấu hình Auto Base giữ lựa chọn MSM/chòm sao và đặt đầu ra RTCM-only; phục hồi Fixed LLA đi qua `buildStartupCommands` và xác nhận readback. Bản đích giữ mặc định MSM `both`, QZSS/SBAS bật theo cấu hình hiện tại và accuracy 5 m, thay vì mặc định MSM4, QZSS/SBAS tắt và 0,01 m của CORS. `check_autobase_config.py`, `check_fixed_output_options.py` và `check_workflow_restore.py` kiểm tra các lựa chọn này với receiver giả lập.
+Đối chiếu lại commit CORS `7db656b`: cấu hình Auto Base giữ lựa chọn MSM/chòm sao và đặt đầu ra RTCM-only; phục hồi Fixed LLA đi qua `buildStartupCommands` và xác nhận readback. Khi Auto Base áp dụng kết quả mà chưa có lựa chọn, bản đích đặt mặc định MSM4 và tắt QZSS/SBAS như CORS. Các đường phục hồi hoặc áp dụng tọa độ khác dùng mặc định MSM `both` và bật QZSS/SBAS khi thiếu lựa chọn. Accuracy cấu hình luôn là 5 m thay cho 0,01 m của CORS. `check_autobase_config.py`, `check_fixed_output_options.py` và `check_workflow_restore.py` kiểm tra các lựa chọn này với receiver giả lập.
 
 Với lệnh AutoNearest đã có địa chỉ CORS, `main` giữ cấu hình Base trước đó khi tác vụ đang chạy; CORS lưu `AUTO_CORS` ngay khi nhận lệnh. Giữ hành vi `main` để có thể khôi phục cấu hình cũ nếu tác vụ thất bại hoặc bị dừng. Với yêu cầu AutoNearest chưa có nguồn, firmware vẫn lưu yêu cầu và bản chụp cấu hình cũ để chờ nguồn.
 
@@ -146,6 +146,8 @@ Chạy `python3 test/host/check_cors_unicore_verify.py /duong-dan/cors` để ki
 Kiểm tra lại ngày 12/11/2026: 90/90 bài host không cần thiết bị hoặc đường dẫn CORS đạt; bốn bài tích hợp payload CORS đạt; ba cấu hình firmware `general`, `general_debug`, `general_test` build thành công. Receiver và dịch vụ mạng trong các bài kiểm tra được mô phỏng; chưa xác nhận trên thiết bị thực.
 
 CI GitHub tại `2ca7d76` đã build và chạy các nhóm kiểm tra thành công; SonarQube nhận coverage mã mới 84,4%, nhưng Quality Gate thất bại do cảnh báo mật khẩu caster mặc định. `test/host/run_coverage.py` đo các bài C++ chạy trực tiếp cùng một số bài host dùng đoạn mã trích xuất nguyên vẹn; ánh xạ kiểm tra đoạn mã khớp nguồn trước khi tính coverage. Các bài chưa được instrument không đóng góp vào báo cáo; kết quả không thay thế kiểm thử phần cứng.
+
+CI tại `4c388dc` đã đạt, gồm build, các nhóm kiểm tra, coverage và SonarQube. Cảnh báo mật khẩu caster mặc định được người dùng yêu cầu chuyển sang Accepted. Ba nhóm kiểm tra host chạy song song hai bài mỗi lượt; các kết nối và receiver trong bài vẫn là giả lập.
 
 | Bài hoặc nhóm của CORS | Bằng chứng trên nhánh này và phần cần chú ý |
 | --- | --- |
