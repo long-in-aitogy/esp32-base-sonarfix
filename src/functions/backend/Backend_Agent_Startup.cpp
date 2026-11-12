@@ -48,7 +48,8 @@ bool BackendAgent::buildStartupCommands(JsonObjectConst base,
     options.outputMode = restoreFixed || String(output["output_mode"] | "rtcm_only") == "rtcm_only"
                              ? OutputMode::RtcmOnly
                              : OutputMode::DiagnosticsRtcm;
-    if (const String level = output["msm_level"].isNull() ? (restoreFixed ? "4" : "both") : output["msm_level"].as<String>(); level == "7")
+    const String defaultLevel = restoreFixed ? "4" : "both";
+    if (const String level = output["msm_level"].isNull() ? defaultLevel : output["msm_level"].as<String>(); level == "7")
         options.msmLevel = MsmLevel::Msm7;
     else if (level == "both" || (!restoreFixed && level != "4"))
         options.msmLevel = MsmLevel::Both;
@@ -192,8 +193,7 @@ void BackendAgent::reconcileBaseStartupReadback()
     if (chip == GnssCmdBuilder::GnssSensorType::Unicore && reference != "ELLIPSOID" && reference != "LEGACY")
         return;
     expected.ellipsoid = chip == GnssCmdBuilder::GnssSensorType::Ublox || reference == "ELLIPSOID";
-    String error;
-    if (!verifyStartupReadback(chip, true, expected, error))
+    if (String error; !verifyStartupReadback(chip, true, expected, error))
         return;
     baseStartupState_ = "fixed_restored";
     baseStartupError_.clear();

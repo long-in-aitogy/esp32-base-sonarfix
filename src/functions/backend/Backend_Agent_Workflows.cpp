@@ -759,10 +759,10 @@ bool BackendAgent::completeAutoBaseSetup(
             StaticJsonDocument<384> requestDoc;
             JsonObject request = requestDoc.createNestedObject("location_request");
             request["request_id"] = requestId;
-            char value[32];
-            snprintf(value, sizeof(value), "%.17g", rawLatitude); request["lat"] = String(value);
-            snprintf(value, sizeof(value), "%.17g", rawLongitude); request["lon"] = String(value);
-            snprintf(value, sizeof(value), "%.17g", rawAltitude); request["alt"] = String(value);
+            std::array<char, 32> value{};
+            snprintf(value.data(), value.size(), "%.17g", rawLatitude); request["lat"] = String(value.data());
+            snprintf(value.data(), value.size(), "%.17g", rawLongitude); request["lon"] = String(value.data());
+            snprintf(value.data(), value.size(), "%.17g", rawAltitude); request["alt"] = String(value.data());
             String requestJson;
             serializeJson(requestDoc, requestJson);
             setWorkflowProgress("resolving_location", 4, 4, requestJson);
@@ -831,9 +831,9 @@ bool BackendAgent::completeAutoBaseSetup(
     DynamicJsonDocument report(CONFIG_DOCUMENT_SIZE);
     const auto numberText = [](double number)
     {
-        char text[32];
-        snprintf(text, sizeof(text), "%.17g", number);
-        return String(text);
+        std::array<char, 32> text{};
+        snprintf(text.data(), text.size(), "%.17g", number);
+        return String(text.data());
     };
     report["version"] = 1;
     report["input_coord"]["lat"] = numberText(rawLatitude);
@@ -853,8 +853,7 @@ bool BackendAgent::completeAutoBaseSetup(
         if (altitude)
             return String(value, 4);
         double scaled = value * 1e10;
-        const double integer = std::round(scaled);
-        if (std::abs(scaled - integer) <= 4 * std::numeric_limits<double>::epsilon() * std::fmax(1.0, std::abs(scaled)))
+        if (const double integer = std::round(scaled); std::abs(scaled - integer) <= 4 * std::numeric_limits<double>::epsilon() * std::fmax(1.0, std::abs(scaled)))
             scaled = integer;
         return String(std::trunc(scaled) / 1e10, 10);
     };

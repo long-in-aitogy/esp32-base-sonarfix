@@ -5,6 +5,7 @@
 #include <nvs.h>
 #include <esp_partition.h>
 #include <esp_ota_ops.h>
+#include <array>
 #include <type_traits>
 #include <memory>
 
@@ -224,9 +225,9 @@ void describeNvsEntry(JsonObject row, const char *partition, const nvs_entry_inf
             if (result == ESP_OK) row["bytes"] = text && length ? length - 1 : length;
             if (text && readable && result == ESP_OK) {
                 if (length <= 97) {
-                    char value[97] = {};
-                    result = nvs_get_str(handle, entry.key, value, &length);
-                    if (result == ESP_OK) row["value"] = String(value);
+                    std::array<char, 97> value = {};
+                    result = nvs_get_str(handle, entry.key, value.data(), &length);
+                    if (result == ESP_OK) row["value"] = String(value.data());
                 } else row["value"] = "Giá trị dài hơn 96 byte";
             }
             break;

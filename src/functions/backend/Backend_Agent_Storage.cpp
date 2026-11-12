@@ -21,8 +21,7 @@ namespace BackendAgentInternal
         DynamicJsonDocument progress(PROGRESS_DOCUMENT_SIZE);
         if (deserializeJson(progress, saved) != DeserializationError::Ok)
             return "{}";
-        const String phase = progress["phase"] | String();
-        if (phase == "ready_for_review" || phase == "completed" || phase == "failed" ||
+        if (const String phase = progress["phase"] | String(); phase == "ready_for_review" || phase == "completed" || phase == "failed" ||
             phase == "stopped" || phase == "reference_check_completed" ||
             phase == "reference_check_failed" || phase == "reprojected")
             return saved;
@@ -44,8 +43,7 @@ namespace BackendAgentInternal
             base["accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
             changed = true;
         }
-        JsonObject coords = base["coords"].as<JsonObject>();
-        if (!coords.isNull() && (fixed || !coords["accuracy"].isUnbound()) && coords["accuracy"] != GnssCmdBuilder::BASE_ACCURACY_METERS)
+        if (JsonObject coords = base["coords"].as<JsonObject>(); !coords.isNull() && (fixed || !coords["accuracy"].isUnbound()) && coords["accuracy"] != GnssCmdBuilder::BASE_ACCURACY_METERS)
         {
             coords["accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
             changed = true;

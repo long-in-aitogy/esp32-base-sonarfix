@@ -153,7 +153,8 @@ bool BackendAgent::verifyUnicoreConfig(JsonObjectConst payload, const String &co
         for (const char *name : {"diagnostics", "rtcm"})
             if (groups[name]["checked"].as<unsigned>() == 0) groups[name]["checked"] = 1;
     } else {
-        groups["diagnostics"]["unread"] = groups["rtcm"]["unread"] = 1;
+        groups["diagnostics"]["unread"] = 1;
+        groups["rtcm"]["unread"] = 1;
         result["output_error"] = outputError;
     }
     bool mismatch = false;
@@ -162,7 +163,10 @@ bool BackendAgent::verifyUnicoreConfig(JsonObjectConst payload, const String &co
         mismatch |= group.value()["mismatched"].as<unsigned>() > 0;
         unread |= group.value()["unread"].as<unsigned>() > 0;
     }
-    result["state"] = unread ? "unread" : mismatch ? "mismatch" : "match";
+    const char *state = "match";
+    if (unread) state = "unread";
+    else if (mismatch) state = "mismatch";
+    result["state"] = state;
     if (result.overflowed()) { error = "GNSS verification result overflow"; return false; }
     serializeJson(result, gnssVerification_);
     gnssVerificationMs_ = millis(); markStatusDirty();
@@ -179,10 +183,10 @@ void describeTmode(JsonObject object, const uint8_t *raw) {
     UbxBaseStatus status;
     if (status.tmode(raw, 40) && status.hasPosition) {
         JsonObject position = object.createNestedObject("self_position");
-        char value[32];
-        snprintf(value, sizeof(value), "%.11f", status.latitude); position["lat"] = value;
-        snprintf(value, sizeof(value), "%.11f", status.longitude); position["lon"] = value;
-        snprintf(value, sizeof(value), "%.4f", status.height); position["alt"] = value;
+        std::array<char, 32> value{};
+        snprintf(value.data(), value.size(), "%.11f", status.latitude); position["lat"] = value.data();
+        snprintf(value.data(), value.size(), "%.11f", status.longitude); position["lon"] = value.data();
+        snprintf(value.data(), value.size(), "%.4f", status.height); position["alt"] = value.data();
     }
 }
 }
@@ -232,7 +236,11 @@ bool BackendAgent::verifyGnssConfig(JsonObjectConst payload, const String &comma
         unsigned seen = 0;
         for (JsonObjectConst request : ports) {
             const String name = request["name"] | "";
-            const int portIndex = name == "I2C" ? 0 : name == "UART1" ? 1 : name == "UART2" ? 2 : name == "USB" ? 3 : name == "SPI" ? 4 : -1;
+            static constexpr std::array<const char *, 5> portNames = {"I2C", "UART1", "UART2", "USB", "SPI"};
+            int portIndex = -1;
+            for (size_t i = 0; i < portNames.size(); ++i) {
+                if (name == portNames[i]) { portIndex = static_cast<int>(i); break; }
+            }
             if (portIndex < 0 || (seen & (1U << portIndex))) { error = "Invalid GNSS readback port"; return false; }
             seen |= 1U << portIndex;
             uint8_t records[UbxConfigVerification::MAX_KEYS * 5];
@@ -306,7 +314,10 @@ bool BackendAgent::verifyGnssConfig(JsonObjectConst payload, const String &comma
         mismatch |= group.value()["mismatched"].as<unsigned>() > 0;
         unread |= group.value()["unread"].as<unsigned>() > 0 || !group.value()["checked"].as<unsigned>();
     }
-    result["state"] = unread ? "unread" : mismatch ? "mismatch" : "match";
+    const char *state = "match";
+    if (unread) state = "unread";
+    else if (mismatch) state = "mismatch";
+    result["state"] = state;
     if (!modeRead) result["mode_error"] = modeError;
     if (!outputRead) result["output_error"] = outputError;
     if (result.overflowed()) { error = "GNSS verification result overflow"; return false; }

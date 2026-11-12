@@ -199,7 +199,7 @@ namespace
         const int star = sentence.indexOf('*');
         if (star >= 0)
         {
-            const auto hex = [](char value) -> int
+            const auto hex = [](char value)
             {
                 if (value >= '0' && value <= '9') return value - '0';
                 if (value >= 'A' && value <= 'F') return value - 'A' + 10;
@@ -293,7 +293,11 @@ namespace
             telemetry.lastGga[telemetry.lastGga.size() - 1] = '\0';
             telemetry.lastGgaMs = millis();
             if (!gga.hasPosition)
-                telemetry.latitude = telemetry.longitude = telemetry.altitude = NAN;
+            {
+                telemetry.latitude = NAN;
+                telemetry.longitude = NAN;
+                telemetry.altitude = NAN;
+            }
         }
         if (gga.hasPosition)
         {

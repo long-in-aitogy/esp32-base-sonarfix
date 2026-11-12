@@ -227,28 +227,28 @@ void Vn2000Session::feed(const uint8_t *data, size_t length) {
         frame_[size_++] = data[i];
         while (size_ > 0) {
             if (frame_[0] != 0xD3 || (size_ >= 2 && (frame_[1] & 0xFC))) {
-                memmove(frame_, frame_ + 1, --size_);
+                memmove(frame_.data(), frame_.data() + 1, --size_);
                 continue;
             }
             if (size_ < 3) break;
             const size_t expected = ((size_t(frame_[1] & 3) << 8) | frame_[2]) + 6;
-            if (expected < 8) { memmove(frame_, frame_ + 1, --size_); continue; }
+            if (expected < 8) { memmove(frame_.data(), frame_.data() + 1, --size_); continue; }
             if (size_ < expected) break;
             const uint32_t actual = (uint32_t(frame_[expected - 3]) << 16)
                 | (uint32_t(frame_[expected - 2]) << 8) | frame_[expected - 1];
-            if (crc24q(frame_, expected - 3) == actual) {
+            if (crc24q(frame_.data(), expected - 3) == actual) {
                 ++validFrames_;
                 decode(expected);
                 size_ -= expected;
-                memmove(frame_, frame_ + expected, size_);
-            } else memmove(frame_, frame_ + 1, --size_);
+                memmove(frame_.data(), frame_.data() + expected, size_);
+            } else memmove(frame_.data(), frame_.data() + 1, --size_);
         }
     }
 }
 
 void Vn2000Session::decode(size_t length) {
     const unsigned message = (unsigned(frame_[3]) << 4) | (frame_[4] >> 4);
-    Bits bits{frame_, (length - 3) * 8};
+    Bits bits{frame_.data(), (length - 3) * 8};
     Vn2000Datum next = datum_;
     if (message == 1021) {
         ++datum_.count1021;

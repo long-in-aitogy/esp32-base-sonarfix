@@ -1,11 +1,12 @@
 #pragma once
 #include "functions/gnss/Ubx_Base_Status.h"
+#include <array>
 
 namespace UbxConfigVerification {
 constexpr size_t MAX_KEYS = 40; // A U1 VALGET reply fits the existing 256-byte reader.
 inline uint32_t enabledKey(unsigned port) {
-    constexpr uint32_t keys[] = {0x10510003, 0x10520005, 0x10530005, 0x10650001, 0x10640006};
-    return port < 5 ? keys[port] : 0;
+    constexpr std::array<uint32_t, 5> keys = {0x10510003, 0x10520005, 0x10530005, 0x10650001, 0x10640006};
+    return port < keys.size() ? keys[port] : 0;
 }
 
 inline bool validExpected(const uint8_t *records, size_t length) {

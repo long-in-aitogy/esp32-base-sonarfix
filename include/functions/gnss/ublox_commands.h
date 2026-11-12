@@ -8,8 +8,7 @@ namespace UbloxCommands
     inline int64_t fixedCoordinateUnits(double value, double scale)
     {
         double units = value * scale * 100.0;
-        const double nearest = std::round(units);
-        if (std::abs(units - nearest) <= 4 * std::numeric_limits<double>::epsilon() * std::fmax(1.0, std::abs(units)))
+        if (const double nearest = std::round(units); std::abs(units - nearest) <= 4 * std::numeric_limits<double>::epsilon() * std::fmax(1.0, std::abs(units)))
             units = nearest;
         return static_cast<int64_t>(units);
     }

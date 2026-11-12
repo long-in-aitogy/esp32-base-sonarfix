@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -43,7 +44,7 @@ public:
 private:
     Vn2000Datum datum_;
     uint32_t validFrames_ = 0;
-    uint8_t frame_[1029] = {};
+    std::array<uint8_t, 1029> frame_ = {};
     size_t size_ = 0;
     void decode(size_t length);
 };

@@ -326,8 +326,7 @@ bool BackendAgent::effectiveStreamActive(const JsonObjectConst &service,
     if (serverId < 1 || serverId > 2)
         return false;
     const auto prefix = String("server") + String(serverId);
-    const auto enabled = jsonBool(service, prefix + "_enabled", false);
-    if (!enabled)
+    if (const auto enabled = jsonBool(service, prefix + "_enabled", false); !enabled)
         return false;
     const auto globalOnDemand = jsonBool(service, "stream_on_demand", false);
     const auto onDemand = jsonBool(service, prefix + "_stream_on_demand", globalOnDemand);

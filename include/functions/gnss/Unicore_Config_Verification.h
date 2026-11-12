@@ -92,8 +92,7 @@ inline bool parseLogs(const char *text, size_t length, std::vector<Log> &logs) {
         static_assert(sizeof(log.name) == sizeof(tokens[0]));
         std::memcpy(log.name, name, sizeof(log.name));
         log.port = port[3] - '0';
-        const char *trigger = tokens[start + 2];
-        if (!std::strcmp(trigger, "ONCE")) {
+        if (const char *trigger = tokens[start + 2]; !std::strcmp(trigger, "ONCE")) {
             if (fields - start != 3) return false;
         } else {
             const bool ontime = !std::strcmp(trigger, "ONTIME");
