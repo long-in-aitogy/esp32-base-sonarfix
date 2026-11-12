@@ -1,5 +1,6 @@
 #include "functions/backend/Backend_Agent.h"
 #include "functions/backend/Backend_Agent_Internal.h"
+#include "functions/backend/Storage_Status.h"
 #include "Prog_Config.h"
 #include "functions/ntrip/ntrip_base.h"
 #include "functions/ntrip/ntrip_rover.h"
@@ -333,7 +334,7 @@ void BackendAgent::handleCommand(const String &source, const String &message)
         return;
     }
 
-    const auto allowed = command == "LOCK_DEVICE" || command == "UNLOCK_DEVICE" || command == "PROVISION_DEVICE" || command == "DEPLOY_LICENSE" || command == "TRIGGER_AUTO_BASE" || command == "TRIGGER_BASE_REFERENCE_CHECK" || command == "STOP_AUTO_BASE" || command == "APPLY_VN2000_PROVINCE" || command == "EXECUTE_RAW_COMMANDS" || command == "DEPLOY_SERVICE_CONFIG" || command == "SET_RTCM_STREAM_ACTIVE" || command == "DELETE_DEVICE" || command == "CHECK_BASE_STATUS" || command == "VERIFY_GNSS_CONFIG" || command == "REBOOT_DEVICE";
+    const auto allowed = command == "LOCK_DEVICE" || command == "UNLOCK_DEVICE" || command == "PROVISION_DEVICE" || command == "DEPLOY_LICENSE" || command == "TRIGGER_AUTO_BASE" || command == "TRIGGER_BASE_REFERENCE_CHECK" || command == "STOP_AUTO_BASE" || command == "APPLY_VN2000_PROVINCE" || command == "EXECUTE_RAW_COMMANDS" || command == "DEPLOY_SERVICE_CONFIG" || command == "SET_RTCM_STREAM_ACTIVE" || command == "DELETE_DEVICE" || command == "CHECK_BASE_STATUS" || command == "VERIFY_GNSS_CONFIG" || command == "CHECK_STORAGE_STATUS" || command == "CLEAR_NVS_DATA" || command == "REBOOT_DEVICE";
     if (!allowed)
     {
         recordCommandResult(command, source, "rejected", "unsupported command", commandId);
@@ -974,6 +975,7 @@ void BackendAgent::executeCommand(const String &source, const String &command,
     }
     else if (command == "VERIFY_GNSS_CONFIG")
     {
+        nvsInventory_.clear();
         if (workflowActive() || (sensorType_ != "Unicorecomm" && sensorType_ != "Ublox"))
         {
             success = false;
@@ -1006,6 +1008,61 @@ void BackendAgent::executeCommand(const String &source, const String &command,
     else if (command == "APPLY_VN2000_PROVINCE")
     {
         success = executeProvinceCommand(payload, error, detail);
+    }
+    else if (command == "CHECK_STORAGE_STATUS")
+    {
+        if (payload["inspect"] == true)
+        {
+            if (!payload["offset"].is<uint32_t>() || payload["offset"].as<uint32_t>() > 8192)
+            {
+                success = false;
+                error = "NVS offset must be an integer from 0 to 8192";
+            }
+            else
+            {
+                gnssVerification_.clear();
+                nvsInventory_.clear();
+                success = readNvsInventory(payload["offset"].as<uint32_t>(), commandId, nvsInventory_, error);
+                nvsInventoryMs_ = millis();
+            }
+        }
+        detail = "storage status refreshed";
+    }
+    else if (command == "CLEAR_NVS_DATA")
+    {
+        nvsInventory_.clear();
+        const String group = payload["group"] | "";
+        const String confirmation = payload["confirm"] | "";
+        if (workflowActive() || (surveyInMonitoring_ && !surveyInReadbackReady_))
+        {
+            success = false;
+            error = "Cannot clean storage during an active GNSS workflow or survey";
+        }
+        else if (confirmation != group || (group != "unused_wifi" && group != "auto_base_history"))
+        {
+            success = false;
+            error = "Select and confirm a supported cleanup group";
+        }
+        else if (group == "unused_wifi")
+        {
+            success = clearUnusedWifi(error);
+            detail = "obsolete Wi-Fi portal data cleared; active network preserved";
+        }
+        else
+        {
+            success = beginBackendPreferences(false);
+            if (success)
+            {
+                Preferences &store = backendPreferences();
+                success = !store.isKey("PROGRESS_JSON") || store.remove("PROGRESS_JSON");
+                store.end();
+            }
+            if (success)
+                autoBaseProgress_ = "{}";
+            else
+                error = "Cannot clear Auto Base history";
+            detail = "saved Auto Base history cleared; base configuration and Survey-In result preserved";
+        }
     }
     else if (command == "REBOOT_DEVICE")
     {

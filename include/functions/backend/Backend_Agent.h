@@ -76,6 +76,8 @@ private:
     String autoBaseProgress_ = "{}";
     String baseConfig_ = "{}";
     String serviceConfig_ = "{}";
+    String nvsInventory_;
+    uint32_t nvsInventoryMs_ = 0;
     String gnssVerification_;
     uint32_t gnssVerificationMs_ = 0;
     String receiverBaseReadback_ = R"({"state":"not_read","chip":"Unicorecomm","mode_kind":"unknown"})";

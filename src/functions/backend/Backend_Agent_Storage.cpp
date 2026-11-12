@@ -40,6 +40,11 @@ namespace BackendAgentInternal
         return changed;
     }
 
+    const char *backendPreferencesPartition()
+    {
+        return useDedicatedBackendPrefs ? BACKEND_PREFS_PARTITION : "nvs";
+    }
+
     Preferences &backendPreferences()
     {
         return useDedicatedBackendPrefs ? backendPrefs : prefs;

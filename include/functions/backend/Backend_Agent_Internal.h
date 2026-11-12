@@ -15,6 +15,7 @@ namespace BackendAgentInternal
 
     bool enforceBaseAccuracy(JsonObject base);
     Preferences &backendPreferences();
+    const char *backendPreferencesPartition();
     bool beginBackendPreferences(bool readOnly);
     String readPreference(const char *key, const String &fallback = String());
     String epochString();

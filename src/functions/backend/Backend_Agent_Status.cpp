@@ -1,5 +1,6 @@
 #include "functions/backend/Backend_Agent.h"
 #include "functions/backend/Backend_Agent_Internal.h"
+#include "functions/backend/Storage_Status.h"
 #include "Prog_Config.h"
 #include "functions/ntrip/ntrip_base.h"
 #include "functions/ntrip/ntrip_rover.h"
@@ -126,6 +127,13 @@ void BackendAgent::appendSystemInfo(JsonDocument &doc, uint32_t nowMs,
     JsonObject survey = appendSurveyInfo(system, nowMs);
     appendReceiverReadback(system, survey);
     appendResourceInfo(system, timestamp);
+    appendStorageStatus(system);
+    if (!nvsInventory_.isEmpty())
+    {
+        DynamicJsonDocument inventory(3072);
+        if (deserializeJson(inventory, nvsInventory_) == DeserializationError::Ok)
+            system["nvs"]["inventory"].set(inventory.as<JsonObjectConst>());
+    }
     JsonObject deviceLock = system.createNestedObject("device_lock");
     deviceLock["scoped"] = true;
     deviceLock["all"] = stationLock_.all;
@@ -429,6 +437,8 @@ void BackendAgent::appendTransportStatus(JsonDocument &doc,
 
 String BackendAgent::buildStatusPayload()
 {
+    if (!nvsInventory_.isEmpty() && millis() - nvsInventoryMs_ >= 60000UL)
+        nvsInventory_.clear();
     if (!gnssVerification_.isEmpty() && millis() - gnssVerificationMs_ >= 60000UL)
         gnssVerification_.clear();
     if (!satelliteReadback_.isEmpty() && millis() - satelliteReadbackMs_ > 45000UL)
@@ -439,7 +449,7 @@ String BackendAgent::buildStatusPayload()
         versionReadbackError_.clear();
         receiverInfoMs_ = 0;
     }
-    DynamicJsonDocument doc(STATUS_DOCUMENT_SIZE + (gnssVerification_.isEmpty() ? 0 : VERIFICATION_DOCUMENT_SIZE)
+    DynamicJsonDocument doc(STATUS_DOCUMENT_SIZE + 1024 + (nvsInventory_.isEmpty() ? 0 : 3072) + (gnssVerification_.isEmpty() ? 0 : VERIFICATION_DOCUMENT_SIZE)
                             + (satelliteReadback_.isEmpty() ? 0 : satelliteReadback_.length() + 256)
                             + (receiverInfoMs_ ? versionReadback_.length() + versionReadbackError_.length() + 256 : 0));
     DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
