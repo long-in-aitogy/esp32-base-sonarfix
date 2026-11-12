@@ -76,6 +76,8 @@ private:
     String autoBaseProgress_ = "{}";
     String baseConfig_ = "{}";
     String serviceConfig_ = "{}";
+    String gnssVerification_;
+    uint32_t gnssVerificationMs_ = 0;
     String receiverBaseReadback_ = R"({"state":"not_read","chip":"Unicorecomm","mode_kind":"unknown"})";
     String surveyInResult_ = "{}";
     String baseStartupState_ = "pending";
@@ -283,6 +285,7 @@ private:
     bool executeRawCommand(JsonDocument &doc, JsonObject payload,
                            String &error, String &detail);
     bool executeAutoBaseCommand(JsonObject payload, String &error, String &detail);
+    bool verifyUnicoreConfig(JsonObjectConst payload, const String &commandId, String &error);
     bool executeReferenceCheckCommand(JsonObject payload, String &error, String &detail);
     bool executeProvinceCommand(JsonObject payload, String &error, String &detail);
     bool executeBasicCommand(const String &command, JsonObject payload,

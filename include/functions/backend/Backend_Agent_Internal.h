@@ -9,6 +9,7 @@
 namespace BackendAgentInternal
 {
     inline constexpr size_t STATUS_DOCUMENT_SIZE = 8192;
+    inline constexpr size_t VERIFICATION_DOCUMENT_SIZE = 12288;
     inline constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
     inline constexpr size_t COMMAND_DOCUMENT_SIZE = 24576;
 

@@ -380,16 +380,12 @@ void BackendAgent::publishStatus(bool force)
     }
     if (websocketConnected())
     {
-        DynamicJsonDocument message(STATUS_DOCUMENT_SIZE + 512);
+        DynamicJsonDocument message(256);
         message["type"] = "status_update";
-        DynamicJsonDocument status(STATUS_DOCUMENT_SIZE);
-        if (deserializeJson(status, payload) == DeserializationError::Ok)
-        {
-            message["payload"].set(status.as<JsonObjectConst>());
-            String websocketPayload;
-            serializeJson(message, websocketPayload);
-            websocket_->sendText(websocketPayload);
-        }
+        message["payload"] = serialized(payload.c_str());
+        String websocketPayload;
+        serializeJson(message, websocketPayload);
+        websocket_->sendText(websocketPayload);
     }
 }
 

@@ -108,6 +108,17 @@ void BackendAgent::appendSystemInfo(JsonDocument &doc, uint32_t nowMs,
                                     const String &timestamp) const
 {
     JsonObject system = doc.createNestedObject("system_info");
+    system["gnss_verification_supported"] = sensorType_ == "Unicorecomm";
+    system["gnss_verification_details_supported"] = sensorType_ == "Unicorecomm";
+    if (!gnssVerification_.isEmpty() && nowMs - gnssVerificationMs_ < 60000UL)
+    {
+        DynamicJsonDocument verification(VERIFICATION_DOCUMENT_SIZE);
+        if (deserializeJson(verification, gnssVerification_) == DeserializationError::Ok)
+        {
+            system["gnss_verification"].set(verification.as<JsonObjectConst>());
+            system["gnss_verification"]["age_seconds"] = (nowMs - gnssVerificationMs_) / 1000UL;
+        }
+    }
     appendStartupInfo(system);
     JsonObject survey = appendSurveyInfo(system, nowMs);
     appendReceiverReadback(system, survey);
@@ -399,7 +410,9 @@ void BackendAgent::appendTransportStatus(JsonDocument &doc,
 
 String BackendAgent::buildStatusPayload()
 {
-    DynamicJsonDocument doc(STATUS_DOCUMENT_SIZE);
+    if (!gnssVerification_.isEmpty() && millis() - gnssVerificationMs_ >= 60000UL)
+        gnssVerification_.clear();
+    DynamicJsonDocument doc(STATUS_DOCUMENT_SIZE + (gnssVerification_.isEmpty() ? 0 : VERIFICATION_DOCUMENT_SIZE));
     DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
     deserializeJson(serviceDoc, serviceConfig_);
     const JsonObjectConst service = serviceDoc.as<JsonObjectConst>();

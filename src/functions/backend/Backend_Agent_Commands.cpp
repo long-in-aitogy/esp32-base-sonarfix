@@ -332,7 +332,7 @@ void BackendAgent::handleCommand(const String &source, const String &message)
         return;
     }
 
-    const auto allowed = command == "LOCK_DEVICE" || command == "UNLOCK_DEVICE" || command == "PROVISION_DEVICE" || command == "DEPLOY_LICENSE" || command == "TRIGGER_AUTO_BASE" || command == "TRIGGER_BASE_REFERENCE_CHECK" || command == "STOP_AUTO_BASE" || command == "APPLY_VN2000_PROVINCE" || command == "EXECUTE_RAW_COMMANDS" || command == "DEPLOY_SERVICE_CONFIG" || command == "SET_RTCM_STREAM_ACTIVE" || command == "DELETE_DEVICE" || command == "CHECK_BASE_STATUS" || command == "REBOOT_DEVICE";
+    const auto allowed = command == "LOCK_DEVICE" || command == "UNLOCK_DEVICE" || command == "PROVISION_DEVICE" || command == "DEPLOY_LICENSE" || command == "TRIGGER_AUTO_BASE" || command == "TRIGGER_BASE_REFERENCE_CHECK" || command == "STOP_AUTO_BASE" || command == "APPLY_VN2000_PROVINCE" || command == "EXECUTE_RAW_COMMANDS" || command == "DEPLOY_SERVICE_CONFIG" || command == "SET_RTCM_STREAM_ACTIVE" || command == "DELETE_DEVICE" || command == "CHECK_BASE_STATUS" || command == "VERIFY_GNSS_CONFIG" || command == "REBOOT_DEVICE";
     if (!allowed)
     {
         recordCommandResult(command, source, "rejected", "unsupported command", commandId);
@@ -766,7 +766,8 @@ void BackendAgent::finishCommand(const String &source, const String &command,
         setAgentState(normalAgentState());
     recordCommandResult(command, source, success ? "success" : "error",
                         success ? detail : error, commandId);
-    saveStatePreferences();
+    if (command != "VERIFY_GNSS_CONFIG")
+        saveStatePreferences();
     publishStatus(true);
     if (success && restartAfterCommand)
     {
@@ -805,6 +806,20 @@ void BackendAgent::executeCommand(const String &source, const String &command,
     else if (command == "EXECUTE_RAW_COMMANDS")
     {
         success = executeRawCommand(doc, payload, error, detail);
+    }
+    else if (command == "VERIFY_GNSS_CONFIG")
+    {
+        if (workflowActive() || sensorType_ != "Unicorecomm")
+        {
+            success = false;
+            error = "Verification requires an idle Unicore receiver";
+        }
+        else
+        {
+            success = verifyUnicoreConfig(payload, commandId, error);
+            if (success)
+                detail = "GNSS readback completed; inspect verification result";
+        }
     }
     else if (command == "CHECK_BASE_STATUS")
     {
