@@ -433,6 +433,11 @@ void BackendAgent::appendTransportStatus(JsonDocument &doc,
     transport["websocket_host"] = readPreference("BACKEND_HOST", BACKEND_HOST);
     transport["control_plane_fail_open"] = controlPlaneFailOpen_;
     copyJsonObject(doc, "last_command_result", lastCommandResult_);
+    JsonObject lastStorageAction = doc["system_info"]["nvs"].createNestedObject("last_action");
+    const JsonObjectConst lastCommand = doc["last_command_result"];
+    lastStorageAction["command_id"] = lastCommand["command_id"];
+    lastStorageAction["status"] = lastCommand["status"];
+    lastStorageAction["detail"] = lastCommand["detail"];
     JsonObject control = doc.createNestedObject("control_plane_failover");
     control["active"] = controlPlaneFailOpen_;
     control["stale_after_seconds"] = BACKEND_CONTROL_STALE_MS / 1000UL;

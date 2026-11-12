@@ -7,6 +7,9 @@ status=(root/'src/functions/backend/Backend_Agent_Status.cpp').read_text()
 start=status.index('    DynamicJsonDocument doc(STATUS_DOCUMENT_SIZE',status.index('String BackendAgent::buildStatusPayload('))
 end=status.index(';',start)+1
 allocation=status[start:end]
+action_start=status.index('    copyJsonObject(doc, "last_command_result"')
+action_end=status.index('    JsonObject control =',action_start)
+action=status[action_start:action_end]
 agent=(root/'src/functions/backend/Backend_Agent.cpp').read_text()
 copy=agent[agent.index('    bool copyJsonObject('):agent.index('\n} // namespace BackendAgentInternal')]
 harness=r'''
@@ -41,8 +44,18 @@ int main() {
     assert(!copyJsonObject(invalid,"service_config","[]"));
     assert(!invalid.containsKey("base_config") && !invalid.containsKey("service_config"));
     assert(copyJsonObject(invalid,"base_config","{}") && invalid["base_config"].is<JsonObject>());
+    {
+        DynamicJsonDocument doc(2048);
+        doc["system_info"]["nvs"]["inventory_supported"] = true;
+        String lastCommandResult_ = R"({"command_id":"request-1","status":"success","detail":"saved"})";
+        ACTION
+        assert(doc["system_info"]["nvs"]["last_action"]["command_id"] == "request-1");
+        assert(doc["system_info"]["nvs"]["last_action"]["status"] == "success");
+        assert(doc["system_info"]["nvs"]["last_action"]["detail"] == "saved");
+        assert(doc["last_command_result"]["command_id"] == "request-1" && !doc.overflowed());
+    }
 }
-'''.replace('ALLOCATION',allocation)
+'''.replace('ALLOCATION',allocation).replace('ACTION',action)
 with tempfile.TemporaryDirectory(prefix='status-capacity-') as directory:
     path=Path(directory); (path/'check.cpp').write_text(harness+copy+checks)
     subprocess.run(['c++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',
