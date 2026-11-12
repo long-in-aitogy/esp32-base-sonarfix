@@ -1,4 +1,4 @@
-"""Advertise the review workflow without claiming the pending nearest boot flow."""
+"""Verify advertised GNSS and Auto Base capabilities."""
 from pathlib import Path
 import subprocess
 import tempfile
@@ -11,8 +11,9 @@ harness=r'''
 #include <ArduinoJson.h>
 #include <cassert>
 constexpr size_t VERIFICATION_DOCUMENT_SIZE=12288;
+void appendStorageStatus(JsonObject system) { system.createNestedObject("nvs"); }
 struct BackendAgent {
-    String sensorType_="Ublox", gnssVerification_;
+    String sensorType_="Ublox", gnssVerification_, nvsInventory_;
     uint32_t gnssVerificationMs_=0;
     struct { bool all=false; } stationLock_;
     void appendStartupInfo(JsonObject) const {}
@@ -31,6 +32,12 @@ int main() {
     assert(doc["system_info"]["auto_base_nearest_supported"]==true);
     assert(doc["system_info"]["auto_base_firmware_profile"]==true);
     assert(doc["system_info"]["gnss_verification_supported"]==true);
+    assert(doc["system_info"]["gnss_verification_uart1"]==true);
+    assert(doc["system_info"]["gnss_rf_supported"]==false);
+    doc.clear(); agent.sensorType_="Unicorecomm"; agent.appendSystemInfo(doc,100,"now");
+    assert(doc["system_info"]["gnss_verification_supported"]==true && doc["system_info"]["gnss_verification_uart1"]==true);
+    doc.clear(); agent.sensorType_="UNKNOWN"; agent.appendSystemInfo(doc,100,"now");
+    assert(doc["system_info"]["gnss_verification_supported"]==false && doc["system_info"]["gnss_verification_uart1"]==false);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='autobase-capability-') as directory:
@@ -39,4 +46,4 @@ with tempfile.TemporaryDirectory(prefix='autobase-capability-') as directory:
                     '-I'+str(root/'test/host'),'-I'+str(root/'.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path/'check.cpp'),'-o',str(path/'check')],check=True)
     subprocess.run([str(path/'check')],check=True)
-print('PASS: review and local AutoNearest capabilities enabled')
+print('PASS: GNSS verification port, unsupported RF and Auto Base capabilities')

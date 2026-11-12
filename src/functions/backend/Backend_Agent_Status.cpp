@@ -114,6 +114,9 @@ void BackendAgent::appendSystemInfo(JsonDocument &doc, uint32_t nowMs,
     system["auto_base_firmware_profile"] = true;
     system["gnss_verification_supported"] = sensorType_ == "Unicorecomm" || sensorType_ == "Ublox";
     system["gnss_verification_details_supported"] = sensorType_ == "Unicorecomm" || sensorType_ == "Ublox";
+    system["gnss_verification_uart1"] = sensorType_ == "Unicorecomm" || sensorType_ == "Ublox";
+    system["gnss_rf_supported"] = false;
+    system["gnss_verification"] = nullptr;
     if (!gnssVerification_.isEmpty() && nowMs - gnssVerificationMs_ < 60000UL)
     {
         DynamicJsonDocument verification(VERIFICATION_DOCUMENT_SIZE);
@@ -280,6 +283,12 @@ void BackendAgent::appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapsh
     doc["rtk_fix_status"] = gnss.fixStatus.data();
     if (gnss.satellites > 0)
         doc["satellite_count"] = gnss.satellites;
+    doc["hacc"] = nullptr;
+    doc["gnss_quality"] = nullptr;
+    doc["gnss_dop"] = nullptr;
+    doc["gnss_satellites"] = nullptr;
+    doc["gnss_receiver"] = nullptr;
+    doc["gnss_rf"] = nullptr;
     if (sensorType_ == "Ublox" && receiverInfoMs_ && nowMs - receiverInfoMs_ <= 45000UL)
     {
         JsonObject receiver = doc.createNestedObject("gnss_receiver");
