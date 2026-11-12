@@ -647,11 +647,13 @@ void BackendAgent::handleControlAck(const String &source, const String &message,
         return;
     if (doc["status_boot_id"].as<String>() != statusBootId_)
         return;
+    if (doc["serial"].as<String>() != serialNumber_)
+        return;
     const int32_t sequence = doc["status_sequence"] | -1;
     if (sequence < 0)
         return;
     const JsonObjectConst location = doc["auto_base_location"].as<JsonObjectConst>();
-    if (doc["serial"].as<String>() == serialNumber_ && autoBaseLocationQueue_
+    if (autoBaseLocationQueue_
         && workflowActive() && !location.isNull()
         && measureJson(location) < sizeof(AutoBaseLocationReply::json))
     {

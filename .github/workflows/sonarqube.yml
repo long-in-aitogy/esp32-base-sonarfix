@@ -30,6 +30,7 @@ jobs:
       - name: Run Auto Base checks
         run: |
           python3 test/host/check_auto_base_status.py
+          python3 test/host/check_auto_base_location.py
           python3 test/host/check_auto_base_report.py
           python3 test/host/check_boot_progress_restore.py
           python3 test/host/check_auto_base_transform.py

@@ -42,6 +42,12 @@ int main() {
     assert(location["l0_deg"]==105);
     assert(!acceptAutoBaseLocationReply(response.as<JsonObjectConst>(),"old",21.08499,105.786656,-8.0624,location));
     assert(!acceptAutoBaseLocationReply(response.as<JsonObjectConst>(),"boot:1",22,105.786656,-8.0624,location));
+    const String other=R"({"type":"control_plane_ack","status_boot_id":"boot","serial":"other","status_sequence":99})";
+    const String missing=R"({"type":"control_plane_ack","status_boot_id":"boot","status_sequence":99})";
+    agent.handleControlAck("mqtt",other,false);
+    agent.handleControlAck("websocket",other,false);
+    agent.handleControlAck("mqtt",missing,false);
+    assert(agent.lastMqttAckSequence_==42 && agent.lastWebsocketAckSequence_==-1);
     agent.handleControlAck("mqtt",msg,true); assert(pushes==1);
     agent.statusBootId_="other"; agent.handleControlAck("mqtt",msg,false); assert(pushes==1);
     agent.statusBootId_="boot"; agent.serialNumber_="other"; agent.handleControlAck("mqtt",msg,false); assert(pushes==1);
