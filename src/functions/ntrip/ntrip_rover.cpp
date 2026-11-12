@@ -30,7 +30,9 @@ namespace
         bool authenticated = false;
         uint32_t lastGgaMs = 0;
         uint32_t bytesReceived = 0;
+        uint32_t bytesWritten = 0;
         uint32_t packetsReceived = 0;
+        uint32_t lastDiagnosticMs = 0;
         const char *lastError = "CORS rover connection lost";
     };
 
@@ -86,7 +88,9 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
     // Close that client before opening a receive-only correction stream.
     roverSession().datum.reset();
     roverSession().bytesReceived = 0;
+    roverSession().bytesWritten = 0;
     roverSession().packetsReceived = 0;
+    roverSession().lastDiagnosticMs = millis();
     roverSession().active = true;
     roverSession().authenticated = false;
     roverSession().lastGgaMs = 0;
@@ -194,11 +198,24 @@ int loopNtripRover()
     Client &client = clientFor(0);
     if (!client.connected())
     {
+        Serial.printf("[NTRIP ROVER][ERROR] CORS socket closed; cors_rx=%lu B; uart_tx=%lu B; rtcm_frames=%lu\n",
+                      static_cast<unsigned long>(roverSession().bytesReceived),
+                      static_cast<unsigned long>(roverSession().bytesWritten),
+                      static_cast<unsigned long>(roverSession().datum.validFrames()));
         roverSession().active = false;
         roverSession().authenticated = false;
         return 504;
     }
     sendRoverGgaIfAvailable(client);
+    if (millis() - roverSession().lastDiagnosticMs >= 5000UL)
+    {
+        roverSession().lastDiagnosticMs = millis();
+        const auto snapshot = getGnssTelemetrySnapshot();
+        Serial.printf("[NTRIP ROVER][DATA] cors_rx=%lu B; uart_tx=%lu B; rtcm_frames=%lu; fix=%s\n",
+                      static_cast<unsigned long>(roverSession().bytesReceived),
+                      static_cast<unsigned long>(roverSession().bytesWritten),
+                      static_cast<unsigned long>(roverSession().datum.validFrames()), snapshot.fixStatus.data());
+    }
     if (client.available() <= 0)
         return 200;
 
@@ -215,6 +232,7 @@ int loopNtripRover()
         roverSession().datum.feed(buffer.data(), static_cast<size_t>(bytesRead));
         const size_t written = Serial1.write(buffer.data(), static_cast<size_t>(bytesRead));
         roverSession().bytesReceived += static_cast<uint32_t>(bytesRead);
+        roverSession().bytesWritten += static_cast<uint32_t>(written);
         ++roverSession().packetsReceived;
         if (written != static_cast<size_t>(bytesRead))
         {

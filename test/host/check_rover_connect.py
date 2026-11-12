@@ -27,7 +27,7 @@ GnssTelemetrySnapshot getGnssTelemetrySnapshot() { return snapshot; }
 struct RoverSession {
     struct Datum { int resets = 0; void reset() { ++resets; } } datum;
     bool active = false, authenticated = false;
-    uint32_t bytesReceived = 0, packetsReceived = 0, lastGgaMs = 0;
+    uint32_t bytesReceived = 0, bytesWritten = 0, packetsReceived = 0, lastGgaMs = 0, lastDiagnosticMs = 0;
     const char *lastError = "old error";
 } session;
 RoverSession &roverSession() { return session; }

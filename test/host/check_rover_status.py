@@ -15,9 +15,9 @@ harness = r'''
 #include <string>
 using std::min;
 struct Session {
-    struct Datum { std::vector<uint8_t> received; void feed(const uint8_t *data, size_t n) { received.insert(received.end(), data, data + n); } } datum;
+    struct Datum { std::vector<uint8_t> received; void feed(const uint8_t *data, size_t n) { received.insert(received.end(), data, data + n); } uint32_t validFrames() const { return 7; } } datum;
     bool active = true, authenticated = true;
-    uint32_t bytesReceived = 0, packetsReceived = 0;
+    uint32_t bytesReceived = 0, bytesWritten = 0, packetsReceived = 0, lastDiagnosticMs = 0;
     const char *lastError = "CORS rover connection lost";
 } session;
 Session &roverSession() { return session; }
@@ -44,7 +44,10 @@ struct {
         return written;
     }
 } Serial1;
-struct Logger { template <typename... T> void printf(const char *, T...) {} };
+uint32_t now = 0; uint32_t millis() { return now; }
+struct Snapshot { std::array<char, 16> fixStatus{}; };
+Snapshot getGnssTelemetrySnapshot() { return {}; }
+struct Logger { int data = 0, closed = 0; template <typename... T> void printf(const char *format, T...) { const std::string message(format); if (message.find("[NTRIP ROVER][DATA]") == 0) ++data; if (message.find("CORS socket closed") != std::string::npos) ++closed; } };
 [[maybe_unused]] Logger Serial;
 constexpr int MUTEX_TIMEOUT_MS = 1500, pdTRUE = 1;
 int rtcmBufferMutex = 1, releases = 0;
@@ -64,6 +67,9 @@ int main() {
         assert(session.bytesReceived == received + size && session.packetsReceived == packets + 1);
     }
     assert(session.datum.received == std::vector<uint8_t>(504 + 1 + 200 + 512, 0xD3));
+    assert(session.bytesWritten == session.bytesReceived && Serial.data == 0);
+    now = 5000; assert(loopNtripRover() == 200 && Serial.data == 1);
+    assert(loopNtripRover() == 200 && Serial.data == 1);
     assert(loopNtripRover() == 200 && releases == 4);
     client.input.assign(504, 0xD3); lockAvailable = false;
     assert(loopNtripRover() == 200 && client.input.size() == 504 && releases == 4);
@@ -72,8 +78,9 @@ int main() {
     assert(loopNtripRover() == 504 && releases == 5);
     assert(std::string(session.lastError) == "GNSS UART did not accept all CORS bytes");
     assert(session.bytesReceived == 504 + 1 + 200 + 512 + 504 && session.packetsReceived == 5);
+    assert(session.bytesWritten == 504 + 1 + 200 + 512 + 252);
     client.connected_ = false;
-    assert(loopNtripRover() == 504 && !session.active && !session.authenticated);
+    assert(loopNtripRover() == 504 && !session.active && !session.authenticated && Serial.closed == 1);
     assert(loopNtripRover() == 504 && releases == 5);
 }
 '''
