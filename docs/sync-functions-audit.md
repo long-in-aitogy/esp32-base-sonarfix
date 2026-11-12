@@ -53,3 +53,5 @@ Các tệp không còn cùng đường dẫn đã được đối chiếu theo c
 Khởi động có chủ ý khác CORS: CORS đặt lại Base sang AutoNearest mỗi lần khởi động; nhánh này giữ và khôi phục chế độ, tọa độ hoặc thời gian Survey-In đã lưu theo yêu cầu bảo toàn cấu hình. Fixed LLA chỉ được xác nhận sau readback phù hợp. Đã đối chiếu tên 17 lệnh backend trong CORS với nhánh này; trùng tên không tự chứng minh toàn bộ hành vi giống nhau. Nền tảng PlatformIO đã đồng bộ 7.1.3 với CORS; ba môi trường firmware và bộ kiểm tra modem đều biên dịch thành công; bảng phân vùng vẫn giữ theo từng môi trường của nhánh này.
 
 Các bài host và build không thay thế nghiệm thu trên receiver thật: cần kiểm tra BESTPOS, accuracy cấu hình 5 m, nguồn RTCM, mất kết nối, khởi động lại và tọa độ ngoài thực địa.
+
+Với Unicore, trường JSON `bestpos` hiện được tạo từ bản tin receiver `BESTNAVA` (giống CORS và `develop`), không phải từ lệnh `BESTPOSA`. Firmware kiểm tra trạng thái FIXEDPOS, tọa độ và độ cao từ readback; kiểm thử host dùng phản hồi mô phỏng, chưa xác minh bản tin trên thiết bị thực.

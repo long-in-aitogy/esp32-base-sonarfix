@@ -107,13 +107,13 @@ int main() {
     assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
     agent.sensorType_ = "Unicorecomm";
     base["altitude_reference"] = "ELLIPSOID";
-    agent.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","raw":"#BESTPOSA;SOL_COMPUTED,FIXEDPOS,21.25,105.75,9.5,1.0,WGS84,"}})";
+    agent.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","raw":"#BESTNAVA,header;SOL_COMPUTED,FIXEDPOS,21.25,105.75,9.5,1.0,WGS84,0.03,0.04,0.1*12345678"}})";
     assert(agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
     assert(!agent.lastCommands.empty());
     const auto &undulation = agent.lastCommands.front();
     assert(std::string(undulation.begin(), undulation.end()) == "config undulation 0.0\r\n");
     agent.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","mode_raw":"MODE BASE 21.25 105.75 10.5"})";
-    assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>())); // MODE alone cannot confirm actual BESTPOS.
+    assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>())); // MODE alone cannot confirm a measured receiver position.
     agent.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","mode_raw":"MODE BASE 21.26 105.75 10.5"})";
     assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
     agent.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","mode_raw":"MODE BASE invalid"})";
@@ -163,7 +163,7 @@ int main() {
     retry.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","altitude_reference":"ELLIPSOID","coords":{"lat":21.25,"lon":105.75,"alt":10.5}})";
     retry.baseStartupState_ = "error";
     retry.baseStartupError_ = "Receiver has not confirmed the saved fixed position";
-    retry.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","raw":"#BESTPOSA;SOL_COMPUTED,FIXEDPOS,21.25,105.75,9.5,1.0,WGS84,"}})";
+    retry.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","raw":"#BESTNAVA,header;SOL_COMPUTED,FIXEDPOS,21.25,105.75,9.5,1.0,WGS84,0.03,0.04,0.1*12345678"}})";
     retry.reconcileBaseStartupReadback();
     assert(retry.baseStartupState_ == "fixed_restored" && retry.baseStartupError_.isEmpty());
 }
