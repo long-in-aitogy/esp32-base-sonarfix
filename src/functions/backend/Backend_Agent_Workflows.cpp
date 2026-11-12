@@ -414,7 +414,9 @@ bool BackendAgent::restoreWorkflowBase(JsonObjectConst base)
         options.outputMode = String(output["output_mode"] | "rtcm_only") == "rtcm_only"
             ? OutputMode::RtcmOnly : OutputMode::DiagnosticsRtcm;
         const String level = output["msm_level"].isNull() ? "both" : output["msm_level"].as<String>();
-        options.msmLevel = level == "7" ? MsmLevel::Msm7 : level == "4" ? MsmLevel::Msm4 : MsmLevel::Both;
+        if (level == "7") options.msmLevel = MsmLevel::Msm7;
+        else if (level == "4") options.msmLevel = MsmLevel::Msm4;
+        else options.msmLevel = MsmLevel::Both;
         const JsonObjectConst systems = output["constellations"];
         options.gps = systems["gps"] | true;
         options.glo = systems["glo"] | true;
@@ -1359,8 +1361,9 @@ bool BackendAgent::prepareReferenceCheckConfig(
         static_cast<int>(payload["samples"] | 60), 5, 120));
 
     const bool savedSurvey = storedBaseObject["base_setup_method"] == "SURVEY_IN";
-    const double surveyDuration = surveyInTargetSeconds_ > 0 ? surveyInTargetSeconds_
-        : storedBaseObject["survey_in_duration"].isNull() ? 120 : coordinateNumber(storedBaseObject["survey_in_duration"]);
+    const double savedDuration = storedBaseObject["survey_in_duration"].isNull()
+        ? 120 : coordinateNumber(storedBaseObject["survey_in_duration"]);
+    const double surveyDuration = surveyInTargetSeconds_ > 0 ? surveyInTargetSeconds_ : savedDuration;
     const double maxSurveyDuration = sensorType_ == "Unicorecomm" ? 3600 : 604800;
     const bool validSavedSurvey = savedSurvey && std::isfinite(surveyDuration) && surveyDuration >= 1
         && surveyDuration <= maxSurveyDuration && std::floor(surveyDuration) == surveyDuration;

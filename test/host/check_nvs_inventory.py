@@ -7,6 +7,7 @@ from host_coverage import compile_cpp, mapped, run_cpp
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Storage_Status.cpp').read_text()
 functions = source[source.index('bool configurationNamespace('):source.index('void describeNvsEntry(')]
+saved = source[source.index('bool appendSavedConfiguration('):source.index('} // namespace', source.index('bool appendSavedConfiguration('))]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
 shim = shim.replace('    bool isEmpty()', '    String substring(size_t from, size_t to) const { return String(substr(from, to - from)); }\n    bool isEmpty()')
 shim = shim.replace('    bool isEmpty()', '    void toLowerCase() { std::transform(begin(), end(), begin(), [](unsigned char c) { return std::tolower(c); }); }\n    int indexOf(const char *text) const { const auto pos = find(text); return pos == npos ? -1 : int(pos); }\n    bool isEmpty()')
@@ -15,8 +16,24 @@ harness = r'''
 #include <ArduinoJson.h>
 #include <cassert>
 #include <cstring>
+#include <memory>
 struct nvs_entry_info_t { const char *namespace_name; const char *key; int type; };
-constexpr int NVS_TYPE_STR = 1;
+constexpr int NVS_TYPE_STR = 1, NVS_READONLY = 0, ESP_OK = 0;
+using nvs_handle_t = int;
+String stored = R"({"gps":true,"password":"secret"})";
+bool openOk = true, readOk = true; int closes = 0;
+int nvs_open_from_partition(const char *, const char *, int, nvs_handle_t *handle) {
+    if (!openOk) return -1;
+    *handle = 1; return ESP_OK;
+}
+int nvs_get_str(nvs_handle_t, const char *, char *out, size_t *length) {
+    if (!readOk) return -1;
+    *length = stored.size() + 1;
+    if (out) std::memcpy(out, stored.c_str(), *length);
+    return ESP_OK;
+}
+void nvs_close(nvs_handle_t) { ++closes; }
+
 '''
 checks = r'''
 int main() {
@@ -49,12 +66,20 @@ int main() {
     page.clear(); rows = page.createNestedArray("entries"); total = 0;
     appendConfigurationFields(rows, 0, total, "agent_state", entry, config.as<JsonVariantConst>(), String());
     assert(rows[0]["truncated"] == true && rows[0]["value"].as<String>().length() == 96);
+    page.clear(); rows = page.createNestedArray("entries"); total = 0;
+    assert(appendSavedConfiguration(rows, 0, total, "agent_state", entry));
+    assert(closes == 1 && total == 2 && rows[0]["value"] == "true" && rows[1]["redacted"] == true);
+    stored = "{bad"; assert(!appendSavedConfiguration(rows, 0, total, "agent_state", entry) && closes == 2);
+    stored = String(8192, 'x'); assert(!appendSavedConfiguration(rows, 0, total, "agent_state", entry) && closes == 3);
+    readOk = false; assert(!appendSavedConfiguration(rows, 0, total, "agent_state", entry) && closes == 4);
+    openOk = false; assert(!appendSavedConfiguration(rows, 0, total, "agent_state", entry) && closes == 4);
+    assert(!appendSavedConfiguration(rows, 0, total, "agent_state", unknown) && closes == 4);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='esp-nvs-inventory-') as directory:
     path = Path(directory)
     (path / 'Arduino.h').write_text('#pragma once\n' + shim)
-    (path / 'check.cpp').write_text(harness + mapped(root / 'src/functions/backend/Storage_Status.cpp', functions) + checks)
+    (path / 'check.cpp').write_text(harness + mapped(root / 'src/functions/backend/Storage_Status.cpp', functions) + mapped(root / 'src/functions/backend/Storage_Status.cpp', saved) + checks)
     compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(path), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)

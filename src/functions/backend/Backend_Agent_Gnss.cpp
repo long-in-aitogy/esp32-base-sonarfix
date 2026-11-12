@@ -121,10 +121,13 @@ bool BackendAgent::verifyUnicoreConfig(JsonObjectConst payload, const String &co
         if (log.period > 0) observed["period"] = log.period;
         else observed["period"] = nullptr;
     }
-    const uint8_t comparePort = logsRead ? UnicoreConfigVerification::comparisonPort(selectedPort ? selectedPort : GNSS_UNICORE_PORT, logs) : 0;
+    const uint8_t configuredPort = selectedPort ? selectedPort : GNSS_UNICORE_PORT;
+    const uint8_t comparePort = logsRead ? UnicoreConfigVerification::comparisonPort(configuredPort, logs) : 0;
     if (comparePort) {
         comparedPorts.add(String("COM") + String(comparePort));
-        details["port_source"] = selectedPort ? "user_selection" : GNSS_UNICORE_PORT >= 1 && GNSS_UNICORE_PORT <= 3 ? "firmware_config" : "log_list_unique";
+        const bool hasConfiguredPort = GNSS_UNICORE_PORT >= 1 && GNSS_UNICORE_PORT <= 3;
+        const char *automaticSource = hasConfiguredPort ? "firmware_config" : "log_list_unique";
+        details["port_source"] = selectedPort ? "user_selection" : automaticSource;
     } else if (logsRead) {
         logsRead = false;
         result["note"] = logs.empty()
@@ -177,7 +180,10 @@ bool BackendAgent::verifyUnicoreConfig(JsonObjectConst payload, const String &co
 namespace
 {
 void describeTmode(JsonObject object, const uint8_t *raw) {
-    object["mode"] = raw[2] == 2 ? "Fixed" : raw[2] == 1 ? "Survey-In" : "Rover";
+    const char *mode = "Rover";
+    if (raw[2] == 2) mode = "Fixed";
+    else if (raw[2] == 1) mode = "Survey-In";
+    object["mode"] = mode;
     object["coordinate_type"] = raw[3] & 1 ? "LLA" : "ECEF";
     object["accuracy_m"] = UbxBaseStatus::u32(raw + 20) * 0.0001;
     UbxBaseStatus status;
@@ -295,7 +301,8 @@ bool BackendAgent::verifyGnssConfig(JsonObjectConst payload, const String &comma
     }
     for (size_t i = 0; i < outputLength; i += 5) {
         const uint32_t key = UbxBaseStatus::u32(expectedOutput.data() + i);
-        const char *name = key >> 28 == 1 ? "protocols" : key >= 0x209102BD ? "rtcm" : "diagnostics";
+        const char *name = key >= 0x209102BD ? "rtcm" : "diagnostics";
+        if (key >> 28 == 1) name = "protocols";
         JsonObject group = groups[name];
         const char *count = outputRead ? "checked" : "unread";
         group[count] = group[count].as<unsigned>() + 1;

@@ -237,6 +237,27 @@ void describeNvsEntry(JsonObject row, const char *partition, const nvs_entry_inf
     if (result != ESP_OK) row["error"] = "Dữ liệu đã thay đổi hoặc không đọc được";
     nvs_close(handle);
 }
+bool appendSavedConfiguration(JsonArray entries, uint32_t offset, uint32_t &total,
+                              const char *partition, const nvs_entry_info_t &entry) {
+    if (!configurationJson(entry)) return false;
+    nvs_handle_t handle;
+    if (nvs_open_from_partition(partition, entry.namespace_name, NVS_READONLY, &handle) != ESP_OK)
+        return false;
+    size_t length = 0;
+    if (nvs_get_str(handle, entry.key, nullptr, &length) != ESP_OK || length > 8192) {
+        nvs_close(handle);
+        return false;
+    }
+    auto text = std::make_unique<char[]>(length);
+    DynamicJsonDocument config(12288);
+    const bool parsed = nvs_get_str(handle, entry.key, text.get(), &length) == ESP_OK
+        && deserializeJson(config, text.get()) == DeserializationError::Ok;
+    nvs_close(handle);
+    if (!parsed) return false;
+    appendConfigurationFields(entries, offset, total, partition, entry,
+                              config.as<JsonVariantConst>(), String());
+    return true;
+}
 } // namespace
 
 bool readNvsInventory(uint32_t offset, const String &commandId, String &output, String &error) {
@@ -266,24 +287,8 @@ bool readNvsInventory(uint32_t offset, const String &commandId, String &output, 
                 const bool wifi = configurationNamespace(entry) && !strncmp(entry.key, "WIFI_", 5);
                 const int entryPriority = wifi ? 0 : configurationNamespace(entry) ? 1 : 2;
                 if (entryPriority != priority) continue;
-                if (configurationJson(entry)) {
-                    nvs_handle_t handle;
-                    if (nvs_open_from_partition(partition, entry.namespace_name, NVS_READONLY, &handle) == ESP_OK) {
-                        size_t length = 0;
-                        if (nvs_get_str(handle, entry.key, nullptr, &length) == ESP_OK && length <= 8192) {
-                            auto text = std::make_unique<char[]>(length);
-                            DynamicJsonDocument config(12288);
-                            if (nvs_get_str(handle, entry.key, text.get(), &length) == ESP_OK
-                                && deserializeJson(config, text.get()) == DeserializationError::Ok) {
-                                appendConfigurationFields(entries, offset, total, partition, entry,
-                                                          config.as<JsonVariantConst>(), String());
-                                nvs_close(handle);
-                                continue;
-                            }
-                        }
-                        nvs_close(handle);
-                    }
-                }
+                if (appendSavedConfiguration(entries, offset, total, partition, entry))
+                    continue;
                 if (total >= offset && entries.size() < 6)
                     describeNvsEntry(entries.createNestedObject(), partition, entry);
                 ++total;
