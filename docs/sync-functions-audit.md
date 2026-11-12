@@ -1,0 +1,49 @@
+# Đối chiếu lịch sử sync-functions
+
+Phạm vi: 37 commit từ `develop` (`c921c25`) đến `sync-functions` (`8af74b7`). Commit `19d2de0` trong repo này đã nhập đúng cây nội dung của `8af74b7`; các thay đổi sau đó được áp dụng từng commit. Nguồn CORS được đối chiếu tại `7db656b`.
+
+Ngày 12/11/2026, 23 bài kiểm tra Python độc lập trong danh sách dưới đây đã chạy đạt trên firmware hiện tại. `check_cors_accuracy.py` được chạy riêng với mã backend CORS và binary host. Tên bài kiểm tra là bằng chứng kiểm tra liên quan, không chứng minh mọi hành vi của commit; các mục không có bài Python cần xem mã hoặc chạy bài C++ tương ứng.
+
+| Commit | Nội dung | Bài kiểm tra gắn với commit |
+| --- | --- | --- |
+| `39bbbee` | fix(ntrip): preserve streams on repeated config | Không có bài trong commit |
+| `113db51` | fix(ntrip): accept immediate SOURCE acknowledgements | `check_ntrip_handshake.py` |
+| `e84d345` | fix(backend): own workflow progress JSON keys | `check_workflow_progress.py` |
+| `a935437` | fix(backend): snapshot active Survey-In duration | `check_survey_snapshot.py` |
+| `621132c` | fix(backend): restore receiver mode after workflows | `check_workflow_restore.py` |
+| `1feb849` | refactor(backend): separate codecs and stored state | Không có bài trong commit |
+| `f85e87d` | build(sonar): align scanner scopes and compile inputs | Không có bài trong commit |
+| `0448286` | fix(backend): own dynamic service config keys | `check_service_config.py` |
+| `282369f` | fix(backend): preserve workflow restore invariants | `check_survey_snapshot.py`, `check_workflow_restore.py`, `check_workflow_validation.py` |
+| `ad8bd21` | chore: enforce consistent incremental merge checks | `check_rover_gga.py` |
+| `0489fbd` | fix(ntrip): separate rover status from byte counts | `check_rover_status.py` |
+| `d5670c2` | fix(ntrip): report reconnect success immediately | `check_ntrip_reconnect.py` |
+| `2f4437e` | fix(ntrip): log connection state changes only | Không có bài trong commit |
+| `67afe60` | fix(gnss): derive ellipsoid height from GGA | `check_gga_position.py` |
+| `089da8c` | fix(gnss): align Unicore coordinate precision | `base_checks.cpp` |
+| `498ee33` | fix(backend): preserve Auto Base configuration | `check_autobase_config.py` |
+| `52976fc` | fix(backend): handle Auto Base transport restore failure | `check_autobase_config.py` |
+| `9d3e5a3` | fix(backend): verify Auto Base receiver readback | `check_autobase_config.py` |
+| `8383284` | fix(gnss): enforce 5 m base accuracy | `base_checks.cpp`, `check_autobase_config.py`, `check_base_accuracy.py`, `check_cors_accuracy.py`, `check_workflow_restore.py` |
+| `5a25387` | fix(gnss): preserve fixed Base output options | `check_fixed_output_options.py` |
+| `a33f493` | fix(ntrip): detect incomplete GNSS UART writes | `check_rover_status.py` |
+| `fca143f` | fix(gnss): recover delayed fixed position readback | `check_workflow_restore.py` |
+| `8f09442` | feat(gnss): report u-blox navigation quality | `check_ublox_navigation.py` |
+| `612c661` | feat(gnss): report Unicore horizontal quality | `check_ublox_navigation.py`, `check_unicore_quality.py` |
+| `4aeeb9d` | fix(websocket): validate upgrade handshake | `check_websocket_upgrade.py`, `protocol_checks.cpp` |
+| `d24ae80` | fix(websocket): reject unsupported server frames | `check_websocket_frames.py` |
+| `9fb12cf` | fix(websocket): release unused receive buffers | `check_websocket_frames.py` |
+| `93b39b4` | fix(ntrip): report actionable rover errors | `check_rover_connect.py` |
+| `74b95b3` | feat(ntrip): send fresh GGA in rover request | `check_rover_connect.py` |
+| `4ff3734` | feat(ntrip): capture caster-selected mountpoint | `check_ntrip_handshake.py`, `check_rover_connect.py` |
+| `45bedd6` | fix(backend): validate workflow caster port before conversion | `check_workflow_connection_config.py` |
+| `1f4a53f` | feat(backend): use caster selection for AutoNearest | `check_auto_nearest_workflow.py`, `check_rover_connect.py` |
+| `65ab601` | fix(backend): restore rover when AutoNearest is unconfigured | `check_auto_nearest_workflow.py`, `check_workflow_restore.py`, `check_workflow_validation.py` |
+| `25d2e79` | fix(backend): reject failed Auto Base coordinate conversion | `check_auto_base_transform.py` |
+| `95cdca7` | fix(backend): require auto apply for measured base position | `check_auto_base_transform.py`, `check_auto_nearest_workflow.py`, `check_autobase_command.py` |
+| `2750929` | fix(backend): preserve AutoNearest source in base config | `check_autobase_config.py` |
+| `8af74b7` | fix(backend): report Survey-In fallback as completed | `check_auto_base_status.py` |
+
+Cần tiếp tục đối chiếu hành vi CORS hiện tại, đặc biệt lệnh đổi tỉnh VN2000: giao diện vẫn gửi lệnh nhưng bản CORS yêu cầu xem lại trước khi áp dụng; firmware này đang giữ hành vi cũ. Bản build `tdm240x_dev_general` dùng `no_ota.csv` và NVS cũ, khác bảng phân vùng CORS có `agent_state`; chưa thay bảng vì cần bảo toàn dữ liệu thiết bị.
+
+Các bài host và build không thay thế nghiệm thu trên receiver thật: cần kiểm tra BESTPOS, accuracy cấu hình 5 m, nguồn RTCM, mất kết nối, khởi động lại và tọa độ ngoài thực địa.
