@@ -317,8 +317,7 @@ void BackendAgent::saveSurveyResult(JsonObjectConst bestPosition, const String &
     savedSurvey["recorded_at"] = epochString().toInt();
     surveyInResult_.clear();
     serializeJson(savedSurvey, surveyInResult_);
-    surveyInResultPending_ = false;
-    saveStatePreferences();
+    surveyInResultPending_ = !saveStatePreferences();
 }
 
 bool BackendAgent::refreshUbloxReadback(String &error)
