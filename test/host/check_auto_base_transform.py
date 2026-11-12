@@ -25,6 +25,7 @@ harness = r'''
 #include <strings.h>
 #include "functions/backend/Vn2000_Datum.h"
 #include "functions/gnss/gnss_cmd_builder.h"
+#include "functions/gnss/ublox_commands.h"
 int tcpStreamMutex = 1; constexpr int MUTEX_TIMEOUT_MS = 1500, pdTRUE = 1;
 constexpr size_t CONFIG_DOCUMENT_SIZE = 6144, AUTO_BASE_RESULT_SIZE = 6144, PROGRESS_DOCUMENT_SIZE = 8192;
 uint32_t now = 1000;
@@ -121,6 +122,11 @@ int main() {
     payload["enable_itrf_vn2000_transform"] = false;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(!agent.reachedWrite && !resultJson.isEmpty() && agent.conversions == 0);
+    std::vector<double> preciseLat{-84.54808557036529}, preciseLon{105}, preciseAlt{650.1759102147155};
+    assert(agent.completeAutoBaseSetup(payload, preciseLat, preciseLon, preciseAlt, resultJson, error, "station"));
+    report.clear(); assert(!deserializeJson(report, agent.reportJson));
+    assert(report["output_coord"]["lat"] == "-84.548085570");
+    assert(report["output_coord"]["alt"] == "650.1759");
     payload["ip"] = "VNGEONET.VN";
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     report.clear(); assert(!deserializeJson(report, agent.reportJson));

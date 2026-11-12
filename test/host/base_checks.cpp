@@ -57,6 +57,10 @@ bool roverSettingEnabled(const CommandList &rover, uint32_t key)
 
 void checkUbloxModes(const CommandList &survey, const CommandList &fixed, const CommandList &rover)
 {
+    GnssOptions options;
+    const auto measured = buildBaseFixedLlaCommand(-84.54808557036529, 105, 650.1759102147155, 5, GnssSensorType::Ublox, options);
+    const auto restored = buildBaseFixedLlaCommand(-84.548085570, 105, 650.1759, 5, GnssSensorType::Ublox, options);
+    assert(measured[0] == restored[0]);
     const auto all = buildBaseAllRtcmOutputCommand("UART1", true, GnssSensorType::Ublox);
     assert(all.size() == 2);
     assert(roverSettingEnabled(all, 0x20910369U)); // RTCM 1094 on UART1.

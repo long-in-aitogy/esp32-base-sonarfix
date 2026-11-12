@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "functions/gnss/Ubx_Reply.h"
+#include "functions/gnss/ublox_commands.h"
 #include "functions/gnss/Unicore_Reply.h"
 #include <cstdio>
 #include <cstdlib>
@@ -875,10 +876,8 @@ bool BackendAgent::completeAutoBaseSetup(
         if (sensorType_ == "Ublox")
         {
             const double scale = altitude ? 100.0 : 10000000.0;
-            const double scaled = value * scale;
-            const auto whole = static_cast<int32_t>(scaled);
-            const auto highPrecision = static_cast<int8_t>((scaled - whole) * 100);
-            return String((whole + highPrecision / 100.0) / scale, altitude ? 4 : 9);
+            const auto units = UbloxCommands::fixedCoordinateUnits(value, scale);
+            return String(static_cast<double>(units) / (scale * 100.0), altitude ? 4 : 9);
         }
         if (altitude)
             return String(value, 4);

@@ -416,13 +416,13 @@ namespace UbloxCommands
         Command message = buildTmode3Message();
         message[8] = 2;
         message[9] = 1;
-        const std::array<double, 3> values = {lat * 10000000.0, lon * 10000000.0, alt * 100.0};
+        const std::array<int64_t, 3> values = {fixedCoordinateUnits(lat, 10000000.0), fixedCoordinateUnits(lon, 10000000.0), fixedCoordinateUnits(alt, 100.0)};
         constexpr std::array<size_t, 3> offsets = {10, 14, 18};
         for (uint8_t i = 0; i < 3; ++i)
         {
-            const auto whole = static_cast<int32_t>(values[i]);
+            const auto whole = static_cast<int32_t>(values[i] / 100);
             writeU32(message, offsets[i], static_cast<uint32_t>(whole));
-            message[22 + i] = static_cast<uint8_t>(static_cast<int8_t>((values[i] - whole) * 100));
+            message[22 + i] = static_cast<uint8_t>(static_cast<int8_t>(values[i] % 100));
         }
         const auto accuracyValue = static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000);
         writeU32(message, 26, accuracyValue);
