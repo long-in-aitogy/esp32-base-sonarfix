@@ -146,7 +146,13 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
         request.remove(request.length() - 2);
         request += "X-NTRIP-Report-Selected: 1\r\n\r\n";
     }
-    client.print(request);
+    if (client.print(request) != request.length())
+    {
+        client.stop();
+        roverSession().active = false;
+        roverSession().lastError = "incomplete NTRIP request write";
+        return false;
+    }
 
     String responseLine;
     if (!waitForNtripResponse(client, &responseLine, selectedMountpoint))

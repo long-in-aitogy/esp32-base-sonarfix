@@ -34,7 +34,7 @@ RoverSession &roverSession() { return session; }
 struct Client {
     String reply, request;
     size_t offset = 0;
-    bool up = false, connectOk = true;
+    bool up = false, connectOk = true, shortWrite = false;
     int connects = 0;
     void stop() { up = false; }
     void setTimeout(int) {}
@@ -42,7 +42,7 @@ struct Client {
     bool connected() { return up; }
     int available() { return offset < reply.size(); }
     int read() { return available() ? static_cast<unsigned char>(reply[offset++]) : -1; }
-    size_t print(const String &s) { request = s; return s.size(); }
+    size_t print(const String &s) { request = s; return shortWrite ? s.size() - 1 : s.size(); }
 } client;
 Client &clientFor(int) { return client; }
 bool safeNtripField(const String &s) { return s.find_first_of("\r\n") == String::npos; }
@@ -63,6 +63,9 @@ int main() {
     client = Client{}; client.reply = "HTTP/1.1 401 secret\r\n\r\n";
     assert(!startNtripRover("host", 2101, "user", "secret", "mount", 2));
     assert(String(session.lastError) == "cannot connect to CORS rover mountpoint");
+    client = Client{}; client.reply = "ICY 200 OK\r\n"; client.shortWrite = true;
+    assert(!startNtripRover("host", 2101, "user", "secret", "mount", 1));
+    assert(!client.up && !session.active && !session.authenticated && String(session.lastError) == "incomplete NTRIP request write");
     client = Client{}; client.connectOk = false;
     assert(!startNtripRover("host", 2101, "user", "secret", "mount", 1));
     assert(String(session.lastError) == "cannot connect to CORS rover mountpoint");

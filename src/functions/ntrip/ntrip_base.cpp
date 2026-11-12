@@ -215,7 +215,13 @@ bool connectEndpoint(uint8_t index)
               auth + "\r\n"
                      "Connection: Keep-Alive\r\n\r\n";
   }
-  client.print(request);
+  if (client.print(request) != request.length())
+  {
+    client.stop();
+    clearEndpointState(endpoint);
+    endpoint.lastError = "incomplete NTRIP request write";
+    return false;
+  }
 
   String responseLine;
   if (!waitForNtripResponse(client, &responseLine))
