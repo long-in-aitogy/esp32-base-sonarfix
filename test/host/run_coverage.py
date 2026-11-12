@@ -17,6 +17,12 @@ suites = {
     'mqtt': ['test/host/mqtt_write_checks.cpp'],
     'wifi': ['test/host/wifi_profiles_checks.cpp'],
     'protocol': ['test/host/protocol_checks.cpp'],
+    'config': ['test/host/config_verification_checks.cpp', 'src/functions/gnss/Unicore_Log.cpp'],
+    'sample': ['test/host/sample_checks.cpp'],
+    'codec': ['test/host/codec_checks.cpp', 'src/functions/backend/Backend_Agent_Codec.cpp'],
+    'readback': ['test/host/readback_checks.cpp', 'src/functions/gnss/Ublox_Readback.cpp',
+                 'src/functions/gnss/Unicore_Readback.cpp', 'src/functions/gnss/Unicore_Log.cpp',
+                 'src/functions/backend/Backend_Agent_Codec.cpp'],
 }
 files = {}
 
@@ -38,9 +44,13 @@ with tempfile.TemporaryDirectory(prefix='esp32-coverage-') as directory:
     build = Path(directory)
     for name, sources in suites.items():
         binary = build / name
-        subprocess.run([compiler, '-std=c++17', '-g', '-fsanitize=address,undefined',
+        includes = [root / 'test/host', root / 'include']
+        if name in ('readback', 'codec'):
+            includes.insert(0, root / 'test/host/readback')
+            includes.append(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src')
+        subprocess.run([compiler, '-std=c++17', '-DNATIVE_BUILD', '-g', '-fsanitize=address,undefined',
                         '-fprofile-instr-generate', '-fcoverage-mapping',
-                        '-I' + str(root / 'test/host'), '-I' + str(root / 'include'),
+                        *['-I' + str(path) for path in includes],
                         *[str(root / path) for path in sources], '-o', str(binary)], check=True)
         raw, profile = build / f'{name}.profraw', build / f'{name}.profdata'
         subprocess.run([str(binary)], check=True, env=dict(os.environ, LLVM_PROFILE_FILE=str(raw)))

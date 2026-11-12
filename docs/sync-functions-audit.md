@@ -135,7 +135,7 @@ Chạy `python3 test/host/check_cors_unicore_verify.py /duong-dan/cors` để ki
 
 Kiểm tra lại ngày 12/11/2026: 90/90 bài host không cần thiết bị hoặc đường dẫn CORS đạt; bốn bài tích hợp payload CORS đạt; ba cấu hình firmware `general`, `general_debug`, `general_test` build thành công. Receiver và dịch vụ mạng trong các bài kiểm tra được mô phỏng; chưa xác nhận trên thiết bị thực hoặc CI GitHub.
 
-CI GitHub tại `da5ba07` đã build và chạy các nhóm kiểm tra thành công; SonarQube nhận báo cáo nhưng Quality Gate thất bại do cảnh báo mật khẩu caster mặc định và coverage mã mới 8,9%. `test/host/run_coverage.py` đo các bài C++ chạy trực tiếp cùng một số bài host dùng đoạn mã trích xuất nguyên vẹn; ánh xạ kiểm tra đoạn mã khớp nguồn trước khi tính coverage. Các bài chưa được instrument không đóng góp vào báo cáo; kết quả không thay thế kiểm thử phần cứng.
+CI GitHub tại `245e33b` đã build và chạy các nhóm kiểm tra thành công; SonarQube nhận báo cáo nhưng Quality Gate thất bại do cảnh báo mật khẩu caster mặc định và coverage mã mới 57%. `test/host/run_coverage.py` đo các bài C++ chạy trực tiếp cùng một số bài host dùng đoạn mã trích xuất nguyên vẹn; ánh xạ kiểm tra đoạn mã khớp nguồn trước khi tính coverage. Các bài chưa được instrument không đóng góp vào báo cáo; kết quả không thay thế kiểm thử phần cứng.
 
 | Bài hoặc nhóm của CORS | Bằng chứng trên nhánh này và phần cần chú ý |
 | --- | --- |
