@@ -326,7 +326,7 @@ void BackendAgentWebsocket::parseFrames()
 
 void BackendAgentWebsocket::sendControl(uint8_t opcode, const uint8_t *payload, size_t length)
 {
-    if (!connected_ || !client_ || length > 125)
+    if (!connected_ || !client_ || length > 125 || (length && !payload))
         return;
 #if !defined(NATIVE_BUILD)
     const uint32_t mask = esp_random();
@@ -343,14 +343,22 @@ void BackendAgentWebsocket::sendControl(uint8_t opcode, const uint8_t *payload, 
         static_cast<uint8_t>(0x80 | opcode),
         static_cast<uint8_t>(0x80 | length),
     };
-    client_->write(header.data(), header.size());
-    client_->write(maskBytes.data(), maskBytes.size());
+    if (client_->write(header.data(), header.size()) != header.size() ||
+        client_->write(maskBytes.data(), maskBytes.size()) != maskBytes.size())
+    {
+        disconnect(false);
+        return;
+    }
     if (payload && length > 0)
     {
         for (size_t i = 0; i < length; ++i)
         {
             const uint8_t byte = maskByte(payload[i], maskBytes[i % maskBytes.size()]);
-            client_->write(&byte, 1);
+            if (client_->write(&byte, 1) != 1)
+            {
+                disconnect(false);
+                return;
+            }
         }
     }
 }
