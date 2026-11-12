@@ -4,6 +4,7 @@
 
 #include "Prog_Config.h"
 #include "functions/backend/Backend_Agent.h"
+#include "functions/backend/Backend_Agent_Internal.h"
 #include "hardware/Sim_handler.h"
 #include "hardware/Wifi_handler.h"
 
@@ -126,7 +127,7 @@ String base64Encode(const String &plain)
 
 namespace ntrip_common
 {
-    constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
+    constexpr size_t CONFIG_DOCUMENT_SIZE = BackendAgentInternal::CONFIG_DOCUMENT_SIZE;
     WiFiClient wifiNtripClient1;
     WiFiClient wifiNtripClient2;
     TinyGsmClient gsmNtripClient1(modem, 0);
