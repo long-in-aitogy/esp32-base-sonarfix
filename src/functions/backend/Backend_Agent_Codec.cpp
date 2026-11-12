@@ -111,28 +111,27 @@ namespace BackendAgentInternal
     {
         uint32_t value = 0;
         int bits = -8;
-        size_t outputLength = 0;
+        size_t outputLength = 0, symbols = 0, padding = 0;
         for (const char character : encoded)
         {
             const auto c = character;
+            if (c == '\r' || c == '\n' || c == ' ' || c == '\t')
+                continue;
             if (c == '=')
             {
-                break;
+                if (++padding > 2)
+                    return 0;
+                continue;
             }
             const auto decoded = base64Value(c);
-            if (decoded < 0)
-            {
-                if (c == '\r' || c == '\n' || c == ' ' || c == '\t')
-                {
-                    continue;
-                }
+            if (decoded < 0 || padding)
                 return 0;
-            }
+            ++symbols;
             value = (value << 6) | static_cast<uint32_t>(decoded);
             bits += 6;
             if (bits >= 0)
             {
-                if (outputLength >= outputCapacity)
+                if (!output || outputLength >= outputCapacity)
                 {
                     return 0;
                 }
@@ -140,6 +139,9 @@ namespace BackendAgentInternal
                 bits -= 8;
             }
         }
+        if (symbols % 4 == 1 || (padding && (symbols + padding) % 4 != 0) ||
+            (value & ((1U << (bits + 8)) - 1U)))
+            return 0;
         return outputLength;
     }
 
