@@ -15,10 +15,12 @@ harness = r'''
 #include <ArduinoJson.h>
 #include <cassert>
 #include <cmath>
+#include <limits>
 #include <vector>
 #include <strings.h>
 #include "functions/backend/Vn2000_Datum.h"
 int tcpStreamMutex = 1; constexpr int MUTEX_TIMEOUT_MS = 1500, pdTRUE = 1;
+constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
 uint32_t now = 1000;
 uint32_t millis() { return now; }
 int pdMS_TO_TICKS(int n) { return n; }
@@ -53,10 +55,15 @@ struct BackendAgent {
     struct ProjectedPosition { double latitude, longitude, altitude; double northing = 0, easting = 0; };
     bool reachedWrite = false, transformOk = false; int conversions = 0;
     bool resolveAutoBaseProjection(JsonObject, double, double &meridian, double &scale, String &, String &, String &) { meridian=105; scale=0.9999; return true; }
-    template <class... T> String buildAutoBaseResult(T&&...) { return "measured"; }
+    String sensorType_ = "Ublox";
+    String reportJson;
+    String buildAutoBaseResult(double, double, double, double, double, double, bool, bool, size_t,
+                               const String &, const String &, const String &, double, double, JsonObjectConst report) {
+        reportJson.clear(); serializeJson(report, reportJson); return "measured";
+    }
     bool transformToVn2000(double, double, double, double, double, ProjectedPosition &);
     bool transformItrfToVn2000(double, double, double, double, double, ProjectedPosition &) { ++conversions; return transformOk; }
-    bool completeAutoBaseSetup(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &, String &);
+    bool completeAutoBaseSetup(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &, String &, const String &);
 };
 '''
 matcher = workflow[workflow.index('    bool acceptAutoBaseLocationReply('):workflow.index('} // namespace')]
@@ -70,38 +77,45 @@ int main() {
     DynamicJsonDocument doc(256); JsonObject payload = doc.to<JsonObject>();
     std::vector<double> lat{21}, lon{105}, alt{10}; String resultJson, error;
     payload["enable_itrf_vn2000_transform"] = true;
-    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
+    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(!agent.reachedWrite && error == "VN2000 conversion failed; no candidate coordinates were installed");
     payload["enable_itrf_vn2000_transform"] = false;
-    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
+    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(!agent.reachedWrite && resultJson == "measured" && agent.conversions == 1);
     payload["ip"] = "VNGEONET.VN";
     payload["enable_itrf_vn2000_transform"] = true;
-    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
+    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(error == "missing RTCM 1021 from this CORS session");
     sessionDatum.has1021 = true;
-    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
+    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(error == "location reply queue could not be allocated");
     agent.autoBaseLocationQueue_ = 1;
-    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
+    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(error == "backend location ACK timed out or did not match sampled LLH");
     agent.workflowCancelRequested_ = true;
-    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
+    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(error == "cancelled by user");
     agent.workflowCancelRequested_ = false;
     provideLocation = true;
-    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
+    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     sessionDatum.has1025 = true; sessionDatum.centralMeridianDeg = 105; sessionDatum.scale = 0.9999;
-    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
+    sessionDatum.kT = 1.00000008613; sessionDatum.count1021 = 2;
+    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    DynamicJsonDocument report(4096);
+    assert(!deserializeJson(report, agent.reportJson));
+    assert(report["source"]["mountpoint"] == "station" && report["projection_source"] == "rtcm1025");
+    assert(report["parameter_source"] == "rtcm1021" && report["received_messages"]["1021"] == 2);
+    assert(std::abs(coordinateNumber(report["parameters"]["kT"]) - 1.00000008613) < 1e-15);
+    assert(report["receiver_write_completed"] == false && report["auto_applied"] == false);
     payload["resN"] = "invalid";
-    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
+    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(error == "invalid CORS shift");
     payload.remove("resN");
     sessionDatum.has1025 = false;
     payload["l0_deg"] = 105; payload["k0"] = 0.9999;
-    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
+    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     payload["auto_apply"] = true;
-    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error));
+    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(agent.reachedWrite);
 }
 '''

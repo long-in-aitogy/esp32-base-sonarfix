@@ -186,14 +186,14 @@ private:
     bool completeAutoBaseSetup(JsonObject payload, const std::vector<double> &latitudes,
                                const std::vector<double> &longitudes,
                                const std::vector<double> &altitudes,
-                               String &resultJson, String &failureReason);
+                               String &resultJson, String &failureReason, const String &sourceMountpoint);
     String buildAutoBaseResult(double finalLatitude, double finalLongitude,
                                double finalAltitude, double rawLatitude,
                                double rawLongitude, double rawAltitude,
                                bool transformed, bool transportRestored,
                                size_t sampleCount, const String &projectionSource,
                                const String &provinceCode, const String &provinceName,
-                               double centralMeridianDeg, double scale);
+                               double centralMeridianDeg, double scale, JsonObjectConst report);
     bool runReferenceCheckWorkflow(JsonObject payload);
     bool prepareReferenceCheckConfig(JsonObject payload, JsonObject &reference,
                                      double &referenceLatitude, double &referenceLongitude,

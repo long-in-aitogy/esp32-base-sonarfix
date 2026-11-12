@@ -50,7 +50,7 @@ struct BackendAgent {
     }
     bool waitForAutoBaseFix(uint32_t, uint8_t, bool &, String &, const String &source) { fixSource=source; return true; }
     bool collectAutoBaseSamples(int, std::vector<double> &, std::vector<double> &, std::vector<double> &, bool &, String &, const String &source) { sampleSource=source; return true; }
-    bool completeAutoBaseSetup(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &result, String &) { result="{}"; return true; }
+    bool completeAutoBaseSetup(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &result, String &, const String &) { result="{}"; return true; }
     bool runAutoBaseWorkflow(JsonObject);
 };
 '''
