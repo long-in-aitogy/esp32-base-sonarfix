@@ -9,6 +9,8 @@ workflow = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_tex
 begin = workflow.index('bool BackendAgent::completeAutoBaseSetup(')
 end = workflow.index('    setAgentState("auto_setup_base");', begin)
 method = workflow[begin:end] + '    reachedWrite = true;\n    (void)resultJson;\n    return true;\n}\n'
+full_end = workflow.index('\nbool BackendAgent::runAutoBaseWorkflow(', begin)
+full_method = workflow[begin:full_end].replace('BackendAgent::completeAutoBaseSetup(', 'BackendAgent::completeAutoBaseSetupFull(', 1)
 result_method = workflow[workflow.index('String BackendAgent::buildAutoBaseResult('):begin]
 result_method = result_method.replace('BackendAgent::buildAutoBaseResult(', 'BackendAgent::buildRealAutoBaseResult(', 1)
 config_start = workflow.index('    DynamicJsonDocument baseConfig(CONFIG_DOCUMENT_SIZE);', begin)
@@ -71,14 +73,17 @@ struct BackendAgent {
     bool stopNtripRoverLocked() { return true; }
     void setWorkflowProgress(const char *, int, int, const String &) {}
     struct ProjectedPosition { double latitude, longitude, altitude; double northing = 0, easting = 0; };
-    bool reachedWrite = false, transformOk = false, failFinalResult = false; int conversions = 0;
+    bool reachedWrite = false, transformOk = false, failFinalResult = false;
+    bool receiverOk = true, saveOk = true, restartOk = true; int conversions = 0;
     String sensorType_ = "Ublox";
     String reportJson;
     String baseConfig_ = R"({"base_setup_method":"SURVEY_IN","survey_in_duration":300})";
     int configWrites = 0;
-    bool restoreWorkflowBase(JsonObjectConst) { ++configWrites; return true; }
-    bool saveStatePreferences() { return true; }
-    bool restartConfiguredNtrip() { return true; }
+    bool restoreWorkflowBase(JsonObjectConst) { ++configWrites; return receiverOk; }
+    bool saveStatePreferences() { return saveOk; }
+    bool restartConfiguredNtrip() { return restartOk; }
+    void setAgentState(const String &) {}
+    String normalAgentState() { return "online"; }
     void publishConfigState(const char *) {}
     bool applyCandidate(String &);
     String buildRealAutoBaseResult(double, double, double, double, double, double, bool, bool, size_t,
@@ -94,6 +99,7 @@ struct BackendAgent {
     bool transformToVn2000(double, double, double, double, double, ProjectedPosition &);
     bool transformItrfToVn2000(double, double, double, double, double, ProjectedPosition &) { ++conversions; return transformOk; }
     bool completeAutoBaseSetup(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &, String &, const String &);
+    bool completeAutoBaseSetupFull(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &, String &, const String &);
 };
 '''
 matcher = workflow[workflow.index('    bool acceptAutoBaseLocationReply('):workflow.index('} // namespace')]
@@ -249,11 +255,32 @@ int main() {
     payload["enable_itrf_vn2000_transform"] = true;
     assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(error == "cannot acquire rover transport for datum readback");
+    allowLock = true;
+    BackendAgent full;
+    DynamicJsonDocument fullRequest(512); fullRequest["ip"] = "other-caster.example"; fullRequest["auto_apply"] = true;
+    const String previous = full.baseConfig_;
+    assert(full.completeAutoBaseSetupFull(fullRequest.as<JsonObject>(), lat, lon, alt, resultJson, error, "station"));
+    DynamicJsonDocument finalConfig(8192), finalResult(8192);
+    assert(!deserializeJson(finalConfig, full.baseConfig_) && !deserializeJson(finalResult, resultJson));
+    assert(finalConfig["base_setup_method"] == "FIXED_LLA" && finalConfig["accuracy"] == 5);
+    assert(finalResult["conversion_report"]["receiver_write_completed"] == true && finalResult["configured_ntrip_restarted"] == true);
+    BackendAgent failResult; failResult.failFinalResult = true;
+    assert(!failResult.completeAutoBaseSetupFull(fullRequest.as<JsonObject>(), lat, lon, alt, resultJson, error, "station"));
+    assert(failResult.configWrites == 0 && failResult.baseConfig_ == previous && error == "cannot allocate Auto Base result");
+    BackendAgent failReadback; failReadback.receiverOk = false;
+    assert(!failReadback.completeAutoBaseSetupFull(fullRequest.as<JsonObject>(), lat, lon, alt, resultJson, error, "station"));
+    assert(failReadback.baseConfig_ == previous && error == "receiver did not confirm automatically measured Fixed LLA");
+    BackendAgent failSave; failSave.saveOk = false;
+    assert(!failSave.completeAutoBaseSetupFull(fullRequest.as<JsonObject>(), lat, lon, alt, resultJson, error, "station"));
+    assert(failSave.baseConfig_ == previous && error == "could not save automatically applied Fixed LLA");
+    BackendAgent failRestart; failRestart.restartOk = false;
+    assert(!failRestart.completeAutoBaseSetupFull(fullRequest.as<JsonObject>(), lat, lon, alt, resultJson, error, "station"));
+    assert(failRestart.baseConfig_ == previous && error == "could not restore configured NTRIP after applying Fixed LLA");
 }
 '''
 with tempfile.TemporaryDirectory(prefix='auto-base-transform-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(harness + json_bool + validation + result_method + method + candidate + checks)
+    (path / 'check.cpp').write_text(harness + json_bool + validation + result_method + method + full_method + candidate + checks)
     subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / 'test/host'), '-I' + str(root / 'include'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)

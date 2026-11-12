@@ -92,6 +92,15 @@ int main() {
     assert(!agent.executeServiceConfigCommand(request.as<JsonObject>(), error, detail));
     assert(error == "service configuration exceeds memory capacity" && agent.serviceConfig_ == legacy);
     assert(setups == 4 && connections == 4);
+    BackendAgent removed;
+    removed.serviceConfig_ = R"({"server1_enabled":true,"server3_enabled":true,"password3":"secret","port3":2103})";
+    DynamicJsonDocument deletion(256), after(2048);
+    deletion["removed_servers"].add(3); deletion["removed_servers"].add(1);
+    assert(removed.executeServiceConfigCommand(deletion.as<JsonObject>(), error, detail));
+    assert(!deserializeJson(after, removed.serviceConfig_));
+    assert(after["server1_enabled"] == true && after["server3_enabled"].isNull());
+    assert(after["password3"].isNull() && after["port3"].isNull() && after["removed_servers"].isNull());
+    assert(removed.saves == 1);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='service-config-') as directory:

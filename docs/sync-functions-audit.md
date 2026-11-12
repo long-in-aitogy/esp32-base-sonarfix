@@ -128,3 +128,27 @@ Chạy `python3 test/host/check_cors_verify.py /duong-dan/cors` để kiểm tra
 Chạy `python3 test/host/check_cors_unicore_verify.py /duong-dan/cors` để kiểm tra payload Unicore do CORS tạo cho MSM4, MSM7 và cả hai, với COM3 hoặc CURRENT. Kiểm tra khớp, sai tọa độ, thiếu log và không đọc được đều đạt với MODE/UNILOGLIST mô phỏng. Bài cần cây CORS cục bộ và không xác nhận receiver thực.
 
 Đã biên dịch và chạy trực tiếp `readback_checks.cpp` của CORS với mã đọc UBX/Unicore và codec của nhánh đích, dùng môi trường UART giả lập của CORS: các trường hợp khóa, timeout, phản hồi lỗi, tọa độ và bảo toàn byte UART đều đạt. Bài `check_wifi_nvs.py` của CORS cũng đạt sau khi đổi kỳ vọng mật khẩu dự phòng sang giá trị giữ từ `develop`. Bộ kiểm tra đích bổ sung các tình huống nhiều cổng Unicore, hai lần thử SIM, loại bỏ ký tự xuống dòng ở SOURCE và giữ trường RTCM 1025 trong báo cáo. Những bài dùng receiver và mạng giả lập không chứng minh hoạt động thiết bị thực.
+
+Đối chiếu bổ sung ngày 12/11/2026: 30.000 bộ dữ liệu TMODE3, NAV-SVIN và ECEF sinh xác định (seed `20261112`) cho cùng kết quả bit giữa `Ubx_Base_Status.h` của CORS và nhánh này. So sánh các hằng `inline constexpr` trong `Prog_Config.h` cho thấy hai cây cùng tập tên; chỉ `WIFI_SSID`, `MQTT_SERVER`, `NTRIP_MOUNTPOINT` khác giá trị. Các mặc định đó được giữ theo `develop`; cấu hình AutoNearest trùng CORS. Bản `general` giữ debug tắt như `develop`; CORS bật debug mặc định.
+
+Đối chiếu nội dung các bài nguồn không cùng tên, ký hiệu “từng phần” có nghĩa là **chưa chứng minh toàn bộ bài nguồn**:
+
+| Bài hoặc nhóm của CORS | Bằng chứng trên nhánh này và phần cần chú ý |
+| --- | --- |
+| `check_auto_base_boot.py` | `check_autocors_startup.py`, `check_autocors_scheduler.py`; chủ ý giữ cấu hình đã lưu thay vì khởi động AutoNearest mới ở mọi lần boot. |
+| `check_backend_lifecycle.py` | Từng phần: `check_optional_backend_allocations.py`, `check_mqtt_dispatch.py`, `check_control_failover_workflow.py`, `check_detection_lifecycle.py`; chưa chạy vòng đời tích hợp tương đương. |
+| `check_backend_storage.py` | Từng phần: `check_backend_migration.py`, `check_service_config.py`, `check_service_startup_capacity.py`, `check_workflow_connection_config.py`; chưa chạy bài tích hợp nguyên bản. |
+| `check_base_startup_confirmation.py` | Từng phần: `check_boot_progress_restore.py`, `check_workflow_restore.py`, `check_unicore_verify_command.py`, `check_unicore_fixed_readback.py`. |
+| `check_command_dispatch.py` | Từng phần: `check_wifi_commands.py`, `check_restart_transport.py`; chưa có toàn bộ kịch bản định tuyến trong một bài. |
+| `check_gnss_lifecycle.py` | Từng phần: kiểm tra UBX/Unicore, readback, Survey-In và Rover riêng; `readback_checks.cpp` của nguồn chạy trực tiếp với mã đích. |
+| `check_network_lifecycle.py` | Từng phần: `check_wifi_recovery.py`, `check_wifi_migration.py`, `check_sim_recovery_workflow.py`; chưa có một bài gộp toàn bộ vòng đời mạng. |
+| `check_ntrip_source.py` | Từng phần: `check_ntrip_config_capacity.py` chạy nạp hai endpoint và điều kiện khóa/cấp phép thực; `check_ntrip_source_connect.py`, `check_ntrip_port.py`, `check_ntrip_handshake.py`, `check_ntrip_reconnect.py` kiểm tra kết nối. Chưa gộp toàn bộ vòng đời SOURCE. |
+| `check_projection_audit.py` | Từng phần: `check_vn2000.py` so bộ giải mã với Python; `check_auto_base_transform.py` kiểm tra trường RTCM và báo cáo/lưu cấu hình. Chưa chạy bài nguồn nguyên bản vì cấu trúc báo cáo khác. |
+| `check_status_stream.py` | Từng phần: `check_service_config.py`, `check_stream_persistence.py`, `check_status_config_capacity.py`, `check_config_publish_capacity.py`; chưa chạy tập 144 trạng thái và 44 lệnh nguồn như một bài. |
+| `check_ublox_verification.py` | `check_cors_verify.py` dùng payload CORS thật với chín cấu hình MSM/chòm sao; receiver giả lập và có thêm tình huống sai/không đọc được. |
+| `check_wifi_handover.py` | Từng phần: `check_wifi_recovery.py`, `check_sim_recovery_workflow.py`; đường gọi hàm đã khác, chưa chạy nguyên bài nguồn. |
+| `check_wifi_nvs.py` | Đã chạy bài nguồn với mã đích, thay kỳ vọng mật khẩu dự phòng theo `develop`; dữ liệu và kết nối đều mô phỏng. |
+| `check_workflow_lifecycle.py` | Từng phần: `check_auto_nearest_workflow.py` dùng các vòng chờ và 60 mẫu thật, mô phỏng bước áp dụng; `check_auto_base_transform.py` chạy toàn bộ hàm tạo kết quả và áp dụng, mô phỏng receiver/lưu trữ/NTRIP; `check_workflow_restore.py` kiểm tra khôi phục. Chưa có bài tích hợp đầy đủ tương đương. |
+| `codec_checks.cpp` | Đã chạy với API Base64 đích và Arduino giả lập được điều chỉnh tạm. |
+| `config_verification_checks.cpp`, `sample_checks.cpp`, `readback_checks.cpp` | Đã chạy mã kiểm tra nguồn với mã/header đích; readback dùng UART giả lập của CORS. |
+| `firmware_coverage_inventory.py`, `host_coverage.py`, `run_coverage.py`, `test_coverage_report.py`, `test_firmware_inventory.py` | Công cụ lập và kiểm tra báo cáo coverage của CORS; chưa chuyển bộ công cụ này sang nhánh đích. Không coi chúng là tính năng firmware. |
