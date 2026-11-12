@@ -48,4 +48,6 @@ Lệnh đổi tỉnh VN2000 được giữ theo lựa chọn của người dùn
 
 Đã đối chiếu luồng NTRIP của CORS với ba mô-đun `ntrip_base`, `ntrip_common` và `ntrip_rover`. Giữ xử lý hiện tại: không kết thúc luồng chunked khi chờ dữ liệu, đóng riêng kết nối ghi thiếu, và phân biệt phiên Rover đang hoạt động với workflow đang khôi phục SOURCE. Các bài host kiểm tra bắt tay, hai SOURCE, ghi thiếu, Rover và khóa khi khôi phục đều đạt; chưa kiểm tra với caster thực.
 
+Khởi động có chủ ý khác CORS: CORS đặt lại Base sang AutoNearest mỗi lần khởi động; nhánh này giữ và khôi phục chế độ, tọa độ hoặc thời gian Survey-In đã lưu theo yêu cầu bảo toàn cấu hình. Fixed LLA chỉ được xác nhận sau readback phù hợp. Đã đối chiếu tên 17 lệnh backend trong CORS với nhánh này; trùng tên không tự chứng minh toàn bộ hành vi giống nhau.
+
 Các bài host và build không thay thế nghiệm thu trên receiver thật: cần kiểm tra BESTPOS, accuracy cấu hình 5 m, nguồn RTCM, mất kết nối, khởi động lại và tọa độ ngoài thực địa.
