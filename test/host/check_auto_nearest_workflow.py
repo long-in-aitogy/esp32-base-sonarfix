@@ -7,9 +7,12 @@ source = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_text(
 start = source.index('bool BackendAgent::runAutoBaseWorkflow(')
 end = source.index('\nbool BackendAgent::', start + 5)
 method = source[start:end]
+sampling = source[source.index('bool BackendAgent::waitForAutoBaseFix('):source.index('String BackendAgent::buildAutoBaseResult(')]
 harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include "functions/backend/Base_Sample.h"
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <vector>
@@ -19,8 +22,10 @@ uint32_t now = 10000;
 uint32_t millis() { return now; }
 int pdMS_TO_TICKS(int ms) { return ms; }
 void vTaskDelay(int ms) { now += ms; }
-struct Position { uint32_t lastGgaMs = 9999; double latitude = 21, longitude = 105; } position;
-Position getGnssTelemetrySnapshot() { return position; }
+struct GnssTelemetrySnapshot { uint32_t lastGgaMs = 9999; double latitude = 21, longitude = 105, altitude = 12; std::array<char, 16> fixStatus = {"RTK_FIXED"}; } position;
+GnssTelemetrySnapshot getGnssTelemetrySnapshot() { position.lastGgaMs = now; return position; }
+uint32_t roverDisconnectAt = 0;
+const char *ntripRoverLastError() { return "caster disconnected"; }
 double coordinateNumber(JsonVariantConst value) { return value.isNull() ? NAN : value.as<double>(); }
 struct BackendAgent {
     String baseStartupState_;
@@ -39,7 +44,14 @@ struct BackendAgent {
     bool saveStatePreferences() { return saveOk; }
     String normalAgentState() { return "ready"; }
     void setAgentState(const String &) {}
-    void setWorkflowProgress(const String &s, int, int, const String &d = String()) { stage=s; details=d; }
+    void setWorkflowProgress(const String &s, int, int, const String &d = String()) {
+        stage=s; details=d;
+        if (s == "wait_fix" || s == "averaging") {
+            DynamicJsonDocument progress(1200); deserializeJson(progress, d);
+            if (s == "wait_fix") fixSource = progress["source_mountpoint"] | String();
+            else sampleSource = progress["source_mountpoint"] | String();
+        }
+    }
     void publishConfigState(const char *) {}
     bool applyRoverMode() { return true; }
     bool startAutoBaseRover(const String &, uint16_t, const String &, const String &, const String &, uint8_t, String &failure, String *selected) {
@@ -48,9 +60,10 @@ struct BackendAgent {
         if (selected) *selected = "selected-station";
         return true;
     }
-    bool waitForAutoBaseFix(uint32_t, uint8_t, bool &, String &, const String &source) { fixSource=source; return true; }
-    bool collectAutoBaseSamples(int, std::vector<double> &, std::vector<double> &, std::vector<double> &, bool &, String &, const String &source) { sampleSource=source; return true; }
-    bool completeAutoBaseSetup(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &result, String &, const String &) { result="{}"; return true; }
+    int loopNtripRoverLocked() { return roverDisconnectAt && now >= roverDisconnectAt ? 504 : 200; }
+    bool waitForAutoBaseFix(uint32_t, uint8_t, bool &, String &, const String &);
+    bool collectAutoBaseSamples(int, std::vector<double> &, std::vector<double> &, std::vector<double> &, bool &, String &, const String &);
+    bool completeAutoBaseSetup(JsonObject, const std::vector<double> &lat, const std::vector<double> &lon, const std::vector<double> &alt, String &result, String &, const String &) { assert(lat.size() == 60 && lon.size() == 60 && alt.size() == 60); result="{}"; return true; }
     bool runAutoBaseWorkflow(JsonObject);
 };
 '''
@@ -61,6 +74,10 @@ int main() {
     assert(selected.selectedRequested && selected.fixSource == "selected-station" && selected.sampleSource == "selected-station");
     assert(selected.details.find("selected-station") != String::npos);
     assert(selected.stage == "ready_for_review" && selected.restores == 1 && selected.restarts == 1);
+    roverDisconnectAt = now + 6000;
+    BackendAgent disconnected; assert(!disconnected.runAutoBaseWorkflow(payload));
+    assert(disconnected.stage == "failed" && disconnected.restores == 1 && disconnected.restarts == 1);
+    roverDisconnectAt = 0;
     payload["auto_apply"] = true;
     BackendAgent automatic; assert(automatic.runAutoBaseWorkflow(payload));
     assert(automatic.stage == "completed" && automatic.restores == 0);
@@ -116,9 +133,9 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='auto-nearest-workflow-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(harness + method + checks)
+    (path / 'check.cpp').write_text(harness + sampling + method + checks)
     subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
-                    '-I' + str(root / 'test/host'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
+                    '-I' + str(root / 'test/host'), '-I' + str(root / 'include'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     subprocess.run([str(path / 'check')], check=True)
-print('PASS: AutoNearest selection, GGA timeout, fallback and restoration')
+print('PASS: AutoNearest selection, RTK sampling, disconnect, fallback and restoration')
