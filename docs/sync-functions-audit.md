@@ -55,3 +55,5 @@ Khởi động có chủ ý khác CORS: CORS đặt lại Base sang AutoNearest 
 Các bài host và build không thay thế nghiệm thu trên receiver thật: cần kiểm tra BESTPOS, accuracy cấu hình 5 m, nguồn RTCM, mất kết nối, khởi động lại và tọa độ ngoài thực địa.
 
 Với Unicore, trường JSON `bestpos` hiện được tạo từ bản tin receiver `BESTNAVA` (giống CORS và `develop`), không phải từ lệnh `BESTPOSA`. Firmware kiểm tra trạng thái FIXEDPOS, tọa độ và độ cao từ readback; kiểm thử host dùng phản hồi mô phỏng, chưa xác minh bản tin trên thiết bị thực.
+
+Đã đối chiếu phục hồi mạng và chuyển SIM/Wi-Fi với `Network_Manager.cpp` của CORS. Giữ giá trị mật khẩu dự phòng của `develop` khi NVS chưa có `WIFI_PASS`; CORS dùng `WIFI_PASSWORD`. Đổi mặc định có thể khiến thiết bị cũ thiếu khóa này không kết nối được. Các mạng đã lưu vẫn được ưu tiên; bộ kiểm tra host xác minh chuyển cấu hình, phục hồi Wi-Fi và lệnh nhập thông tin.
