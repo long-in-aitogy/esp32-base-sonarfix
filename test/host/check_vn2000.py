@@ -44,6 +44,18 @@ frames = [
     frame(1025, [(0, 8), (0, 6), (0, 34), (round(105.75 / 1.1e-8), 35), (660000000, 30),
                  (300000000, 36), (1000000, 35)]),
 ]
+# Fixed CORS frames check the exact RTCM bytes as well as the decoded scale.
+projection_vectors = [
+    ('d30019401070400000000471e827a33ab668000ee6b2800000000000e9a16f', 660000000, 0.9996),
+    ('d30019401070400000000471e827a3490484000ee6b28000000000002264a8', 690000000, 0.9999),
+]
+for encoded, raw_scale, scale in projection_vectors:
+    projection = namespace['RTCMDatum']()
+    namespace['_decode_type1025'](bytes.fromhex(encoded), projection)
+    assert projection.rtcm1025_update and abs(projection.k0 - scale) < 1e-12
+    assert projection.projection_1025['raw_l0'] == '9545454545'
+    assert projection.projection_1025['raw_k0'] == raw_scale
+    assert projection.projection_1025['frame_hex'] == encoded
 # Extra trailing fields reflect real RTCM records; decoders must use bounded reads.
 datum = namespace['RTCMDatum']()
 for message, packet in zip((1021, 1023, 1025), frames):
@@ -72,6 +84,7 @@ int main(int argc, char **argv) {
     std::vector<uint8_t> shortFrame((std::istreambuf_iterator<char>(shortInput)), {});
     Vn2000Session session;
     Vn2000Result result;
+    FIXED_PROJECTIONS
     assert(!transformVn2000(21, 105, 0, session.datum(), result));
     session.feed(shortFrame.data(), shortFrame.size());
     assert(!session.datum().has1021); // Valid CRC cannot authorize truncated parameters.
@@ -113,6 +126,20 @@ int main(int argc, char **argv) {
     assert(session.datum().has1021 && session.datum().count1021 == 1);
 }
 '''
+checks = []
+for encoded, raw_scale, scale in projection_vectors:
+    data = ','.join(str(byte) for byte in bytes.fromhex(encoded))
+    checks.append('''{
+        const uint8_t packet[] = {%s};
+        session.reset(); session.feed(packet, sizeof(packet));
+        const auto projection = session.datum();
+        assert(projection.has1025 && projection.projectionScaleRaw == %d);
+        assert(std::abs(projection.scale - %.4f) < 1e-12);
+        assert(projection.projectionLongitudeRaw == 9545454545LL && projection.projectionType == 1);
+        assert(projection.projectionFrameBytes == sizeof(packet));
+        assert(std::string(projection.projectionFrameHex) == "%s");
+    }''' % (data, raw_scale, scale, encoded))
+harness = harness.replace('FIXED_PROJECTIONS', '\n'.join(checks) + '\n    session.reset();')
 with tempfile.TemporaryDirectory(prefix='esp-vn2000-') as directory:
     path = Path(directory)
     (path / 'frames.bin').write_bytes(b''.join(frames))
