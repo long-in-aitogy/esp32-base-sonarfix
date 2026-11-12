@@ -1,0 +1,47 @@
+name: SonarQube Analysis
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Build firmware and compilation database
+        run: |
+          python3 -m venv /tmp/platformio
+          /tmp/platformio/bin/pip install platformio
+          /tmp/platformio/bin/pio run -e tdm240x_dev_general
+          /tmp/platformio/bin/pio run -e tdm240x_dev_general -t compiledb
+
+      - name: Run Auto Base checks
+        run: |
+          python3 test/host/check_auto_base_status.py
+          python3 test/host/check_auto_base_transform.py
+          python3 test/host/check_auto_nearest_workflow.py
+          python3 test/host/check_autobase_config.py
+          python3 test/host/check_workflow_restore.py
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.host.url=https://sonarcloud.io
+            -Dsonar.organization=tundzai001
+            -Dsonar.projectKey=tundzai001_esp32-base
+            -Dsonar.qualitygate.wait=true
