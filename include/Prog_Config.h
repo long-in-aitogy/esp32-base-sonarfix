@@ -39,6 +39,13 @@ inline constexpr char APN[] = "v-internet"; // Thay bằng APN của nhà mạng
 inline constexpr char GPRS_USER[] = "";     // Thường để trống
 inline constexpr char GPRS_PASS[] = "";
 
+// Local AutoNearest profile.
+inline constexpr char AUTO_BASE_CASTER_HOST[] = "aitogy.click";
+inline constexpr uint16_t AUTO_BASE_CASTER_PORT = 2101;
+inline constexpr char AUTO_BASE_CASTER_USER[] = "aitogy";
+inline constexpr char AUTO_BASE_CASTER_PASSWORD[] = "aitogy";
+inline constexpr char AUTO_BASE_CASTER_MOUNTPOINT[] = "test";
+
 // ================= CẤU HÌNH NTRIP =================
 // Mã trạng thái nền của luồng gửi NTRIP; cộng 4 khi gửi được RTCM.
 inline constexpr int NTRIP_MODE = 1;

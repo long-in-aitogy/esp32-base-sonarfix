@@ -2,6 +2,7 @@
 #include "functions/backend/Backend_Agent_Internal.h"
 #include "Prog_Config.h"
 #include "functions/ntrip/ntrip_base.h"
+#include "functions/ntrip/ntrip_rover.h"
 #include "functions/ntrip/RTCM_Receiver.h"
 #include <array>
 #include <cmath>
@@ -527,6 +528,14 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
                                           String &detail)
 {
     const auto sensorType = payload["sensor_type"] | sensorType_;
+    if (payload["source_mode"] == "nearest" && payload["startup_auto"] == true)
+    {
+        payload["ip"] = AUTO_BASE_CASTER_HOST;
+        payload["port"] = AUTO_BASE_CASTER_PORT;
+        payload["user"] = AUTO_BASE_CASTER_USER;
+        payload["password"] = AUTO_BASE_CASTER_PASSWORD;
+        payload["mountpoint"] = AUTO_BASE_CASTER_MOUNTPOINT;
+    }
     const auto requestedPort = payload["port"] | 0;
     const auto hasConnection = !String(payload["ip"] | String()).isEmpty() && !String(payload["user"] | String()).isEmpty() && !String(payload["password"] | String()).isEmpty() && !String(payload["mountpoint"] | String()).isEmpty() && requestedPort >= 1 && requestedPort <= 65535;
     if (workflowActive())
@@ -550,16 +559,115 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
         error = "automatic apply is only supported for nearest CORS mode";
         return false;
     }
+    const bool noConnectionFields = String(payload["ip"] | String()).isEmpty()
+        && String(payload["user"] | String()).isEmpty() && String(payload["password"] | String()).isEmpty()
+        && String(payload["mountpoint"] | String()).isEmpty() && requestedPort == 0;
+    if (!hasConnection && noConnectionFields && sourceMode == "nearest" && (payload["auto_apply"] | false))
+    {
+        DynamicJsonDocument saved(CONFIG_DOCUMENT_SIZE);
+        if (deserializeJson(saved, baseConfig_) != DeserializationError::Ok || !saved.is<JsonObject>())
+        {
+            error = "cannot read previous Base configuration";
+            return false;
+        }
+        const String previousConfig = baseConfig_;
+        const String previousSensor = sensorType_;
+        JsonObject base = saved.as<JsonObject>();
+        const JsonObjectConst requested = payload["auto_base_config"].as<JsonObjectConst>();
+        for (JsonPairConst item : requested)
+            base[item.key()] = item.value();
+        base["base_setup_method"] = "AUTO_CORS";
+        base["auto_cors_source_mode"] = "nearest";
+        base["mode"] = "BASE";
+        base.remove("auto_base_started_boot_id");
+        base.remove("auto_base_started_request_id");
+        if (saved.overflowed())
+        {
+            error = "nearest CORS configuration exceeds memory capacity";
+            return false;
+        }
+        if (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS * 4)) != pdTRUE)
+        {
+            error = "network transport is busy";
+            return false;
+        }
+        stopNtrip();
+        stopNtripRover();
+        xSemaphoreGive(tcpStreamMutex);
+        sensorType_ = sensorType;
+        baseStartupState_ = "awaiting_auto_base";
+        if (!applyRoverMode())
+        {
+            sensorType_ = previousSensor;
+            DynamicJsonDocument previous(CONFIG_DOCUMENT_SIZE);
+            deserializeJson(previous, previousConfig);
+            if (restoreWorkflowBase(previous.as<JsonObjectConst>())) restartConfiguredNtrip();
+            error = "cannot switch GNSS receiver to Rover mode";
+            return false;
+        }
+        baseConfig_.clear();
+        serializeJson(saved, baseConfig_);
+        if (!saveStatePreferences())
+        {
+            baseConfig_ = previousConfig;
+            sensorType_ = previousSensor;
+            saveStatePreferences();
+            DynamicJsonDocument previous(CONFIG_DOCUMENT_SIZE);
+            deserializeJson(previous, previousConfig);
+            if (restoreWorkflowBase(previous.as<JsonObjectConst>())) restartConfiguredNtrip();
+            error = "cannot save nearest CORS request";
+            return false;
+        }
+        baseStartupError_.clear();
+        publishConfigState("base_config_state");
+        setAgentState("auto_setup_rover");
+        setWorkflowProgress("awaiting_source", 0, 4);
+        markStatusDirty();
+        detail = "Rover mode active; local AutoNearest is pending";
+        return true;
+    }
     if (!hasConnection)
     {
         error = "missing or invalid CORS connection fields";
         return false;
     }
     sensorType_ = sensorType;
+    const String previousConfig = baseConfig_;
+    const bool startupAuto = payload["startup_auto"] == true && sourceMode == "nearest";
+    if (startupAuto)
+    {
+        DynamicJsonDocument saved(CONFIG_DOCUMENT_SIZE);
+        if (deserializeJson(saved, baseConfig_) != DeserializationError::Ok || !saved.is<JsonObject>())
+        {
+            error = "cannot read previous Base configuration";
+            return false;
+        }
+        saved["auto_base_started_boot_id"] = statusBootId_;
+        saved["auto_base_started_request_id"] = saved["auto_base_request_id"] | String();
+        if (saved.overflowed())
+        {
+            error = "nearest CORS configuration exceeds memory capacity";
+            return false;
+        }
+        baseConfig_.clear();
+        serializeJson(saved, baseConfig_);
+        if (!saveStatePreferences())
+        {
+            baseConfig_ = previousConfig;
+            error = "cannot save nearest CORS startup mode";
+            return false;
+        }
+        publishConfigState("base_config_state");
+    }
     String workflowPayload;
     serializeJson(payload, workflowPayload);
     if (!startWorkflow("auto_base", workflowPayload))
     {
+        if (startupAuto)
+        {
+            baseConfig_ = previousConfig;
+            saveStatePreferences();
+        }
         error = "cannot start auto base workflow";
         return false;
     }
@@ -753,6 +861,11 @@ bool BackendAgent::executeStopWorkflowCommand(String &detail)
         setWorkflowProgress("stopping", 0, 4);
         detail = "base workflow stop requested";
         return true;
+    }
+    if (baseStartupState_ == "awaiting_auto_base")
+    {
+        baseStartupState_ = "awaiting_configuration";
+        markStatusDirty();
     }
     setWorkflowProgress("stopped", 0, 4);
     setAgentState(normalAgentState());

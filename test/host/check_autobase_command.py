@@ -12,11 +12,28 @@ harness = r'''
 #include <ArduinoJson.h>
 #include <cassert>
 constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
+constexpr int MUTEX_TIMEOUT_MS = 1500, pdTRUE = 1;
+const char *AUTO_BASE_CASTER_HOST="caster", *AUTO_BASE_CASTER_USER="user", *AUTO_BASE_CASTER_PASSWORD="pass", *AUTO_BASE_CASTER_MOUNTPOINT="nearest";
+constexpr int AUTO_BASE_CASTER_PORT=2101;
+int tcpStreamMutex=1; bool lockOk=true;
+int pdMS_TO_TICKS(int n) { return n; }
+int xSemaphoreTake(int, int) { return lockOk ? 1 : 0; }
+void xSemaphoreGive(int) {}
+void stopNtrip() {}
+void stopNtripRover() {}
 struct BackendAgent {
-    String sensorType_ = "Ublox";
+    String statusBootId_="boot", sensorType_ = "Ublox", baseConfig_ = R"({"base_setup_method":"SURVEY_IN"})", baseStartupState_, baseStartupError_;
+    bool roverOk=true, saveOk=true, startOk=true;
+    bool applyRoverMode() { return roverOk; }
+    bool saveStatePreferences() { return saveOk; }
+    bool restoreWorkflowBase(JsonObjectConst) { baseStartupState_="configured"; return true; }
+    bool restartConfiguredNtrip() { return true; }
+    void publishConfigState(const char *) {}
+    void markStatusDirty() {}
+    void setWorkflowProgress(const char *, int, int) {}
     bool running = false; int started = 0; String progress;
     bool workflowActive() { return running; }
-    bool startWorkflow(const char *, const String &) { ++started; return true; }
+    bool startWorkflow(const char *, const String &) { ++started; return startOk; }
     void setAgentState(const char *) {}
     void setWorkflowProgress(const char *, int, int, const String &value) { progress = value; }
     bool executeAutoBaseCommand(JsonObject, String &, String &);
@@ -40,6 +57,30 @@ int main() {
     assert(agent.executeAutoBaseCommand(request, error, detail) && agent.started == 2);
     progress.clear(); assert(!deserializeJson(progress, agent.progress));
     assert(progress["note"] == "Collect RTK Fixed LLH and apply Base coordinates after quality checks.");
+    DynamicJsonDocument pending(1024); pending["source_mode"]="nearest"; pending["auto_apply"]=true;
+    BackendAgent local;
+    assert(local.executeAutoBaseCommand(pending.as<JsonObject>(), error, detail));
+    assert(local.baseStartupState_=="awaiting_auto_base" && local.started==0);
+    DynamicJsonDocument saved(1024); assert(!deserializeJson(saved,local.baseConfig_));
+    assert(saved["base_setup_method"]=="AUTO_CORS" && saved["auto_cors_source_mode"]=="nearest");
+    BackendAgent blocked; lockOk=false;
+    assert(!blocked.executeAutoBaseCommand(pending.as<JsonObject>(), error, detail));
+    assert(blocked.baseConfig_==R"({"base_setup_method":"SURVEY_IN"})"); lockOk=true;
+    BackendAgent failed; failed.roverOk=false;
+    assert(!failed.executeAutoBaseCommand(pending.as<JsonObject>(), error, detail));
+    assert(failed.baseConfig_==R"({"base_setup_method":"SURVEY_IN"})" && failed.baseStartupState_=="configured");
+    DynamicJsonDocument startup(1024); startup["source_mode"]="nearest"; startup["auto_apply"]=true; startup["startup_auto"]=true;
+    BackendAgent boot;
+    boot.baseConfig_=R"({"base_setup_method":"AUTO_CORS","auto_base_request_id":"request"})";
+    assert(boot.executeAutoBaseCommand(startup.as<JsonObject>(), error, detail));
+    saved.clear(); assert(!deserializeJson(saved,boot.baseConfig_));
+    assert(saved["auto_base_started_boot_id"]=="boot" && saved["auto_base_started_request_id"]=="request");
+    BackendAgent startFailed; startFailed.startOk=false;
+    assert(!startFailed.executeAutoBaseCommand(startup.as<JsonObject>(), error, detail));
+    assert(startFailed.baseConfig_==R"({"base_setup_method":"SURVEY_IN"})");
+    pending["ip"]="partial";
+    BackendAgent partial;
+    assert(!partial.executeAutoBaseCommand(pending.as<JsonObject>(), error, detail));
     request["source_mode"] = "unknown";
     assert(!agent.executeAutoBaseCommand(request, error, detail) && agent.started == 2);
     assert(error == "unsupported CORS source mode");

@@ -2,6 +2,9 @@
 #include "functions/backend/Backend_Agent_Internal.h"
 #include "functions/gnss/Ublox_Readback.h"
 #include "functions/gnss/Unicore_Readback.h"
+#include "hardware/Connection_type.h"
+#include "hardware/Sim_handler.h"
+#include "hardware/Wifi_handler.h"
 #include <array>
 #include <cmath>
 #include <cstdlib>
@@ -281,7 +284,8 @@ bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
         const bool hasCoordinates = std::isfinite(configNumber(coords["lat"], NAN))
             && std::isfinite(configNumber(coords["lon"], NAN))
             && std::isfinite(configNumber(coords["alt"], NAN));
-        baseStartupState_ = hasCoordinates ? "preserved" : "awaiting_configuration";
+        baseStartupState_ = base["auto_cors_source_mode"] == "nearest"
+            ? "awaiting_auto_base" : hasCoordinates ? "preserved" : "awaiting_configuration";
         markStatusDirty();
         return true;
     }
@@ -315,4 +319,28 @@ bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
     Serial.printf("[GNSS][STARTUP] %s; chip=%s\n", baseStartupState_.c_str(), sensorType_.c_str());
     markStatusDirty();
     return true;
+}
+
+void BackendAgent::startBootAutoBaseWhenReady()
+{
+    if (baseStartupState_ != "awaiting_auto_base" || stationLock_.all || !licenseValid_ || workflowActive())
+        return;
+    if (isGsmConnection() ? !modem.isGprsConnected() : WiFi.status() != WL_CONNECTED)
+        return;
+    DynamicJsonDocument request(CONFIG_DOCUMENT_SIZE);
+    request["source_mode"] = "nearest";
+    request["auto_apply"] = true;
+    request["startup_auto"] = true;
+    request["startup_boot_id"] = statusBootId_;
+    request["enable_itrf_vn2000_transform"] = false;
+    request["timeout"] = 3600;
+    request["samples"] = 60;
+    String error, detail;
+    baseStartupState_ = "auto_base_running";
+    if (!executeAutoBaseCommand(request.as<JsonObject>(), error, detail))
+    {
+        baseStartupState_ = "error";
+        baseStartupError_ = error;
+        markStatusDirty();
+    }
 }

@@ -5,7 +5,7 @@ import tempfile
 root=Path(__file__).resolve().parents[2]
 source=(root/'src/functions/backend/Backend_Agent_Startup.cpp').read_text()
 start=source.index('bool BackendAgent::initializeBaseAtBoot(')
-method=source[start:]
+method=source[start:source.index("\nvoid BackendAgent::startBootAutoBaseWhenReady(", start)]
 helper=source[source.index('    double configNumber('):source.index('\n}\n\nbool BackendAgent::readStartupReceiverMode')]
 harness=r'''
 #include <Arduino.h>
@@ -46,6 +46,9 @@ int main() {
         assert(agent.initializeBaseAtBoot(GnssSensorType::Ublox));
         assert(agent.baseStartupState_=="awaiting_configuration" && agent.dirty);
     }
+    BackendAgent nearest;
+    nearest.baseConfig_=R"({"base_setup_method":"AUTO_CORS","auto_cors_source_mode":"nearest","coords":{"lat":21,"lon":105,"alt":5}})";
+    assert(nearest.initializeBaseAtBoot(GnssSensorType::Ublox) && nearest.baseStartupState_=="awaiting_auto_base");
     BackendAgent configured;
     configured.baseConfig_=R"({"base_setup_method":"AUTO_CORS","coords":{"lat":21,"lon":105,"alt":5}})";
     assert(configured.initializeBaseAtBoot(GnssSensorType::Ublox) && configured.baseStartupState_=="preserved");

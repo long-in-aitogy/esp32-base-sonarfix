@@ -28,7 +28,8 @@ int main() {
     BackendAgent agent; DynamicJsonDocument doc(2048);
     agent.appendSystemInfo(doc,100,"now");
     assert(doc["system_info"]["auto_base_review_supported"]==true);
-    assert(doc["system_info"]["auto_base_nearest_supported"].isNull());
+    assert(doc["system_info"]["auto_base_nearest_supported"]==true);
+    assert(doc["system_info"]["auto_base_firmware_profile"]==true);
     assert(doc["system_info"]["gnss_verification_supported"]==true);
 }
 '''
@@ -38,4 +39,4 @@ with tempfile.TemporaryDirectory(prefix='autobase-capability-') as directory:
                     '-I'+str(root/'test/host'),'-I'+str(root/'.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path/'check.cpp'),'-o',str(path/'check')],check=True)
     subprocess.run([str(path/'check')],check=True)
-print('PASS: review capability enabled, nearest capability remains gated')
+print('PASS: review and local AutoNearest capabilities enabled')

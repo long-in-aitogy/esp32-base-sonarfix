@@ -240,6 +240,7 @@ private:
                                const StartupPosition &expected, String &error);
     void saveSurveyResult(JsonObjectConst bestPosition, const String &mode);
     void pollGnssStatus();
+    void startBootAutoBaseWhenReady();
     struct ProjectedPosition {
         double latitude;
         double longitude;

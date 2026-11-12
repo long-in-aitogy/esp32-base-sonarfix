@@ -600,6 +600,7 @@ void BackendAgent::loop()
     if (!baseStartupAttempted_ && sensorType_ != "UNKNOWN" && !sensorType_.isEmpty())
         initializeBaseAtBoot(GnssCmdBuilder::sensorTypeFromString(sensorType_));
 
+    startBootAutoBaseWhenReady();
     pollGnssStatus();
     publishStatus(false);
 }
