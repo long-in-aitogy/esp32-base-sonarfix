@@ -47,7 +47,6 @@ struct BackendAgent {
     bool applyRoverMode() { ++roverCalls; return roverOk; }
     GnssCmdBuilder::CommandList lastCommands;
     bool writeGnssCommands(const GnssCmdBuilder::CommandList &commands) { ++writes; lastCommands = commands; return writeOk; }
-    bool applyBaseCoordinates(double, double, double) { ++writes; return writeOk; }
     bool refreshReceiverReadback(String &error) { error = "read failed"; return readOk; }
     void markStatusDirty() {}
     bool restoreWorkflowBase(JsonObjectConst);
@@ -107,6 +106,11 @@ int main() {
     base.clear(); base["base_setup_method"] = "FIXED_LLA";
     base["coords"]["lat"] = 21.25; base["coords"]["lon"] = 105.75; base["coords"]["alt"] = 10.5;
     base["accuracy"] = 0.5;
+    base["gnss_options"]["output_mode"] = "diagnostics";
+    assert(agent.buildStartupCommands(base.as<JsonObjectConst>(), GnssCmdBuilder::GnssSensorType::Ublox,
+                                      true, startupCommands, startupPosition, startupError));
+    assert(restoredAccuracy == 5 && restoredOptions.outputMode == GnssCmdBuilder::OutputMode::RtcmOnly);
+    assert(restoredOptions.msmLevel == GnssCmdBuilder::MsmLevel::Msm4 && !restoredOptions.qzss && !restoredOptions.sbas);
     base["gnss_options"]["msm_level"] = "7";
     base["gnss_options"]["constellations"]["glo"] = false;
     agent.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","lat":21.25,"lon":105.75,"alt":10.5}})";

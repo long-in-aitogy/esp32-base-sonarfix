@@ -10,7 +10,7 @@ Các commit CORS mới nhất liên quan đến ESP32 đã đối chiếu theo h
 
 | Commit CORS | Kết quả đối chiếu trên `main` |
 | --- | --- |
-| `7db656b` | Giữ tùy chọn GNSS khi áp dụng Fixed LLA, xác nhận receiver và báo cấu hình đã áp dụng. Kiểm tra bằng `check_fixed_output_options.py`, `check_autobase_config.py` và `check_workflow_restore.py`. Accuracy giữ 5 m. |
+| `7db656b` | Giữ tùy chọn GNSS khi áp dụng Fixed LLA, xác nhận receiver và báo cấu hình đã áp dụng. Kiểm tra bằng `check_autobase_config.py` và `check_workflow_restore.py`. Accuracy giữ 5 m. |
 | `d5a9e61` | AutoNearest mặc định dùng host và mountpoint tương ứng; các mặc định MQTT/NTRIP độc lập vẫn giữ theo `develop`. |
 | `149014a` | Auto Base báo Fixed LLA sau áp dụng; fallback Survey-In được lưu và báo hoàn thành. Kiểm tra bằng `check_auto_base_status.py` và `check_auto_nearest_workflow.py`. |
 | `84371e0` | Giữ cấu hình AutoNearest trong `Prog_Config.h`, như nguồn sau revert. |
@@ -52,7 +52,7 @@ Kiểm tra lại sau các thay đổi đồng bộ: cây Git của `19d2de0` và
 | `52976fc` | fix(backend): handle Auto Base transport restore failure | `check_autobase_config.py` |
 | `9d3e5a3` | fix(backend): verify Auto Base receiver readback | `check_autobase_config.py` |
 | `8383284` | fix(gnss): enforce 5 m base accuracy | `base_checks.cpp`, `check_autobase_config.py`, `check_base_accuracy.py`, `check_cors_accuracy.py`, `check_workflow_restore.py` |
-| `5a25387` | fix(gnss): preserve fixed Base output options | `check_fixed_output_options.py` |
+| `5a25387` | fix(gnss): preserve fixed Base output options | `check_workflow_restore.py` |
 | `a33f493` | fix(ntrip): detect incomplete GNSS UART writes | `check_rover_status.py` |
 | `fca143f` | fix(gnss): recover delayed fixed position readback | `check_workflow_restore.py` |
 | `8f09442` | feat(gnss): report u-blox navigation quality | `check_ublox_navigation.py` |
@@ -71,9 +71,9 @@ Kiểm tra lại sau các thay đổi đồng bộ: cây Git của `19d2de0` và
 | `2750929` | fix(backend): preserve AutoNearest source in base config | `check_autobase_config.py` |
 | `8af74b7` | fix(backend): report Survey-In fallback as completed | `check_auto_base_status.py` |
 
-Lệnh đổi tỉnh VN2000 được giữ theo lựa chọn của người dùng; firmware lưu tọa độ gốc, yêu cầu readback xác nhận và báo lỗi nếu lưu thất bại. CORS hiện yêu cầu xem lại trước khi áp dụng. Bản build `tdm240x_dev_general` đã chuyển sang `partitions.csv` như geodetic, có `agent_state`. Việc thay bảng phân vùng khi nạp lên thiết bị cũ có thể ảnh hưởng dữ liệu flash; chưa thực hiện flash hoặc kiểm tra di chuyển dữ liệu thực tế.
+Lệnh đổi tỉnh VN2000 hiện theo lựa chọn mới của người dùng và geodetic: yêu cầu duyệt kết quả Auto Base rồi áp dụng Fixed LLA, không ghi receiver trực tiếp. Bản build `tdm240x_dev_general` đã chuyển sang `partitions.csv` như geodetic, có `agent_state`. Việc thay bảng phân vùng khi nạp lên thiết bị cũ có thể ảnh hưởng dữ liệu flash; chưa thực hiện flash hoặc kiểm tra di chuyển dữ liệu thực tế.
 
-Danh mục 34 tỉnh trong firmware được đối chiếu với `coordinate_provinces.json` của CORS: Lai Châu dùng 103°; 17 tỉnh có nhiều kinh tuyến cũ yêu cầu lệnh gửi thêm `l0_deg` thuộc danh sách tương ứng. Lệnh thiếu lựa chọn hoặc chọn ngoài danh sách bị từ chối trước khi ghi receiver. Chạy `python3 test/host/compare_province_catalog.py /duong-dan/cors` để đối chiếu lại danh mục.
+Danh mục kinh tuyến cũ dành riêng cho lệnh ghi trực tiếp đã được gỡ. Khi cần chọn tỉnh, workflow dùng danh mục từ backend geodetic và yêu cầu người dùng duyệt trước khi áp dụng.
 
 Đã đối chiếu luồng NTRIP của CORS với ba mô-đun `ntrip_base`, `ntrip_common` và `ntrip_rover`. Cập nhật 13/11/2026: hành vi gửi chunk rỗng định kỳ và tạm dừng SOURCE khi workflow chạy được đồng bộ theo geodetic. Nhánh này vẫn kiểm tra ghi thiếu. Chưa kiểm tra với caster thực.
 
@@ -115,7 +115,7 @@ Build bổ sung tại `d1ba249` với cả `BACKEND_WEBSOCKET_ENABLED=1` và `BA
 
 Các trường `bestpos`, `mode_kind`, `mode_raw`, `position_type` và `state` mà CORS dùng trong workflow được nhánh đích xử lý trong `Backend_Agent_Gnss.cpp` và bước kiểm tra khởi động. Các bài readback và trạng thái kiểm tra giá trị mô phỏng; kiểm tra tên trường không chứng minh mọi trạng thái receiver thực.
 
-Đối chiếu lại commit CORS `7db656b`: cấu hình Auto Base giữ lựa chọn MSM/chòm sao và đặt đầu ra RTCM-only; phục hồi Fixed LLA đi qua `buildStartupCommands` và xác nhận readback. Khi Auto Base áp dụng kết quả mà chưa có lựa chọn, bản đích đặt mặc định MSM4 và tắt QZSS/SBAS như CORS. Các đường phục hồi hoặc áp dụng tọa độ khác dùng mặc định MSM `both` và bật QZSS/SBAS khi thiếu lựa chọn. Accuracy cấu hình luôn là 5 m thay cho 0,01 m của CORS. `check_autobase_config.py`, `check_fixed_output_options.py` và `check_workflow_restore.py` kiểm tra các lựa chọn này với receiver giả lập.
+Đối chiếu lại commit CORS `7db656b`: cấu hình Auto Base giữ lựa chọn MSM/chòm sao và đặt đầu ra RTCM-only; phục hồi Fixed LLA đi qua `buildStartupCommands` và xác nhận readback. Khi áp dụng hoặc khôi phục Fixed LLA mà chưa có lựa chọn, bản đích đặt mặc định MSM4 và tắt QZSS/SBAS như CORS; Survey-In dùng MSM `both` và bật QZSS/SBAS khi thiếu lựa chọn. Accuracy cấu hình luôn là 5 m thay cho 0,01 m của CORS. `check_autobase_config.py` và `check_workflow_restore.py` kiểm tra các lựa chọn này với receiver giả lập.
 
 Với lệnh AutoNearest đã có địa chỉ CORS, `main` giữ cấu hình Base trước đó khi tác vụ đang chạy; CORS lưu `AUTO_CORS` ngay khi nhận lệnh. Giữ hành vi `main` để có thể khôi phục cấu hình cũ nếu tác vụ thất bại hoặc bị dừng. Với yêu cầu AutoNearest chưa có nguồn, firmware vẫn lưu yêu cầu và bản chụp cấu hình cũ để chờ nguồn.
 

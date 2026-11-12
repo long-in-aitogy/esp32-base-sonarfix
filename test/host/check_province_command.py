@@ -1,122 +1,31 @@
-"""Keep province override while requiring original coordinates and receiver confirmation."""
+"""Province overrides require review and Fixed LLA, as in geodetic."""
 from pathlib import Path
-import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 
 root = Path(__file__).resolve().parents[2]
-source = (root / 'src/functions/backend/Backend_Agent_Commands.cpp').read_text()
+source_path = root / 'src/functions/backend/Backend_Agent_Commands.cpp'
+source = source_path.read_text()
 method = source[source.index('bool BackendAgent::executeProvinceCommand('):source.index('bool BackendAgent::executeBasicCommand(')]
-projection = (root / 'src/functions/backend/Backend_Agent_Projection.cpp').read_text()
-catalog = projection[projection.index('    struct ProvinceProjection'):projection.index('    struct EcefCoordinate')]
-lookup = projection[projection.index('bool BackendAgent::getProvinceProjection('):projection.index('bool BackendAgent::transformToVn2000(')]
 harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <array>
 #include <cassert>
-#include <cmath>
-constexpr size_t CONFIG_DOCUMENT_SIZE = 6144;
-namespace GnssCmdBuilder {
-    constexpr float BASE_ACCURACY_METERS = 5.0f;
-    enum class GnssSensorType { Ublox, Unicore };
-    GnssSensorType sensorTypeFromString(const String &s) { return s == "Ublox" ? GnssSensorType::Ublox : GnssSensorType::Unicore; }
-}
-void enforceBaseAccuracy(JsonObject base) {
-    base["accuracy"] = 5;
-    if (!base["coords"]["accuracy"].isNull()) base["coords"]["accuracy"] = 5;
-}
-struct BackendAgent {
-    struct ProjectedPosition { double latitude, longitude, altitude, northing = 0, easting = 0, projectedHeight = 0; };
-    struct StartupPosition { double latitude, longitude, altitude; bool ellipsoid = false; };
-    String baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":21,"lon":105,"alt":10,"accuracy":3}})";
-    String sensorType_ = "Ublox";
-    String baseStartupState_, baseStartupError_;
-    bool active = false, readOk = true, confirmOk = true, saveOk = true;
-    int writes = 0, saves = 0, publishes = 0;
-    double transformedInput = 0, sentLatitude = 0, usedMeridian = 0;
-    bool workflowActive() { return active; }
-    bool getProvinceProjection(const String &, double &, double &, String &, std::array<double, 3> &) const;
-    bool transformToVn2000(double lat, double lon, double alt, double meridian, double, ProjectedPosition &r) {
-        transformedInput = lat; usedMeridian = meridian; r = {lat + 0.01, lon, alt, 10, 20, 30}; return true;
-    }
-    bool applyBaseCoordinates(double lat, double, double, JsonObjectConst) { ++writes; sentLatitude = lat; return true; }
-    bool refreshReceiverReadback(String &error) { if (!readOk) error = "read failed"; return readOk; }
-    bool verifyStartupReadback(GnssCmdBuilder::GnssSensorType, bool fixed, const StartupPosition &p, String &error) {
-        assert(fixed && p.ellipsoid && p.latitude == sentLatitude);
-        if (!confirmOk) error = "BESTPOS mismatch"; return confirmOk;
-    }
-    bool saveStatePreferences() { ++saves; return saveOk; }
-    void publishConfigState(const char *) { ++publishes; }
-    void markStatusDirty() {}
-    void setWorkflowProgress(const char *, int, int) {}
-    bool executeProvinceCommand(JsonObject, String &, String &);
-};
+struct BackendAgent { bool executeProvinceCommand(JsonObject, String &, String &); };
 '''
 checks = r'''
 int main() {
-    BackendAgent agent; DynamicJsonDocument request(256); request["province_code"] = "ha_noi";
-    String error, detail; const String original = agent.baseConfig_;
-    agent.active = true;
-    assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail) && agent.writes == 0);
-    agent.active = false; agent.confirmOk = false;
-    assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
-    assert(error == "BESTPOS mismatch" && agent.baseConfig_ == original && agent.saves == 0);
-    assert(agent.baseStartupState_ == "error" && agent.baseStartupError_ == error);
-    agent.confirmOk = true; agent.saveOk = false;
-    assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
-    assert(agent.baseConfig_ == original && agent.publishes == 0 && agent.baseStartupError_ == error);
-    agent.saveOk = true;
-    assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
-    DynamicJsonDocument saved(4096); assert(!deserializeJson(saved, agent.baseConfig_));
-    assert(std::abs(saved["coords"]["lat"].as<double>() - 21.01) < 1e-12 && saved["coords"]["accuracy"] == 5);
-    assert(saved["auto_base_raw_itrf_llh"]["lat"] == 21 && saved["base_setup_method"] == "FIXED_LLA");
-    assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
-    assert(agent.transformedInput == 21 && agent.sentLatitude == 21.01);
-    saved.remove("auto_base_raw_itrf_llh"); agent.baseConfig_.clear(); serializeJson(saved, agent.baseConfig_);
-    int writes = agent.writes;
-    assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
-    assert(agent.writes == writes && error == "original coordinates are missing; cannot transform again");
-    agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":"21.25","lon":"105.75","alt":"10.5"},"conversion_report":{"projection_source":"rtcm1025","central_meridian_deg":107}})";
-    assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
-    assert(agent.transformedInput == 21.25 && agent.sentLatitude == 21.26);
-    saved.clear(); assert(!deserializeJson(saved, agent.baseConfig_));
-    assert(saved["conversion_report"]["projection_source"] == "manual" && saved["conversion_report"]["central_meridian_deg"] == 105);
-    assert(saved["conversion_report"]["projected_coord"]["h"].as<double>() == 30);
-    assert(saved["conversion_report"]["projected_coord"]["north"].as<double>() == 10);
-    agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","itrf_vn2000_transform_applied":true,"coords":{"lat":"21.08","lon":"105.78","alt":"10.5"},"auto_base_raw_itrf_llh":{"lat":"21.084989583712345","lon":"105.78665644691234","alt":"10.5"}})";
-    assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
-    assert(std::abs(agent.transformedInput - 21.084989583712345) < 1e-13);
-    saved.clear(); assert(!deserializeJson(saved, agent.baseConfig_));
-    assert(std::abs(saved["coords"]["lat"].as<double>() - agent.sentLatitude) < 1e-13);
-    assert(saved["auto_base_raw_itrf_llh"]["lat"] == "21.084989583712345");
-    agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":"21.084989583712345","lon":"105.78665644691234","alt":"10.5"}})";
-    assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
-    saved.clear(); assert(!deserializeJson(saved, agent.baseConfig_));
-    assert(std::abs(saved["coords"]["lat"].as<double>() - agent.sentLatitude) < 1e-13);
-    assert(saved["auto_base_raw_itrf_llh"]["lat"] == "21.084989583712345");
-    agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":"21bad","lon":"105.75","alt":"10.5"}})";
-    writes = agent.writes;
-    assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail) && agent.writes == writes);
-    agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":true,"lon":"105.75","alt":"10.5"}})";
-    assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail) && agent.writes == writes);
-    agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":"nan","lon":"105.75","alt":"10.5"}})";
-    assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail) && agent.writes == writes);
-    agent.baseConfig_ = original; request["province_code"] = "PHU_THO_VPHUC_HBINH";
-    assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail) && agent.writes == writes);
-    assert(error == "province has multiple central meridians; specify payload.l0_deg");
-    request["l0_deg"] = 107; assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail) && agent.writes == writes);
-    request["l0_deg"] = 0; assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail) && agent.writes == writes);
-    request["l0_deg"] = "106"; assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
-    assert(agent.usedMeridian == 106);
-    request["l0_deg"] = 105; assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
-    assert(agent.usedMeridian == 105);
-    request.remove("l0_deg"); request["province_code"] = "LAI_CHAU";
-    assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail) && agent.usedMeridian == 103);
+    BackendAgent agent; DynamicJsonDocument payload(256); String error, detail;
+    payload["province_code"] = "HA_NOI";
+    assert(!agent.executeProvinceCommand(payload.as<JsonObject>(), error, detail));
+    assert(error == "Review Auto Base results and apply Fixed LLA; province overrides no longer write the receiver");
 }
 '''
-with tempfile.TemporaryDirectory(prefix='esp-province-') as directory:
+with tempfile.TemporaryDirectory(prefix='province-command-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(harness + catalog + lookup + method + checks)
-    subprocess.run(['c++', '-std=c++17', '-fsanitize=address,undefined', '-I' + str(root / 'test/host'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'), str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
-print('PASS: province change preserves original coordinates, requires readback and handles save failure')
+    (path / 'check.cpp').write_text(harness + mapped(source_path, method) + checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+                 '-I' + str(root / 'test/host'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
+                 str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
+print('PASS: province override requires review and does not write receiver')

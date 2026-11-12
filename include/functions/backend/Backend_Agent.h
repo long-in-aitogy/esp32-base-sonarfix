@@ -213,7 +213,6 @@ private:
     bool restartConfiguredNtrip(bool transportLocked = false);
     int loopNtripRoverLocked();
     bool stopNtripRoverLocked();
-    bool applyBaseCoordinates(double latitude, double longitude, double altitude, JsonObjectConst base);
     bool restoreWorkflowBase(JsonObjectConst base);
     void reconcileBaseStartupReadback();
     bool refreshReceiverReadback(String &error);
@@ -245,12 +244,6 @@ private:
         double easting = 0.0;
         double projectedHeight = 0.0;
     };
-    bool transformToVn2000(double latitude, double longitude, double altitude,
-                           double centralMeridianDeg, double scale, ProjectedPosition &result);
-    static bool transformItrfToVn2000(double latitude, double longitude, double altitude,
-                                     double centralMeridianDeg, double scale, ProjectedPosition &result);
-    bool getProvinceProjection(const String &code, double &centralMeridianDeg,
-                               double &scale, String &name, std::array<double, 3> &meridians) const;
     void markStatusDirty() { statusDirty_ = true; }
 
     String buildStatusPayload();

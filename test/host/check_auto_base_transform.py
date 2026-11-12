@@ -22,9 +22,6 @@ result_method = workflow[workflow.index('String BackendAgent::buildAutoBaseResul
 config_start = workflow.index('    DynamicJsonDocument baseConfig(CONFIG_DOCUMENT_SIZE);', begin)
 config_end = workflow.index('    setAgentState(normalAgentState());', config_start)
 config_update = workflow[config_start:config_end]
-projection = (root / 'src/functions/backend/Backend_Agent_Projection.cpp').read_text()
-begin = projection.index('bool BackendAgent::transformToVn2000(')
-validation = projection[begin:]
 harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -88,9 +85,9 @@ double coordinateNumber(JsonVariantConst v) {
     if (v.is<const char *>()) { const char *p = v.as<const char *>(); char *end = nullptr; double value = std::strtod(p, &end); return end != p && *end == 0 ? value : NAN; }
     return v.as<double>();
 }
-bool datumTransformOk = true;
+bool datumTransformOk = true; int datumCalls = 0;
 bool transformVn2000(double lat, double lon, double alt, const Vn2000Datum &, Vn2000Result &out) {
-    out.latitude = lat; out.longitude = lon; out.altitude = alt; return datumTransformOk;
+    ++datumCalls; out.latitude = lat; out.longitude = lon; out.altitude = alt; return datumTransformOk;
 }
 MATCHER_PLACEHOLDER
 struct BackendAgent {
@@ -105,8 +102,8 @@ struct BackendAgent {
     bool stopNtripRoverLocked() { return stopOk; }
     void setWorkflowProgress(const char *value, int, int, const String &details = String()) { phase = value; phaseDetails = details; }
     struct ProjectedPosition { double latitude, longitude, altitude; double northing = 0, easting = 0; };
-    bool reachedWrite = false, transformOk = false, failFinalResult = false;
-    bool receiverOk = true, saveOk = true, restartOk = true; int conversions = 0;
+    bool reachedWrite = false, failFinalResult = false;
+    bool receiverOk = true, saveOk = true, restartOk = true;
     String sensorType_ = "Ublox";
     String reportJson;
     String baseConfig_ = R"({"base_setup_method":"SURVEY_IN","survey_in_duration":300})";
@@ -142,8 +139,6 @@ struct BackendAgent {
         return buildRealAutoBaseResult(lat, lon, alt, rawLat, rawLon, rawAlt, transformed, restarted,
                                        count, source, code, name, meridian, scale, report);
     }
-    bool transformToVn2000(double, double, double, double, double, ProjectedPosition &);
-    bool transformItrfToVn2000(double, double, double, double, double, ProjectedPosition &) { ++conversions; return transformOk; }
     bool completeAutoBaseSetup(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &, String &, const String &);
     bool completeAutoBaseSetupFull(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &, String &, const String &);
     bool waitForAutoBaseFix(uint32_t, uint8_t, bool &, String &, const String &);
@@ -169,10 +164,7 @@ bool BackendAgent::applyCandidate(String &failureReason) {
 ''' + config_update + '\n    return true;\n}\n'
 checks = r'''
 int main() {
-    BackendAgent agent; BackendAgent::ProjectedPosition result{21, 105, 10};
-    assert(!agent.transformToVn2000(21, 105, 10, NAN, 0.9999, result));
-    assert(!agent.transformToVn2000(21, 105, 10, 105, NAN, result));
-    assert(agent.conversions == 0);
+    BackendAgent agent;
     DynamicJsonDocument doc(256); JsonObject payload = doc.to<JsonObject>();
     std::vector<double> lat{21}, lon{105}, alt{10}; String resultJson, error;
     payload["enable_itrf_vn2000_transform"] = true;
@@ -182,10 +174,10 @@ int main() {
     assert(!deserializeJson(report, agent.reportJson));
     assert(report["transform_applied"] == false && report["projection_source"] == "not_used");
     assert(report["calculated_coord"]["lat"] == report["input_coord"]["lat"]);
-    assert(agent.conversions == 0);
+    assert(datumCalls == 0);
     payload["enable_itrf_vn2000_transform"] = false;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
-    assert(!agent.reachedWrite && !resultJson.isEmpty() && agent.conversions == 0);
+    assert(!agent.reachedWrite && !resultJson.isEmpty() && datumCalls == 0);
     std::vector<double> preciseLat{-84.54808557036529}, preciseLon{105}, preciseAlt{650.1759102147155};
     assert(agent.completeAutoBaseSetup(payload, preciseLat, preciseLon, preciseAlt, resultJson, error, "station"));
     report.clear(); assert(!deserializeJson(report, agent.reportJson));
@@ -465,9 +457,8 @@ int main() {
 with tempfile.TemporaryDirectory(prefix='auto-base-transform-') as directory:
     path = Path(directory)
     agent_path = root / 'src/functions/backend/Backend_Agent.cpp'
-    projection_path = root / 'src/functions/backend/Backend_Agent_Projection.cpp'
     workflow_path = root / 'src/functions/backend/Backend_Agent_Workflows.cpp'
-    (path / 'check.cpp').write_text(harness + mapped(agent_path, json_bool) + mapped(projection_path, validation) +
+    (path / 'check.cpp').write_text(harness + mapped(agent_path, json_bool) +
                                     '#define buildAutoBaseResult buildRealAutoBaseResult\n' + mapped(workflow_path, result_method) +
                                     '#undef buildAutoBaseResult\n' + method +
                                     '#define completeAutoBaseSetup completeAutoBaseSetupFull\n' + mapped(workflow_path, full_method) +

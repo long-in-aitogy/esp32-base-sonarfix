@@ -54,7 +54,6 @@ jobs:
           xargs -r -n 1 -P 2 python3 <<'CHECKS'
           test/host/check_base_accuracy.py
           test/host/check_province_command.py
-          test/host/check_fixed_output_options.py
           test/host/check_raw_config_preflight.py
           test/host/check_raw_batch.py
           test/host/check_service_config.py

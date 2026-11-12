@@ -45,22 +45,22 @@ bool BackendAgent::buildStartupCommands(JsonObjectConst base,
     GnssOptions options;
     options.ports = {"UART1"};
     const JsonObjectConst output = base["gnss_options"].as<JsonObjectConst>();
-    options.outputMode = String(output["output_mode"] | "rtcm_only") == "rtcm_only"
+    options.outputMode = restoreFixed || String(output["output_mode"] | "rtcm_only") == "rtcm_only"
                              ? OutputMode::RtcmOnly
                              : OutputMode::DiagnosticsRtcm;
-    if (const String level = output["msm_level"].isNull() ? "both" : output["msm_level"].as<String>(); level == "7")
+    if (const String level = output["msm_level"].isNull() ? (restoreFixed ? "4" : "both") : output["msm_level"].as<String>(); level == "7")
         options.msmLevel = MsmLevel::Msm7;
-    else if (level == "4")
-        options.msmLevel = MsmLevel::Msm4;
-    else
+    else if (level == "both" || (!restoreFixed && level != "4"))
         options.msmLevel = MsmLevel::Both;
+    else
+        options.msmLevel = MsmLevel::Msm4;
     const JsonObjectConst systems = output["constellations"].as<JsonObjectConst>();
     options.gps = systems["gps"] | true;
     options.glo = systems["glo"] | true;
     options.gal = systems["gal"] | true;
     options.bds = systems["bds"] | true;
-    options.qzss = systems["qzss"] | true;
-    options.sbas = systems["sbas"] | true;
+    options.qzss = systems["qzss"] | !restoreFixed;
+    options.sbas = systems["sbas"] | !restoreFixed;
     position.ellipsoid = detected == GnssSensorType::Ublox;
     if (!restoreFixed)
     {
