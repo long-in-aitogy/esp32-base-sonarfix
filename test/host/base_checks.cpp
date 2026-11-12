@@ -59,6 +59,9 @@ void checkUbloxModes(const CommandList &survey, const CommandList &fixed, const 
 {
     const auto all = buildBaseAllRtcmOutputCommand("UART1", true, GnssSensorType::Ublox);
     assert(all.size() == 2);
+    assert(roverSettingEnabled(all, 0x20910369U)); // RTCM 1094 on UART1.
+    assert(roverSettingEnabled(all, 0x20910319U)); // RTCM 1097 on UART1.
+    assert(roverSettingEnabled(all, 0x209102D7U)); // RTCM 1127 on UART1.
     assert(survey[0][8] == 1 && fixed[0][8] == 2 && fixed[0][9] == 1);
     const auto readAccuracy = [](const Command &packet, size_t offset)
     {
