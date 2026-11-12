@@ -70,9 +70,11 @@ jobs:
           python3 test/host/check_config_publish_capacity.py
           python3 test/host/check_connection_preference.py
           python3 test/host/check_network_status.py
+          python3 test/host/check_network_lifecycle.py
           python3 test/host/check_wifi_migration.py
           python3 test/host/check_wifi_recovery.py
           python3 test/host/check_wifi_commands.py
+          python3 test/host/check_command_dispatch.py
           python3 test/host/check_sim_apn.py
           python3 test/host/check_mqtt_dispatch.py
           python3 test/host/check_backend_restart_transport.py
