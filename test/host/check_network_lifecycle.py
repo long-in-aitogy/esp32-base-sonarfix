@@ -69,18 +69,18 @@ int main() {
     now += 60000; checkSimRecovery();
     assert(isGsmConnection() && !wifiFallbackActive && !wifiConnected && events == "MNBQSCMNBQSCD");
 
-    // Healthy fallback must not interrupt an active workflow, but a lost Wi-Fi
-    // route can return to SIM after one successful probe.
+    // Geodetic probes SIM even while a workflow is active; a lost Wi-Fi route
+    // can return to SIM after one successful probe.
     assert(tryWifiFallback(true));
     workflowActive = true; now += 60000;
     const int before = probes;
-    checkSimRecovery(); assert(probes == before && isWifiConnection());
+    checkSimRecovery(); assert(probes == before + 1 && isWifiConnection());
     wifiConnected = false; networkOk = false; now += 15000;
-    checkSimRecovery(); assert(probes == before && isWifiConnection());
+    checkSimRecovery(); assert(probes == before + 1 && isWifiConnection());
     networkOk = true; now += 14999;
-    checkSimRecovery(); assert(probes == before && isWifiConnection());
+    checkSimRecovery(); assert(probes == before + 1 && isWifiConnection());
     ++now; checkSimRecovery();
-    assert(probes == before + 1 && isGsmConnection() && !wifiFallbackActive);
+    assert(probes == before + 2 && isGsmConnection() && !wifiFallbackActive);
 
     // A failed Wi-Fi probe must leave existing SIM sockets running.
     workflowActive = false; mqttUp = ntripUp = true; wifiOk = false; events.clear();
@@ -120,4 +120,4 @@ with tempfile.TemporaryDirectory(prefix='network-lifecycle-') as directory:
     compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(path), str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     run_cpp([str(path / 'check')], check=True)
-print('PASS: SIM fallback, workflow protection, recovery probes and lost Wi-Fi route')
+print('PASS: SIM fallback, workflow recovery probes and lost Wi-Fi route')

@@ -34,47 +34,6 @@ namespace
     }
 }
 
-bool BackendAgent::readStartupReceiverMode(GnssCmdBuilder::GnssSensorType detected, String &error)
-{
-    if (detected == GnssCmdBuilder::GnssSensorType::Unicore)
-    {
-        String mode;
-        return UnicoreReadback::readMode(mode, error);
-    }
-    UbxBaseStatus status;
-    return UbloxReadback::readBaseStatus(status, error);
-}
-
-bool BackendAgent::prepareStartupConfig(DynamicJsonDocument &config, JsonObject &base,
-                                        bool &saved, String &method, String &error)
-{
-    if (deserializeJson(config, baseConfig_.c_str()) != DeserializationError::Ok || !config.is<JsonObject>())
-    {
-        error = "Saved Base configuration is invalid";
-        return false;
-    }
-    base = config.as<JsonObject>();
-    saved = base.size() > 0;
-    method = base["base_setup_method"] | String();
-    if (saved && method.isEmpty())
-    {
-        error = "Saved Base mode is missing";
-        return false;
-    }
-    if (saved)
-        return true;
-
-    base["base_setup_method"] = "SURVEY_IN";
-    base["survey_in_duration"] = AUTO_SURVEY_IN_SECONDS;
-    base["survey_in_accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
-    base["mode"] = "BASE";
-    JsonObject options = base.createNestedObject("gnss_options");
-    options["output_mode"] = "rtcm_only";
-    options["msm_level"] = "both";
-    method = "SURVEY_IN";
-    return true;
-}
-
 bool BackendAgent::buildStartupCommands(JsonObjectConst base,
                                         GnssCmdBuilder::GnssSensorType detected,
                                         bool restoreFixed,
@@ -264,59 +223,35 @@ bool BackendAgent::initializeBaseAtBoot(GnssCmdBuilder::GnssSensorType detected)
         return false;
     };
     DynamicJsonDocument config(CONFIG_DOCUMENT_SIZE);
-    JsonObject base;
-    auto saved = false;
-    String method;
-    if (String configError;
-        !prepareStartupConfig(config, base, saved, method, configError))
-        return fail(configError);
+    if (deserializeJson(config, baseConfig_) != DeserializationError::Ok || !config.is<JsonObject>())
+        return fail("Saved Base configuration is invalid");
     if (stationLock_.all)
     {
         baseStartupState_ = "locked";
         markStatusDirty();
         return true;
     }
-    if (method == "AUTO_CORS")
+    JsonObject base = config.as<JsonObject>();
+    base["base_setup_method"] = "AUTO_CORS";
+    base["auto_cors_source_mode"] = "nearest";
+    base["mode"] = "BASE";
+    base.remove("coords");
+    // Do not restore a snapshot from a previous boot after a failed new run.
+    base.remove("auto_base_previous_config");
+    if (!base["gnss_options"].is<JsonObject>())
     {
-        JsonObjectConst coords = base["coords"].as<JsonObjectConst>();
-        if (coords.isNull())
-            coords = base;
-        const bool hasCoordinates = std::isfinite(configNumber(coords["lat"], NAN))
-            && std::isfinite(configNumber(coords["lon"], NAN))
-            && std::isfinite(configNumber(coords["alt"], NAN));
-        baseStartupState_ = base["auto_cors_source_mode"] == "nearest"
-            ? "awaiting_auto_base" : hasCoordinates ? "preserved" : "awaiting_configuration";
-        markStatusDirty();
-        return true;
+        JsonObject options = base.createNestedObject("gnss_options");
+        options["output_mode"] = "rtcm_only";
+        options["msm_level"] = "both";
     }
-    if (String queryError; !readStartupReceiverMode(detected, queryError))
-        return fail(queryError.isEmpty() ? String("Receiver mode could not be read") : queryError);
-    const auto restoreFixed = method == "FIXED_LLA";
-    if (!restoreFixed && !method.isEmpty() && method != "SURVEY_IN")
-        return fail("Unsupported saved Base mode");
-    CommandList commands;
-    StartupPosition position;
-    if (String commandError;
-        !buildStartupCommands(base, detected, restoreFixed, commands, position, commandError))
-        return fail(commandError);
-    if (!commands.empty() && !writeGnssCommands(commands))
-        return fail("Receiver rejected startup configuration");
-    if (!saved)
-    {
-        baseConfig_.clear();
-        serializeJson(config, baseConfig_);
-    }
+    if (config.overflowed())
+        return fail("Auto Base startup configuration exceeds memory capacity");
+    baseConfig_.clear();
+    serializeJson(config, baseConfig_);
     if (!saveStatePreferences())
-        return fail("Could not save Base configuration");
-    baseStartupState_ = restoreFixed ? "fixed_restored"
-                                     : "survey_started";
-    lastReceiverPollMs_ = 0;
-    String error;
-    if (!refreshReceiverReadback(error))
-        return fail(error);
-    if (!verifyStartupReadback(detected, restoreFixed, position, error))
-        return fail(error);
-    Serial.printf("[GNSS][STARTUP] %s; chip=%s\n", baseStartupState_.c_str(), sensorType_.c_str());
+        return fail("Could not save Auto Base startup mode");
+    baseStartupState_ = "awaiting_auto_base";
+    baseStartupError_.clear();
     markStatusDirty();
     return true;
 }

@@ -54,7 +54,7 @@ bool setupWiFi(bool (*validateConnection)()) {
     Preferences store;
     if (!store.begin("myPrefs", true)) return false;
     const String ssid = store.getString("WIFI_SSID", WIFI_SSID);
-    const String password = store.getString("WIFI_PASS", "123456789");
+    const String password = store.getString("WIFI_PASS", WIFI_PASSWORD);
     const bool savedCredentials = store.isKey("WIFI_SSID") && store.isKey("WIFI_PASS");
     store.end();
     const bool connected = connectWifi(ssid, password, validateConnection);

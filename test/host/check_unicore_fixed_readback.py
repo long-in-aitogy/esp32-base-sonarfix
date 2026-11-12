@@ -8,7 +8,7 @@ root = Path(__file__).resolve().parents[2]
 readback = (root / 'src/functions/gnss/Unicore_Readback.cpp').read_text()
 parser = readback[readback.index('    bool readBestPosition('):readback.index('    const char *modeKind(')]
 startup = (root / 'src/functions/backend/Backend_Agent_Startup.cpp').read_text()
-number = startup[startup.index('    double configNumber('):startup.index('\n}\n\nbool BackendAgent::readStartupReceiverMode')]
+number = startup[startup.index('    double configNumber('):startup.index('\n}\n\nbool BackendAgent::buildStartupCommands')]
 verify = startup[startup.index('bool BackendAgent::verifyStartupReadback('):startup.index('void BackendAgent::reconcileBaseStartupReadback(')]
 shim = (root / 'test/host/Arduino.h').read_text()
 shim = shim.replace('    void trim()', '''    int indexOf(char value, int start) const { auto p = find(value, start); return p == npos ? -1 : int(p); }

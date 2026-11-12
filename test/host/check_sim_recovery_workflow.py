@@ -1,4 +1,4 @@
-"""Do not switch a working Wi-Fi transport during a Rover workflow."""
+"""Check geodetic SIM recovery while a Rover workflow is active."""
 from pathlib import Path
 import subprocess
 import tempfile
@@ -36,8 +36,7 @@ int main() {
     now += 60000; probeOk = true; checkSimRecovery();
     assert(probes == 3 && simRecoverySuccesses == 1 && switches == 0);
     now += 60000; active = true; checkSimRecovery();
-    assert(probes == 3 && switches == 0 && wifiFallbackActive);
-    active = false; checkSimRecovery(); assert(switches == 1 && !wifiFallbackActive);
+    assert(probes == 4 && switches == 1 && !wifiFallbackActive);
     wifiFallbackActive = true; wifiConnected = false; active = true;
     now += 15000; checkSimRecovery();
     assert(switches == 2 && !wifiFallbackActive);
@@ -48,4 +47,4 @@ with tempfile.TemporaryDirectory(prefix='sim-recovery-') as directory:
     (path / 'check.cpp').write_text(harness + method + checks)
     subprocess.run(['c++', '-std=c++17', '-fsanitize=address,undefined', str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     subprocess.run([str(path / 'check')], check=True)
-print('PASS: SIM recovery hysteresis, probe failure and active workflow gating')
+print('PASS: SIM recovery hysteresis, probe failure and active workflow behavior')

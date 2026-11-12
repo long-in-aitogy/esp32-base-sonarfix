@@ -1,5 +1,7 @@
 # Đối chiếu lịch sử sync-functions
 
+**Cập nhật 13/11/2026:** Theo làm rõ của người dùng, geodetic/esp32 là chuẩn về tính năng và luồng hoạt động; các đoạn ghi kết quả trước đó là lịch sử, không phải quyết định tiếp tục giữ khác biệt. Accuracy 5 m và kiểm tra readback vẫn được giữ theo yêu cầu riêng.
+
 Phạm vi: 37 commit từ `develop` (`c921c25`) đến `sync-functions` (`8af74b7`). Commit `19d2de0` trong repo này đã nhập đúng cây nội dung của `8af74b7`; các thay đổi sau đó được áp dụng từng commit. Nguồn CORS được đối chiếu tại `7db656b`.
 
 Kiểm tra lại danh sách: bảng dưới ghi đủ 37/37 mã commit `develop..sync-functions` và 15/15 commit CORS có thay đổi `geodetic/esp32` từ ngày 10/11/2026. Quét tên định nghĩa phương thức backend tìm thấy đủ 96/96 tên nguồn trong cây đích; một số hàm đã chuyển tệp. Các lệnh backend được so sánh theo tên đều khớp 17/17. Các phép kiểm tra danh sách này không tự chứng minh hành vi tương đương.
@@ -15,7 +17,7 @@ Các commit CORS mới nhất liên quan đến ESP32 đã đối chiếu theo h
 | `b2f4254`, `1d89155` | Hai SOURCE và lỗi ghi thiếu được kiểm tra bằng `check_ntrip_source_connect.py`; tách thông tin AutoNearest khỏi SOURCE đang chạy. |
 | `540d46b`, `754f3ca` | Kiểm tra handshake, khởi động và khôi phục bằng bộ host tương ứng trong repo này; cấu trúc bài kiểm tra có khác nguồn. |
 | `ef0631c`, `236072e`, `e43b82a` | Có log từ chối caster, fallback và bộ khởi động AutoNearest tại thiết bị; kiểm tra bằng `check_auto_nearest_workflow.py`, `check_autocors_scheduler.py`. |
-| `376b9f9` | Chủ ý không đặt lại Base sang AutoNearest ở mọi lần khởi động: giữ cấu hình đã lưu theo yêu cầu bảo toàn `develop`. |
+| `376b9f9` | Khi khởi động chuyển sang AutoNearest mới như geodetic; loại tọa độ và bản chụp cấu hình cũ khỏi lượt khởi động. |
 | `7141523`, `88edbe0` | Giữ kết nối khi cấu hình dịch vụ không đổi và xử lý SOURCE ACK; kiểm tra bằng `check_service_config.py`, `check_ntrip_handshake.py`. |
 | `ae200f9` | Có AutoNearest, lựa chọn mountpoint và fallback Survey-In; bảo toàn cấu hình cũ để phục hồi nếu workflow thất bại. |
 | `87e0f62` | Xác minh cấu hình Unicore bằng MODE BASE, hỗ trợ chọn cổng và thử lại xác nhận Fixed LLA đến muộn. Các bài `check_unicore_verify_command.py`, `check_unicore_fixed_readback.py`, `check_workflow_restore.py` đạt. |
@@ -69,11 +71,11 @@ Kiểm tra lại sau các thay đổi đồng bộ: cây Git của `19d2de0` và
 | `2750929` | fix(backend): preserve AutoNearest source in base config | `check_autobase_config.py` |
 | `8af74b7` | fix(backend): report Survey-In fallback as completed | `check_auto_base_status.py` |
 
-Lệnh đổi tỉnh VN2000 được giữ theo lựa chọn của người dùng; firmware lưu tọa độ gốc, yêu cầu readback xác nhận và báo lỗi nếu lưu thất bại. CORS hiện yêu cầu xem lại trước khi áp dụng. Bản build `tdm240x_dev_general` dùng `no_ota.csv` và NVS cũ, khác bảng phân vùng CORS có `agent_state`; chưa thay bảng vì cần bảo toàn dữ liệu thiết bị.
+Lệnh đổi tỉnh VN2000 được giữ theo lựa chọn của người dùng; firmware lưu tọa độ gốc, yêu cầu readback xác nhận và báo lỗi nếu lưu thất bại. CORS hiện yêu cầu xem lại trước khi áp dụng. Bản build `tdm240x_dev_general` đã chuyển sang `partitions.csv` như geodetic, có `agent_state`. Việc thay bảng phân vùng khi nạp lên thiết bị cũ có thể ảnh hưởng dữ liệu flash; chưa thực hiện flash hoặc kiểm tra di chuyển dữ liệu thực tế.
 
 Danh mục 34 tỉnh trong firmware được đối chiếu với `coordinate_provinces.json` của CORS: Lai Châu dùng 103°; 17 tỉnh có nhiều kinh tuyến cũ yêu cầu lệnh gửi thêm `l0_deg` thuộc danh sách tương ứng. Lệnh thiếu lựa chọn hoặc chọn ngoài danh sách bị từ chối trước khi ghi receiver. Chạy `python3 test/host/compare_province_catalog.py /duong-dan/cors` để đối chiếu lại danh mục.
 
-Đã đối chiếu luồng NTRIP của CORS với ba mô-đun `ntrip_base`, `ntrip_common` và `ntrip_rover`. Giữ xử lý hiện tại: không kết thúc luồng chunked khi chờ dữ liệu, đóng riêng kết nối ghi thiếu, và phân biệt phiên Rover đang hoạt động với workflow đang khôi phục SOURCE. Các bài host kiểm tra bắt tay, hai SOURCE, ghi thiếu, Rover và khóa khi khôi phục đều đạt; chưa kiểm tra với caster thực.
+Đã đối chiếu luồng NTRIP của CORS với ba mô-đun `ntrip_base`, `ntrip_common` và `ntrip_rover`. Cập nhật 13/11/2026: hành vi gửi chunk rỗng định kỳ và tạm dừng SOURCE khi workflow chạy được đồng bộ theo geodetic. Nhánh này vẫn kiểm tra ghi thiếu. Chưa kiểm tra với caster thực.
 
 Các tệp không còn cùng đường dẫn đã được đối chiếu theo chức năng: quản lý mạng nằm trong `main.cpp`; nhận diện GNSS nằm trong `ntrip_base.cpp`; định tuyến log Unicore nằm trong `Unicore_Log.h`; NTRIP được tách thành ba mô-đun. `math_functions.c` phía CORS là tệp rỗng. Các hàm đọc datum RTCM được chuyển sang `Vn2000_Datum.cpp` và đã kiểm tra cùng dữ liệu tham chiếu Python.
 
@@ -83,7 +85,7 @@ Các tệp không còn cùng đường dẫn đã được đối chiếu theo c
 
 Tại CORS `7db656b`, toàn bộ nội dung `Vn2000_Datum.cpp` trùng phần đầu `Backend_Agent_Projection.cpp` của nguồn. Bộ host kiểm tra CRC, chia nhỏ và reset RTCM, gói 1025 M3/M6 và phép chuyển với dữ liệu tham chiếu đạt. Dữ liệu datum thuộc phiên Rover: khởi tạo lại khi bắt đầu phiên mới; kiểm tra luồng Rover và trường hợp đọc 504 byte đạt.
 
-Khởi động có chủ ý khác CORS: CORS đặt lại Base sang AutoNearest mỗi lần khởi động; nhánh này giữ và khôi phục chế độ, tọa độ hoặc thời gian Survey-In đã lưu theo yêu cầu bảo toàn cấu hình. Fixed LLA chỉ được xác nhận sau readback phù hợp. Đã đối chiếu tên 17 lệnh backend trong CORS với nhánh này; trùng tên không tự chứng minh toàn bộ hành vi giống nhau. Nền tảng PlatformIO đã đồng bộ 7.1.3 với CORS; ba môi trường firmware và bộ kiểm tra modem đều biên dịch thành công; bảng phân vùng vẫn giữ theo từng môi trường của nhánh này.
+Khởi động đã đồng bộ geodetic: sau khi nhận diện receiver và kiểm tra khóa, firmware chuyển cấu hình sang AutoNearest mới và loại tọa độ cũ. Các điều kiện mạng, license và khóa vẫn áp dụng; accuracy 5 m và kiểm tra readback khi áp dụng Fixed LLA vẫn được giữ. Phân vùng `general` đã chuyển sang bảng của geodetic.
 
 Các bài host và build không thay thế nghiệm thu trên receiver thật: cần kiểm tra BESTPOS, accuracy cấu hình 5 m, nguồn RTCM, mất kết nối, khởi động lại và tọa độ ngoài thực địa.
 
@@ -91,11 +93,13 @@ Với Unicore, trường JSON `bestpos` hiện được tạo từ bản tin rec
 
 Với u-blox, sau khi readback xác nhận chế độ Rover, firmware chờ GGA mới tối đa 10 giây rồi tiếp tục chờ vị trí ở workflow nếu GGA đến chậm, giống CORS. Lệnh hủy vẫn dừng; AutoNearest vẫn yêu cầu tọa độ GGA hợp lệ trước khi chọn caster. `check_ublox_rover_gga.py` kiểm tra GGA mới, GGA cũ, timeout và hủy trên host.
 
-Đã đối chiếu phục hồi mạng và chuyển SIM/Wi-Fi với `Network_Manager.cpp` của CORS. Giữ giá trị mật khẩu dự phòng của `develop` khi NVS chưa có `WIFI_PASS`; CORS dùng `WIFI_PASSWORD`. Đổi mặc định có thể khiến thiết bị cũ thiếu khóa này không kết nối được. Các mạng đã lưu vẫn được ưu tiên; bộ kiểm tra host xác minh chuyển cấu hình, phục hồi Wi-Fi và lệnh nhập thông tin.
+Đã đồng bộ giá trị Wi-Fi fallback với geodetic; các cấu hình đã lưu vẫn được ưu tiên. Kiểm tra host xác minh chuyển cấu hình và phục hồi Wi-Fi.
 
-Cấu hình mặc định MQTT và NTRIP cũng khác CORS: `develop` dùng MQTT `45.117.179.134`, NTRIP `aitogy.com.vn` và mountpoint `/test`; CORS dùng MQTT `aitogy.click` và mountpoint `test_esp`. Giữ mặc định của `develop` vì chưa xác minh được tính tương đương của các máy chủ và mountpoint. Cấu hình đã lưu trong NVS vẫn được ưu tiên; các giá trị mặc định ảnh hưởng thiết bị chưa có cấu hình hoặc sau khi đặt lại. Cấu hình AutoNearest riêng đã đồng bộ với CORS tại `d5a9e61`.
+Chuyển lại SIM được thực hiện theo geodetic kể cả khi workflow đang chạy. Callback lệnh ATG cũng dùng topic mặc định như geodetic; topic tùy chỉnh vẫn được subscribe nhưng không được callback ATG xử lý. Các kiểm tra host tương ứng đã cập nhật theo hành vi này.
 
-Phần SIM giữ cách chọn APN của `main`: ưu tiên APN đã lưu, tự nhận diện nhà mạng nếu để trống hoặc `auto`, rồi dùng APN cấu hình nếu không nhận diện được. CORS dùng APN mặc định ngay khi thiếu khóa lưu; không thay hành vi này để tránh bỏ qua lựa chọn nhà mạng trên thiết bị hiện tại. Kiểm tra APN, receiver và các luồng NTRIP liên quan đã được đưa vào CI.
+MQTT mặc định, mountpoint NTRIP và SSID fallback đã đồng bộ geodetic; cấu hình NVS đã lưu vẫn được ưu tiên.
+
+Phần SIM đã đồng bộ cách chọn APN của geodetic: dùng APN mặc định khi thiếu khóa lưu, hoặc tự nhận diện nhà mạng khi APN để trống hay `auto`.
 
 Ngày 12/11/2026, kiểm tra lại tại `afeb4e5`: 71 bài `check_*.py` chạy không cần thiết bị đều đạt; hai bài tích hợp lệnh CORS chạy riêng với bộ tạo lệnh thực cũng đạt. Ba cấu hình firmware `tdm240x_dev_general`, `tdm240x_dev_general_debug` và `tdm240x_dev_general_test` biên dịch thành công. `check_status_flash.py` cần cổng ESP32 thật và chưa được chạy; lúc kiểm tra không có cổng thiết bị phù hợp. Kết quả này không chứng minh hoạt động thực địa hay CI GitHub đã chạy.
 
@@ -139,7 +143,7 @@ Chạy `python3 test/host/check_cors_unicore_verify.py /duong-dan/cors` để ki
 
 Đã biên dịch và chạy trực tiếp `readback_checks.cpp` của CORS với mã đọc UBX/Unicore và codec của nhánh đích, dùng môi trường UART giả lập của CORS: các trường hợp khóa, timeout, phản hồi lỗi, tọa độ và bảo toàn byte UART đều đạt. Bài `check_wifi_nvs.py` của CORS cũng đạt sau khi đổi kỳ vọng mật khẩu dự phòng sang giá trị giữ từ `develop`. Bộ kiểm tra đích bổ sung các tình huống nhiều cổng Unicore, hai lần thử SIM, loại bỏ ký tự xuống dòng ở SOURCE và giữ trường RTCM 1025 trong báo cáo. Những bài dùng receiver và mạng giả lập không chứng minh hoạt động thiết bị thực.
 
-Đối chiếu bổ sung ngày 12/11/2026: 30.000 bộ dữ liệu TMODE3, NAV-SVIN và ECEF sinh xác định (seed `20261112`) cho cùng kết quả bit giữa `Ubx_Base_Status.h` của CORS và nhánh này. So sánh các hằng `inline constexpr` trong `Prog_Config.h` cho thấy hai cây cùng tập tên; chỉ `WIFI_SSID`, `MQTT_SERVER`, `NTRIP_MOUNTPOINT` khác giá trị. Các mặc định đó được giữ theo `develop`; cấu hình AutoNearest trùng CORS. Bản `general` giữ debug tắt như `develop`; CORS bật debug mặc định.
+Đối chiếu bổ sung ngày 12/11/2026: 30.000 bộ dữ liệu TMODE3, NAV-SVIN và ECEF sinh xác định (seed `20261112`) cho cùng kết quả bit giữa `Ubx_Base_Status.h` của CORS và nhánh này. So sánh các hằng `inline constexpr` trong `Prog_Config.h` cho thấy hai cây cùng tập tên; chỉ `WIFI_SSID`, `MQTT_SERVER`, `NTRIP_MOUNTPOINT` khác giá trị. Các mặc định đó và debug của bản `general` đã được đồng bộ geodetic trong cập nhật 13/11/2026.
 
 Đối chiếu nội dung các bài nguồn không cùng tên, ký hiệu “từng phần” có nghĩa là **chưa chứng minh toàn bộ bài nguồn**:
 
@@ -151,13 +155,13 @@ CI tại `4c388dc` đã đạt, gồm build, các nhóm kiểm tra, coverage và
 
 | Bài hoặc nhóm của CORS | Bằng chứng trên nhánh này và phần cần chú ý |
 | --- | --- |
-| `check_auto_base_boot.py` | `check_autocors_startup.py`, `check_autocors_scheduler.py`; chủ ý giữ cấu hình đã lưu thay vì khởi động AutoNearest mới ở mọi lần boot. |
+| `check_auto_base_boot.py` | `check_autocors_startup.py`, `check_autocors_scheduler.py`; kiểm tra khởi động AutoNearest mới theo geodetic, khóa, mất mạng và lỗi lưu. |
 | `check_backend_lifecycle.py` | Từng phần: `check_backend_queues.py` chạy hàng đợi thật với MQTT/WebSocket giả lập; `check_control_failover_workflow.py` kết hợp parser ACK và failover thật, kiểm tra ACK giữ lại, sai phiên, ACK cũ và khôi phục; các bài allocation, MQTT và phát hiện receiver kiểm tra các bước khác. Chưa chạy toàn bộ vòng đời trong một bài. |
 | `check_backend_storage.py` | `check_backend_load.py` chạy liền migration và nạp cấu hình thật với NVS giả lập, gồm 5 m cho Survey-In/Fixed LLA và fallback NVS cũ; `check_backend_save_state.py` kiểm tra từng khóa snapshot và lỗi open/write/commit. `check_license_reference_commands.py` kiểm tra hoàn tác license và lệnh reference; các bài service config kiểm tra cấu hình dịch vụ. Chưa chạy bài nguồn nguyên bản hoặc chứng minh tính nguyên tử NVS trên thiết bị. |
 | `check_base_startup_confirmation.py` | Từng phần: `check_autocors_startup.py` chạy hàm chuẩn bị cấu hình và luồng khởi động thực với receiver/lưu trữ giả lập, gồm mặc định Survey-In 120 giây/5 m, cấu hình sai, khóa, lỗi đọc/ghi/lưu và xác nhận; `check_boot_progress_restore.py`, `check_workflow_restore.py`, `check_unicore_verify_command.py`, `check_unicore_fixed_readback.py` kiểm tra các bước khác. |
 | `check_command_dispatch.py` | Bài cùng tên trên nhánh đích chạy các hàm định tuyến ESP, MQTT, NTRIP, GNSS và CONFIG; phần lưu preferences và receiver được giả lập. |
 | `check_gnss_lifecycle.py` | Từng phần: kiểm tra UBX/Unicore, readback, Survey-In và Rover riêng; `readback_checks.cpp` của nguồn chạy trực tiếp với mã đích. |
-| `check_network_lifecycle.py` | Bài cùng tên trên nhánh đích chạy chuyển SIM/Wi-Fi, thời gian chờ, bảo vệ workflow và mất Wi-Fi với kết nối giả lập; vòng lặp thực được kiểm tra thêm khi khóa bận hoặc không tồn tại, GPRS mất và phục hồi, Wi-Fi mất rồi kết nối lại, cùng cân bằng khóa. Các bài riêng kiểm tra lưu Wi-Fi; chưa mô phỏng toàn bộ khởi động như bài nguồn. |
+| `check_network_lifecycle.py` | Bài cùng tên trên nhánh đích chạy chuyển SIM/Wi-Fi, thời gian chờ, thăm dò SIM khi workflow hoạt động như geodetic và mất Wi-Fi với kết nối giả lập; vòng lặp thực được kiểm tra khi khóa bận hoặc không tồn tại, GPRS mất và phục hồi, Wi-Fi mất rồi kết nối lại, cùng cân bằng khóa. Chưa mô phỏng toàn bộ khởi động như bài nguồn. |
 | `check_ntrip_source.py` | Từng phần: `check_ntrip_config_capacity.py` chạy nạp hai endpoint và điều kiện khóa/cấp phép thực; `check_ntrip_source_connect.py`, `check_ntrip_port.py`, `check_ntrip_handshake.py`, `check_ntrip_reconnect.py` kiểm tra kết nối. Chưa gộp toàn bộ vòng đời SOURCE. |
 | `check_projection_audit.py` | `check_vn2000.py` kiểm tra hai gói 1025 M3/M6 cố định của CORS với bộ giải mã Python và ESP32; `check_auto_base_transform.py` kiểm tra các giá trị và byte tương ứng trong báo cáo/lưu cấu hình bằng datum giả lập. Hai bước chạy riêng, chưa kiểm tra toàn bộ đường dữ liệu receiver đến báo cáo trên thiết bị thật. |
 | `check_status_stream.py` | `check_stream_targeting.py` chạy 44 lệnh chọn nguồn; `check_status_matrix.py` chạy 144 tổ hợp trạng thái theo bài CORS với mã tạo trạng thái thực và kết nối giả lập. Hai bài kiểm tra capacity chạy riêng. |

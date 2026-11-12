@@ -223,9 +223,6 @@ private:
     void appendUbloxPosition(JsonDocument &doc, const UbxBaseStatus &status,
                              const String &mode);
     bool refreshUnicoreReadback(String &error);
-    bool prepareStartupConfig(DynamicJsonDocument &config, JsonObject &base,
-                              bool &saved, String &method, String &error);
-    bool readStartupReceiverMode(GnssCmdBuilder::GnssSensorType detected, String &error);
     struct StartupPosition {
         double latitude = 0.0;
         double longitude = 0.0;

@@ -32,7 +32,7 @@ inline constexpr char CONNECTION_PREFERENCE[] = "4G"; // "4G" hoặc "WIFI".
 static_assert(std::string_view(CONNECTION_PREFERENCE) == "4G" || std::string_view(CONNECTION_PREFERENCE) == "WIFI",
               "CONNECTION_PREFERENCE must be 4G or WIFI");
 
-inline constexpr char WIFI_SSID[] = "AITOGY-VP";
+inline constexpr char WIFI_SSID[] = "";
 inline constexpr char WIFI_PASSWORD[] = "";
 
 inline constexpr uint8_t TX_TO_MODEM_RX = 17;
@@ -56,12 +56,12 @@ inline constexpr char AUTO_BASE_CASTER_MOUNTPOINT[] = "test";
 inline constexpr int NTRIP_MODE = 1;
 inline constexpr char NTRIP_CASTER_ADDRESS[] = "aitogy.com.vn";
 inline constexpr uint16_t NTRIP_CASTER_PORT = 2101;
-inline constexpr char NTRIP_MOUNTPOINT[] = "/test";
+inline constexpr char NTRIP_MOUNTPOINT[] = "test_esp";
 inline constexpr char NTRIP_AUTH_BASE_STATION[] = "12345";
 
 // ================ CẤU HÌNH MQTT =================
 
-inline constexpr char MQTT_SERVER[] = "45.117.179.134";
+inline constexpr char MQTT_SERVER[] = "aitogy.click";
 inline constexpr uint16_t MQTT_PORT = 1883;
 inline constexpr char MQTT_USER[] = "mqttUser";
 inline constexpr char MQTT_PASS[] = "MqttPassword123$%^";

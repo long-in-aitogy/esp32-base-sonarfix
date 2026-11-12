@@ -30,6 +30,8 @@ std::array<bool, 2> accept, failWrites;
 std::array<int, 2> attempts;
 int sends = 0, updates = 0;
 bool roverActive = false;
+bool workflowActive = false;
+struct { bool workflowActive() const { return ::workflowActive; } } backendAgent;
 uint32_t now = 5000;
 uint32_t millis() { return now; }
 bool ntripRoverSessionStarted() { return roverActive; }
@@ -75,6 +77,8 @@ int main() {
     reset(); clients[0].up = endpoints[0].authenticated = true; clients[1].up = endpoints[1].authenticated = true; failWrites[0] = true;
     assert(loopNTRIP(data) == NTRIP_MODE + 4 && !clients[0].up && clients[1].up && endpoints[1].authenticated);
     reset(); roverActive = true;
+    assert(loopNTRIP(data) == 504 && attempts[0] == 0 && attempts[1] == 0 && sends == 0);
+    roverActive = false; workflowActive = true;
     assert(loopNTRIP(data) == 504 && attempts[0] == 0 && attempts[1] == 0 && sends == 0);
 }
 '''

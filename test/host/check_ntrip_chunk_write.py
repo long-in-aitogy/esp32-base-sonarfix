@@ -40,7 +40,8 @@ int main() {
     using namespace ntrip_common;
     NtripEndpoint endpoint; Client client;
     assert(!sendEndpointRtcm(endpoint,client,String()));
-    assert(client.wire.empty() && client.up && endpoint.authenticated);
+    assert(client.wire=="0\r\n\r\n" && client.up && endpoint.authenticated);
+    client.wire.clear();
     assert(sendEndpointRtcm(endpoint,client,"abc"));
     assert(client.wire=="3\r\nabc\r\n" && endpoint.bytesInWindow==3);
     for (int fail=1; fail<=3; ++fail) {
@@ -56,4 +57,4 @@ with tempfile.TemporaryDirectory(prefix='ntrip-chunk-') as directory:
     path=Path(directory); (path/'check.cpp').write_text(harness+method+checks)
     subprocess.run(['c++','-std=c++17','-Wall','-Wextra','-Werror','-Wno-sign-compare','-fsanitize=address,undefined',str(path/'check.cpp'),'-o',str(path/'check')],check=True)
     subprocess.run([str(path/'check')],check=True)
-print('PASS: NTRIP chunks stay open and incomplete writes close the affected stream')
+print('PASS: geodetic NTRIP keepalive and incomplete-write handling')

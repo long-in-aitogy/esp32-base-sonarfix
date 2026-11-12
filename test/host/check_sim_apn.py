@@ -34,7 +34,7 @@ int main() {
     assert(connectGSM(1) && modem.usedApn=="custom.apn" && modem.usedUser=="user" && modem.usedPass=="password");
     prefs.data["APN"]="auto"; assert(connectGSM(1) && modem.usedApn=="v-internet");
     prefs.data["APN"]=""; modem.provider="MOBIFONE"; assert(connectGSM(1) && modem.usedApn=="m-wap");
-    prefs.data.erase("APN"); modem.provider="VINAPHONE"; assert(connectGSM(1) && modem.usedApn=="m3-world");
+    prefs.data.erase("APN"); modem.provider="VINAPHONE"; assert(connectGSM(1) && modem.usedApn==APN);
     modem.provider="unknown"; assert(connectGSM(1) && modem.usedApn==APN);
     modem.network=false; assert(!connectGSM(1));
 }

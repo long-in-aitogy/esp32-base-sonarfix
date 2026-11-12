@@ -271,7 +271,14 @@ Client &activeNtripClient()
 bool ntrip_common::sendEndpointRtcm(NtripEndpoint &endpoint, Client &client, const String &rtcmData)
 {
   if (rtcmData.isEmpty())
+  {
+    if (endpoint.version == 2 && millis() - endpoint.lastKeepAliveMs >= 10000UL)
+    {
+      client.print("0\r\n\r\n");
+      endpoint.lastKeepAliveMs = millis();
+    }
     return false;
+  }
 
   const auto failWrite = [&]()
   {
@@ -428,7 +435,7 @@ int connectNTRIP()
 /** @brief Implements loopNTRIP. */
 int loopNTRIP(String &rtcmData)
 {
-  if (ntripRoverSessionStarted())
+  if (ntripRoverSessionStarted() || backendAgent.workflowActive())
     return 504;
 
   auto returnCode = NTRIP_MODE;
