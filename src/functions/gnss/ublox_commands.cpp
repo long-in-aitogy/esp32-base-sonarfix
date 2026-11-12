@@ -127,13 +127,19 @@ namespace UbloxCommands
 /** @brief Implements ubxCfgValsetU1. */
     Command ubxCfgValsetU1(const std::vector<std::pair<uint32_t, bool>> &entries)
     {
-        Command payload = {0x00, 0x07, 0x00, 0x00};
-        for (const auto &[key, value] : entries)
+        Command result;
+        for (size_t offset = 0; offset < entries.size(); offset += 64)
         {
-            appendU32(payload, key);
-            payload.push_back(value ? 1 : 0);
+            Command payload = {0x00, 0x07, 0x00, 0x00};
+            for (size_t i = offset; i < std::min(offset + 64, entries.size()); ++i)
+            {
+                appendU32(payload, entries[i].first);
+                payload.push_back(entries[i].second ? 1 : 0);
+            }
+            const auto packet = ubxPacket(0x06, 0x8A, payload);
+            result.insert(result.end(), packet.begin(), packet.end());
         }
-        return ubxPacket(0x06, 0x8A, payload);
+        return result;
     }
 
 /** @brief Implements ubxCfgMsg. */
