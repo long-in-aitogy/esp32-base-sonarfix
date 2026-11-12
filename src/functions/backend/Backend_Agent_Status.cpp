@@ -484,7 +484,10 @@ String BackendAgent::buildStatusPayload()
     appendGnssStatus(doc, gnss, nowMs);
     appendNtripStatus(doc, service, server1Active, server2Active);
     appendTransportStatus(doc, gnss, nowMs, signal);
+    if (doc.overflowed())
+        return String();
     String payload;
-    serializeJson(doc, payload);
+    if (serializeJson(doc, payload) != measureJson(doc))
+        return String();
     return payload;
 }

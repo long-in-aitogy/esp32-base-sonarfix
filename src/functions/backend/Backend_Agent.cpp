@@ -368,6 +368,11 @@ void BackendAgent::publishStatus(bool force)
     lastStatusMs_ = millis();
     ++statusSequence_;
     const auto payload = buildStatusPayload();
+    if (payload.isEmpty())
+    {
+        Serial.println("[BACKEND][ERROR] Cannot build complete status payload");
+        return;
+    }
     if (mqttConnected())
     {
         const auto sent = mqtt.publish(statusTopic().c_str(), payload.c_str(), true);
