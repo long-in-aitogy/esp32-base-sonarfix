@@ -2,7 +2,7 @@
 
 Phạm vi: 37 commit từ `develop` (`c921c25`) đến `sync-functions` (`8af74b7`). Commit `19d2de0` trong repo này đã nhập đúng cây nội dung của `8af74b7`; các thay đổi sau đó được áp dụng từng commit. Nguồn CORS được đối chiếu tại `7db656b`.
 
-Kiểm tra lại danh sách: bảng dưới ghi đủ 37/37 mã commit `develop..sync-functions` và 15/15 commit CORS có thay đổi `geodetic/esp32` từ ngày 10/11/2026. Quét tên định nghĩa phương thức backend tìm thấy đủ 96/96 tên nguồn trong cây đích; một số hàm đã chuyển tệp. Các phép kiểm tra danh sách này không tự chứng minh hành vi tương đương.
+Kiểm tra lại danh sách: bảng dưới ghi đủ 37/37 mã commit `develop..sync-functions` và 15/15 commit CORS có thay đổi `geodetic/esp32` từ ngày 10/11/2026. Quét tên định nghĩa phương thức backend tìm thấy đủ 96/96 tên nguồn trong cây đích; một số hàm đã chuyển tệp. Các lệnh backend được so sánh theo tên đều khớp 17/17. Các phép kiểm tra danh sách này không tự chứng minh hành vi tương đương.
 
 Các commit CORS mới nhất liên quan đến ESP32 đã đối chiếu theo hành vi:
 
@@ -109,6 +109,8 @@ Build bổ sung tại `d1ba249` với cả `BACKEND_WEBSOCKET_ENABLED=1` và `BA
 
 Với lệnh AutoNearest đã có địa chỉ CORS, `main` giữ cấu hình Base trước đó khi tác vụ đang chạy; CORS lưu `AUTO_CORS` ngay khi nhận lệnh. Giữ hành vi `main` để có thể khôi phục cấu hình cũ nếu tác vụ thất bại hoặc bị dừng. Với yêu cầu AutoNearest chưa có nguồn, firmware vẫn lưu yêu cầu và bản chụp cấu hình cũ để chờ nguồn.
 
+Khi tự khởi động AutoNearest, mã đích ghi ID lần khởi động hiện tại và ID yêu cầu đã lưu trong cấu hình; CORS lấy hai trường này từ payload. Giữ cách của nhánh đích để thông tin khôi phục gắn với phiên và yêu cầu thực tế của thiết bị. `check_autobase_command.py` kiểm tra các ID được ghi và phục hồi khi bắt đầu workflow lỗi.
+
 Kiểm tra lại tại `2345ed8`: 76 bài host không cần thiết bị đều đạt; hai bài dùng bộ tạo lệnh CORS thực cũng đạt, gồm kiểm tra accuracy 5 m cho Survey-In và Fixed LLA. Danh mục kinh tuyến 34 tỉnh khớp CORS. Ba cấu hình firmware `general`, `general_debug` và `general_test` cùng chương trình test modem biên dịch thành công; test modem chưa được chạy. Bộ tạo lệnh u-blox và báo cáo Auto Base dùng cùng cách tính tọa độ để giữ nguyên kết quả khi áp dụng lại. Chưa chạy kiểm tra flash hoặc xác nhận BESTPOS trên thiết bị thật; không có cổng ESP32 được kết nối. Các thay đổi CI mới chưa được chạy trên GitHub.
 
 Kiểm tra lại tại `55ccb7d`: 79 bài Python host không cần thiết bị đều đạt. Hai bài tích hợp CORS chạy riêng với bộ lệnh thực đều đạt, gồm kiểm tra accuracy 5 m trên u-blox TMODE3 và VALSET; danh mục kinh tuyến 34 tỉnh khớp CORS. Bộ kiểm tra lệnh receiver C++ và ba bản build `general`, `general_debug`, `general_test` đều đạt. Các bài kiểm tra mới xác nhận việc cấp thiết bị, chuyển failover và chuyển từ Wi-Fi dự phòng về SIM không chủ động ngắt workflow Rover trong các tình huống đã mô phỏng. Chưa có cổng ESP32 để kiểm tra flash, BESTPOS hoặc hoạt động mạng và receiver thực; CI GitHub cho các commit mới chưa được xác nhận.
@@ -144,7 +146,7 @@ CI GitHub tại `2ca7d76` đã build và chạy các nhóm kiểm tra thành cô
 | `check_auto_base_boot.py` | `check_autocors_startup.py`, `check_autocors_scheduler.py`; chủ ý giữ cấu hình đã lưu thay vì khởi động AutoNearest mới ở mọi lần boot. |
 | `check_backend_lifecycle.py` | Từng phần: `check_backend_queues.py` chạy hàng đợi thật với MQTT/WebSocket giả lập; `check_control_failover_workflow.py` kết hợp parser ACK và failover thật, kiểm tra ACK giữ lại, sai phiên, ACK cũ và khôi phục; các bài allocation, MQTT và phát hiện receiver kiểm tra các bước khác. Chưa chạy toàn bộ vòng đời trong một bài. |
 | `check_backend_storage.py` | Từng phần: `check_backend_save_state.py` kiểm tra từng khóa của snapshot NVS với API giả lập và lỗi open/write/commit; mô phỏng không chứng minh tính nguyên tử của NVS trên thiết bị. `check_license_reference_commands.py` kiểm tra hoàn tác license khi lưu lỗi và lệnh reference khi khởi động workflow thất bại (xác thực và lưu được giả lập); các bài migration và service config kiểm tra các bước khác. Chưa chạy bài tích hợp nguyên bản. |
-| `check_base_startup_confirmation.py` | Từng phần: `check_boot_progress_restore.py`, `check_workflow_restore.py`, `check_unicore_verify_command.py`, `check_unicore_fixed_readback.py`. |
+| `check_base_startup_confirmation.py` | Từng phần: `check_autocors_startup.py` chạy hàm chuẩn bị cấu hình và luồng khởi động thực với receiver/lưu trữ giả lập, gồm mặc định Survey-In 120 giây/5 m, cấu hình sai, khóa, lỗi đọc/ghi/lưu và xác nhận; `check_boot_progress_restore.py`, `check_workflow_restore.py`, `check_unicore_verify_command.py`, `check_unicore_fixed_readback.py` kiểm tra các bước khác. |
 | `check_command_dispatch.py` | Bài cùng tên trên nhánh đích chạy các hàm định tuyến ESP, MQTT, NTRIP, GNSS và CONFIG; phần lưu preferences và receiver được giả lập. |
 | `check_gnss_lifecycle.py` | Từng phần: kiểm tra UBX/Unicore, readback, Survey-In và Rover riêng; `readback_checks.cpp` của nguồn chạy trực tiếp với mã đích. |
 | `check_network_lifecycle.py` | Bài cùng tên trên nhánh đích chạy chuyển SIM/Wi-Fi, thời gian chờ, bảo vệ workflow và mất Wi-Fi với kết nối giả lập. Các bài riêng kiểm tra lưu Wi-Fi; chưa mô phỏng toàn bộ khởi động/khóa như bài nguồn. |

@@ -90,6 +90,7 @@ int main() {
     assert(!nvsFailed.executeAutoBaseCommand(pending.as<JsonObject>(), error, detail));
     assert(error == "cannot restore previous Base configuration after AutoNearest save failed" && nvsFailed.baseStartupState_ == "error");
     DynamicJsonDocument startup(1024); startup["source_mode"]="nearest"; startup["auto_apply"]=true; startup["startup_auto"]=true;
+    startup["startup_boot_id"]="old-boot"; startup["startup_request_id"]="other-request";
     BackendAgent boot;
     boot.baseConfig_=R"({"base_setup_method":"AUTO_CORS","auto_base_request_id":"request"})";
     assert(boot.executeAutoBaseCommand(startup.as<JsonObject>(), error, detail));

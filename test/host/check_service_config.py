@@ -57,6 +57,11 @@ int main() {
     agent.saveOk = true;
     assert(agent.executeServiceConfigCommand(request.as<JsonObject>(), error, detail));
     assert(setups == 2 && connections == 2);
+    DynamicJsonDocument reordered(2048);
+    reordered["port1"] = 2102; reordered["serverhost1"] = "caster.example";
+    for (int retry = 0; retry < 10; ++retry)
+        assert(agent.executeServiceConfigCommand(reordered.as<JsonObject>(), error, detail));
+    assert(setups == 2 && connections == 2 && detail == "service config unchanged; connections preserved");
     agent.active = true;
     assert(agent.executeServiceConfigCommand(request.as<JsonObject>(), error, detail));
     request["port1"] = 2103;
@@ -76,10 +81,10 @@ int main() {
     large["serverhost1"] = String(std::string(9000, 'x'));
     assert(!agent.executeServiceConfigCommand(large.as<JsonObject>(), error, detail));
     assert(error == "service configuration exceeds memory capacity");
-    assert(agent.serviceConfig_ == previous && setups == 3 && connections == 3 && agent.published == 4);
+    assert(agent.serviceConfig_ == previous && setups == 3 && connections == 3 && agent.published == 14);
     request.clear(); request.to<JsonObject>();
     assert(!agent.executeServiceConfigCommand(request.as<JsonObject>(), error, detail));
-    assert(setups == 3 && connections == 3 && agent.published == 4);
+    assert(setups == 3 && connections == 3 && agent.published == 14);
     DynamicJsonDocument provision(128); provision["name"] = "station";
     agent.active = true;
     assert(agent.executeBasicCommand("PROVISION_DEVICE", provision.as<JsonObject>(), error, detail));
