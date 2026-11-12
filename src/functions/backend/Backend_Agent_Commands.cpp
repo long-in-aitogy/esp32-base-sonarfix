@@ -1150,13 +1150,14 @@ void BackendAgent::finishCommand(const String &source, const String &command,
                                  const String &error, const String &detail,
                                  bool restartAfterCommand)
 {
-    const auto workflowState = command == "TRIGGER_AUTO_BASE" || command == "TRIGGER_BASE_REFERENCE_CHECK" || (command == "STOP_AUTO_BASE" && workflowActive());
-    if (success && command != "REBOOT_DEVICE" && command != "DELETE_DEVICE" && command != "DEPLOY_LICENSE" && !workflowState)
+    const bool workflowState = command == "TRIGGER_AUTO_BASE" || command == "TRIGGER_BASE_REFERENCE_CHECK"
+        || (command == "STOP_AUTO_BASE" && workflowActive());
+    const bool normalCompletion = command != "REBOOT_DEVICE" && command != "DELETE_DEVICE"
+        && command != "DEPLOY_LICENSE" && !workflowState;
+    if (!workflowActive() && (!success || normalCompletion))
     {
         setAgentState(normalAgentState());
     }
-    if (!success)
-        setAgentState(normalAgentState());
     recordCommandResult(command, source, success ? "success" : "error",
                         success ? detail : error, commandId);
     if (command != "VERIFY_GNSS_CONFIG")
@@ -1174,7 +1175,8 @@ void BackendAgent::executeCommand(const String &source, const String &command,
                                   const String &commandId, JsonDocument &doc,
                                   JsonObject payload)
 {
-    setAgentState("configuring");
+    if (!workflowActive())
+        setAgentState("configuring");
     String error;
     auto success = true;
     String detail;
