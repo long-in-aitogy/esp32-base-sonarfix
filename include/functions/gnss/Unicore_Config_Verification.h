@@ -31,6 +31,36 @@ inline uint8_t comparisonPort(uint8_t configured, const std::vector<Log> &logs) 
     return port;
 }
 
+inline bool parseLogLine(const char *line, Log &log) {
+    char tokens[6][24] = {};
+    const int fields = std::sscanf(line, "%23s %23s %23s %23s %23s %23s",
+                                   tokens[0], tokens[1], tokens[2], tokens[3], tokens[4], tokens[5]);
+    for (auto &token : tokens)
+        for (char &c : token) if (c >= 'a' && c <= 'z') c -= 'a' - 'A';
+    const int start = std::strcmp(tokens[0], "LOG") == 0 ? 1 : 0;
+    if (fields - start < 3 || fields - start > 4) return false;
+    const bool portFirst = std::strncmp(tokens[start], "COM", 3) == 0;
+    const char *port = tokens[start + (portFirst ? 0 : 1)];
+    const char *name = tokens[start + (portFirst ? 1 : 0)];
+    if (strnlen(port, sizeof(tokens[0])) != 4 || std::strncmp(port, "COM", 3) || port[3] < '1' || port[3] > '3'
+        || strnlen(name, sizeof(tokens[0])) < 2 || name[0] < 'A' || name[0] > 'Z') return false;
+    for (const char *c = name; *c; ++c) if (!(*c >= 'A' && *c <= 'Z') && !(*c >= '0' && *c <= '9')) return false;
+    static_assert(sizeof(log.name) == sizeof(tokens[0]));
+    std::memcpy(log.name, name, sizeof(log.name));
+    log.port = port[3] - '0';
+    if (const char *trigger = tokens[start + 2]; !std::strcmp(trigger, "ONCE")) {
+        if (fields - start != 3) return false;
+    } else {
+        const bool ontime = !std::strcmp(trigger, "ONTIME");
+        if (fields - start != (ontime ? 4 : 3)) return false;
+        char *tail = nullptr;
+        log.period = std::strtod(tokens[start + (ontime ? 3 : 2)], &tail);
+        if (!tail || tail == tokens[start + (ontime ? 3 : 2)] || *tail
+            || !std::isfinite(log.period) || log.period <= 0) return false;
+    }
+    return true;
+}
+
 inline bool parseLogs(const char *text, size_t length, std::vector<Log> &logs) {
     logs.clear();
     if (!text || length < 12 || length > 4096) return false;
@@ -75,33 +105,8 @@ inline bool parseLogs(const char *text, size_t length, std::vector<Log> &logs) {
             continue;
         }
         if (logs.size() >= static_cast<size_t>(count)) return false;
-        char tokens[6][24] = {};
-        const int fields = std::sscanf(line, "%23s %23s %23s %23s %23s %23s",
-                                       tokens[0], tokens[1], tokens[2], tokens[3], tokens[4], tokens[5]);
-        for (auto &token : tokens)
-            for (char &c : token) if (c >= 'a' && c <= 'z') c -= 'a' - 'A';
-        const int start = std::strcmp(tokens[0], "LOG") == 0 ? 1 : 0;
-        if (fields - start < 3 || fields - start > 4) return false;
-        const bool portFirst = std::strncmp(tokens[start], "COM", 3) == 0;
-        const char *port = tokens[start + (portFirst ? 0 : 1)];
-        const char *name = tokens[start + (portFirst ? 1 : 0)];
-        if (strnlen(port, sizeof(tokens[0])) != 4 || std::strncmp(port, "COM", 3) || port[3] < '1' || port[3] > '3'
-            || strnlen(name, sizeof(tokens[0])) < 2 || name[0] < 'A' || name[0] > 'Z') return false;
-        for (const char *c = name; *c; ++c) if (!(*c >= 'A' && *c <= 'Z') && !(*c >= '0' && *c <= '9')) return false;
         Log log;
-        static_assert(sizeof(log.name) == sizeof(tokens[0]));
-        std::memcpy(log.name, name, sizeof(log.name));
-        log.port = port[3] - '0';
-        if (const char *trigger = tokens[start + 2]; !std::strcmp(trigger, "ONCE")) {
-            if (fields - start != 3) return false;
-        } else {
-            const bool ontime = !std::strcmp(trigger, "ONTIME");
-            if (fields - start != (ontime ? 4 : 3)) return false;
-            char *tail = nullptr;
-            log.period = std::strtod(tokens[start + (ontime ? 3 : 2)], &tail);
-            if (!tail || tail == tokens[start + (ontime ? 3 : 2)] || *tail
-                || !std::isfinite(log.period) || log.period <= 0) return false;
-        }
+        if (!parseLogLine(line, log)) return false;
         for (const Log &existing : logs)
             if (existing.port == log.port && !std::strcmp(existing.name, log.name)) return false;
         logs.push_back(log);

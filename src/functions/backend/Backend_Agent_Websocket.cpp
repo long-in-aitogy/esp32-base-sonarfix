@@ -242,7 +242,7 @@ bool BackendAgentWebsocket::readFrame(uint8_t &opcode, String &payload)
     const std::byte second{rx_[1]};
     const bool masked = (second & std::byte{0x80}) != std::byte{};
     uint64_t payloadLength = std::to_integer<uint8_t>(second & std::byte{0x7F});
-    const uint8_t lengthCode = static_cast<uint8_t>(payloadLength);
+    const auto lengthCode = static_cast<uint8_t>(payloadLength);
     size_t headerLength = 2;
 
     if (payloadLength == 126)

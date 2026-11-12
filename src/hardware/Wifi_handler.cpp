@@ -23,9 +23,7 @@ bool connectWifi(const String &ssid, const String &password, bool (*validateConn
 }
 }
 
-bool setupWiFi(bool (*validateConnection)()) {
-    WiFi.persistent(false);
-    WiFi.mode(WIFI_STA);
+static bool tryLegacyWifi(bool (*validateConnection)()) {
     // Upgrade only: select a working old profile before retiring the list.
     String profiles;
     nvs_handle_t legacy;
@@ -51,6 +49,13 @@ bool setupWiFi(bool (*validateConnection)()) {
             }
         }
     }
+    return false;
+}
+
+bool setupWiFi(bool (*validateConnection)()) {
+    WiFi.persistent(false);
+    WiFi.mode(WIFI_STA);
+    if (tryLegacyWifi(validateConnection)) return true;
     Preferences store;
     if (!store.begin("myPrefs", true)) return false;
     const String ssid = store.getString("WIFI_SSID", WIFI_SSID);

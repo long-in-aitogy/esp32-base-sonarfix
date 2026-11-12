@@ -5,7 +5,7 @@ import tempfile
 
 root = Path(__file__).resolve().parents[2]
 wifi = (root / 'src/hardware/Wifi_handler.cpp').read_text()
-setup = wifi[wifi.index('bool setupWiFi('):]
+setup = wifi[wifi.index('static bool tryLegacyWifi('):]
 storage = (root / 'src/functions/backend/Storage_Status.cpp').read_text()
 save = storage[storage.index('bool saveMigratedWifi('):storage.index('\nnamespace {\nbool readableNvsValue')]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')

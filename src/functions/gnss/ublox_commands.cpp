@@ -329,7 +329,7 @@ namespace UbloxCommands
             const size_t valueSize = valsetValueSize(type);
             if (baseMode && (key == 0x4003000FU || key == 0x40030011U))
             {
-                const uint32_t accuracy = static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000);
+                const auto accuracy = static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000);
                 for (uint8_t b = 0; b < 4; ++b)
                     packet[i + 4 + b] = static_cast<uint8_t>(accuracy >> (8 * b));
             }
@@ -356,7 +356,7 @@ namespace UbloxCommands
                  && packet[6] == 0 && (packet[8] == 1 || packet[8] == 2))
         {
             const size_t offset = packet[8] == 1 ? 34 : 26;
-            const uint32_t accuracy = static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000);
+            const auto accuracy = static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000);
             for (uint8_t i = 0; i < 4; ++i)
                 packet[offset + i] = static_cast<uint8_t>(accuracy >> (8 * i));
         }
