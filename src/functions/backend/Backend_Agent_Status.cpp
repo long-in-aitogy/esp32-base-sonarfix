@@ -269,6 +269,14 @@ void BackendAgent::appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapsh
     doc["rtk_fix_status"] = gnss.fixStatus.data();
     if (gnss.satellites > 0)
         doc["satellite_count"] = gnss.satellites;
+    if (sensorType_ == "Ublox" && receiverInfoMs_ && nowMs - receiverInfoMs_ <= 45000UL)
+    {
+        JsonObject receiver = doc.createNestedObject("gnss_receiver");
+        receiver["source"] = "ubx_mon_ver";
+        receiver["age_seconds"] = (nowMs - receiverInfoMs_) / 1000.0;
+        if (!versionReadback_.isEmpty()) receiver["payload_b64"] = versionReadback_;
+        if (!versionReadbackError_.isEmpty()) receiver["error"] = versionReadbackError_;
+    }
     if (sensorType_ == "Ublox" && !satelliteReadback_.isEmpty()
         && nowMs - satelliteReadbackMs_ <= 45000UL)
     {
@@ -422,8 +430,15 @@ String BackendAgent::buildStatusPayload()
         gnssVerification_.clear();
     if (!satelliteReadback_.isEmpty() && millis() - satelliteReadbackMs_ > 45000UL)
         satelliteReadback_.clear();
+    if (receiverInfoMs_ && millis() - receiverInfoMs_ > 45000UL)
+    {
+        versionReadback_.clear();
+        versionReadbackError_.clear();
+        receiverInfoMs_ = 0;
+    }
     DynamicJsonDocument doc(STATUS_DOCUMENT_SIZE + (gnssVerification_.isEmpty() ? 0 : VERIFICATION_DOCUMENT_SIZE)
-                            + (satelliteReadback_.isEmpty() ? 0 : satelliteReadback_.length() + 256));
+                            + (satelliteReadback_.isEmpty() ? 0 : satelliteReadback_.length() + 256)
+                            + (receiverInfoMs_ ? versionReadback_.length() + versionReadbackError_.length() + 256 : 0));
     DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
     deserializeJson(serviceDoc, serviceConfig_);
     const JsonObjectConst service = serviceDoc.as<JsonObjectConst>();

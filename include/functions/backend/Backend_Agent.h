@@ -111,6 +111,8 @@ private:
     uint32_t receiverBaseReadbackMs_ = 0;
     uint32_t receiverBaseReadbackRevision_ = 0;
     uint32_t lastReceiverPollMs_ = 0;
+    String versionReadback_, versionReadbackError_;
+    uint32_t receiverInfoMs_ = 0;
     String satelliteReadback_;
     uint32_t satelliteReadbackMs_ = 0;
     UbxNavigation navigation_;

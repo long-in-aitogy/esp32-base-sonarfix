@@ -157,6 +157,40 @@ bool UbloxReadback::readDop(UbxDop &status, String &error)
     return false;
 }
 
+bool UbloxReadback::readVersion(String &payloadBase64, String &error)
+{
+    UbxReplyBuffer<528> reply;
+    if (!query(0x0A, 0x04, reply, error))
+        return false;
+    const size_t length = reply.length - 8;
+    const uint8_t *payload = reply.frame.data() + 6;
+    if (length < 40 || length > 520 || (length - 40) % 30 || !payload[0])
+    {
+        error = "Invalid MON-VER payload";
+        return false;
+    }
+    for (size_t start = 0; start < length; start += start == 30 ? 10 : 30)
+    {
+        const size_t width = start == 30 ? 10 : 30;
+        for (size_t i = start; i < start + width && payload[i]; ++i)
+        {
+            if (payload[i] < 32 || payload[i] > 126)
+            {
+                error = "Invalid MON-VER text";
+                return false;
+            }
+        }
+    }
+    String encoded = BackendAgentInternal::encodeBase64(payload, length);
+    if (encoded.isEmpty())
+    {
+        error = "Cannot encode MON-VER response";
+        return false;
+    }
+    payloadBase64 = encoded;
+    return true;
+}
+
 bool UbloxReadback::readSatellites(String &payloadBase64, String &error)
 {
     UbxReplyBuffer<UbxSatellites::MAX_PAYLOAD + 8> reply;
