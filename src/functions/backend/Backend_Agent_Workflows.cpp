@@ -193,7 +193,7 @@ void BackendAgent::handleUnicoreAck(const UnicoreReply &reply, const uint8_t *da
             command += static_cast<char>(data[i]);
         command.trim();
         command.toLowerCase();
-        auto target = 0;
+        unsigned long target = 0;
         surveyInMonitoring_ = std::sscanf(command.c_str(), "mode base time %lu", &target) == 1 && target > 0;
         surveyInStartedMs_ = surveyInMonitoring_ ? millis() : 0;
         surveyInTargetSeconds_ = surveyInMonitoring_ ? target : 0;
