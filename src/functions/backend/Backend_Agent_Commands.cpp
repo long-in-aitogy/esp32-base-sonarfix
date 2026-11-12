@@ -470,7 +470,14 @@ bool BackendAgent::executeServiceConfigCommand(JsonObject payload, String &error
     serializeJson(serviceDoc, updatedServiceConfig);
     if (updatedServiceConfig != serviceConfig_)
     {
+        const String previousServiceConfig = serviceConfig_;
         serviceConfig_ = updatedServiceConfig;
+        if (!saveStatePreferences())
+        {
+            serviceConfig_ = previousServiceConfig;
+            error = "cannot save service configuration";
+            return false;
+        }
         detail = "service config deployed";
         setupNTRIP();
         connectNTRIP();

@@ -18,7 +18,9 @@ void setupNTRIP() { ++setups; }
 void connectNTRIP() { ++connections; }
 struct BackendAgent {
     String serviceConfig_ = "{}";
-    int published = 0;
+    int published = 0, saves = 0;
+    bool saveOk = true;
+    bool saveStatePreferences() { ++saves; return saveOk; }
     void publishConfigState(const String &) { ++published; }
     bool executeServiceConfigCommand(JsonObject, String &, String &);
 };
@@ -31,10 +33,16 @@ int main() {
     request["port1"] = 2101;
     String error, detail;
     assert(agent.executeServiceConfigCommand(request.as<JsonObject>(), error, detail));
-    assert(setups == 1 && connections == 1 && agent.published == 1);
+    assert(setups == 1 && connections == 1 && agent.published == 1 && agent.saves == 1);
     assert(agent.executeServiceConfigCommand(request.as<JsonObject>(), error, detail));
-    assert(setups == 1 && connections == 1 && agent.published == 2);
+    assert(setups == 1 && connections == 1 && agent.published == 2 && agent.saves == 1);
     request["port1"] = 2102;
+    const String beforeFailure = agent.serviceConfig_;
+    agent.saveOk = false;
+    assert(!agent.executeServiceConfigCommand(request.as<JsonObject>(), error, detail));
+    assert(error == "cannot save service configuration" && agent.serviceConfig_ == beforeFailure);
+    assert(setups == 1 && connections == 1 && agent.published == 2);
+    agent.saveOk = true;
     assert(agent.executeServiceConfigCommand(request.as<JsonObject>(), error, detail));
     assert(setups == 2 && connections == 2);
     const String previous = agent.serviceConfig_;
