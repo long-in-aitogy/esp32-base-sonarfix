@@ -107,6 +107,10 @@ Build bổ sung tại `d1ba249` với cả `BACKEND_WEBSOCKET_ENABLED=1` và `BA
 
 Đối chiếu các khóa JSON được gán trực tiếp trong `Backend_Agent_Status.cpp` của CORS `7db656b` không thấy khóa nguồn bị thiếu trong tệp tương ứng; đây là kiểm tra tên trường, không chứng minh toàn bộ giá trị tương đương. Bản hiện tại chỉ báo hỗ trợ xác minh GNSS với chip đã nhận diện và bỏ kết quả xác minh cũ sau 60 giây. Kiểm tra trạng thái gần đầy, WebSocket trên 8 KB, lỗi publish và fallback Survey-In đều đạt trên host.
 
+Các trường `bestpos`, `mode_kind`, `mode_raw`, `position_type` và `state` mà CORS dùng trong workflow được nhánh đích xử lý trong `Backend_Agent_Gnss.cpp` và bước kiểm tra khởi động. Các bài readback và trạng thái kiểm tra giá trị mô phỏng; kiểm tra tên trường không chứng minh mọi trạng thái receiver thực.
+
+Đối chiếu lại commit CORS `7db656b`: cấu hình Auto Base giữ lựa chọn MSM/chòm sao và đặt đầu ra RTCM-only; phục hồi Fixed LLA đi qua `buildStartupCommands` và xác nhận readback. Bản đích giữ mặc định MSM `both`, QZSS/SBAS bật theo cấu hình hiện tại và accuracy 5 m, thay vì mặc định MSM4, QZSS/SBAS tắt và 0,01 m của CORS. `check_autobase_config.py`, `check_fixed_output_options.py` và `check_workflow_restore.py` kiểm tra các lựa chọn này với receiver giả lập.
+
 Với lệnh AutoNearest đã có địa chỉ CORS, `main` giữ cấu hình Base trước đó khi tác vụ đang chạy; CORS lưu `AUTO_CORS` ngay khi nhận lệnh. Giữ hành vi `main` để có thể khôi phục cấu hình cũ nếu tác vụ thất bại hoặc bị dừng. Với yêu cầu AutoNearest chưa có nguồn, firmware vẫn lưu yêu cầu và bản chụp cấu hình cũ để chờ nguồn.
 
 Khi tự khởi động AutoNearest, mã đích ghi ID lần khởi động hiện tại và ID yêu cầu đã lưu trong cấu hình; CORS lấy hai trường này từ payload. Giữ cách của nhánh đích để thông tin khôi phục gắn với phiên và yêu cầu thực tế của thiết bị. `check_autobase_command.py` kiểm tra các ID được ghi và phục hồi khi bắt đầu workflow lỗi.

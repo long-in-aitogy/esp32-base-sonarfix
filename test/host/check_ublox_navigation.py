@@ -152,10 +152,10 @@ poll_harness = r'''
 uint32_t now = 0;
 uint32_t millis() { return now; }
 int reads = 0, navigationReads = 0, dopReads = 0;
-bool navigationOk = true, dopOk = true;
+bool navigationOk = true, dopOk = true, versionOk = true, satellitesOk = true;
 namespace UbloxReadback {
-bool readVersion(String &version, String &) { version = "ver"; return true; }
-bool readSatellites(String &satellites, String &) { satellites = "sat"; return true; }
+bool readVersion(String &version, String &error) { if (!versionOk) { error = "version unread"; return false; } version = "ver"; return true; }
+bool readSatellites(String &satellites, String &) { if (!satellitesOk) return false; satellites = "sat"; return true; }
 bool readNavigation(UbxNavigation &nav, String &) { ++navigationReads; nav.valid = true; nav.haccMm = 250; return navigationOk; }
 bool readDop(UbxDop &dop, String &) { ++dopReads; dop.hdop = 120; return dopOk; }
 }
@@ -189,6 +189,12 @@ int main() {
     assert(agent.navigationMs_ == 5000 && agent.dopMs_ == 35000);
     agent.sensorType_ = "Unicorecomm"; now = 65000; agent.pollGnssStatus();
     assert(reads == 3 && navigationReads == 2 && dopReads == 2);
+    agent.sensorType_ = "UNKNOWN"; now = 95000; agent.pollGnssStatus();
+    assert(reads == 3 && navigationReads == 2 && dopReads == 2);
+    agent.sensorType_ = "Ublox"; versionOk = satellitesOk = dopOk = false; agent.pollGnssStatus();
+    assert(reads == 4 && agent.versionReadback_.isEmpty() && agent.versionReadbackError_ == "version unread");
+    assert(agent.satelliteReadback_ == "sat" && agent.satelliteReadbackMs_ == 35000);
+    assert(agent.dopMs_ == 35000 && agent.receiverInfoMs_ == 95000);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='ublox-nav-poll-') as directory:
