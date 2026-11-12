@@ -79,6 +79,17 @@ int main() {
     cancelled.workflowCancelRequested_ = true;
     assert(!cancelled.runAutoBaseWorkflow(payload) && cancelled.stage == "stopped");
     assert(cancelled.baseStartupState_ == "awaiting_configuration" && cancelled.connections == 0);
+    BackendAgent previousSurvey; previousSurvey.connectOk = false; previousSurvey.error = "network error";
+    previousSurvey.baseConfig_ = R"({"base_setup_method":"AUTO_CORS","auto_cors_source_mode":"nearest","auto_base_previous_config":{"base_setup_method":"SURVEY_IN","survey_in_duration":300}})";
+    assert(!previousSurvey.runAutoBaseWorkflow(payload));
+    saved.clear(); assert(!deserializeJson(saved, previousSurvey.baseConfig_));
+    assert(saved["base_setup_method"] == "SURVEY_IN" && saved["survey_in_duration"] == 300);
+    BackendAgent snapshotSaveFailure; snapshotSaveFailure.connectOk = false; snapshotSaveFailure.saveOk = false;
+    snapshotSaveFailure.error = "network error";
+    snapshotSaveFailure.baseConfig_ = R"({"base_setup_method":"AUTO_CORS","auto_base_previous_config":{"base_setup_method":"SURVEY_IN"}})";
+    const String pendingConfig = snapshotSaveFailure.baseConfig_;
+    assert(!snapshotSaveFailure.runAutoBaseWorkflow(payload));
+    assert(snapshotSaveFailure.baseConfig_ == pendingConfig && snapshotSaveFailure.stage == "failed");
     BackendAgent restoreFailure; restoreFailure.restoreOk = false;
     assert(!restoreFailure.runAutoBaseWorkflow(payload) && restoreFailure.stage == "failed");
     payload["source_mode"] = "manual";

@@ -63,6 +63,11 @@ int main() {
     assert(local.baseStartupState_=="awaiting_auto_base" && local.started==0);
     DynamicJsonDocument saved(1024); assert(!deserializeJson(saved,local.baseConfig_));
     assert(saved["base_setup_method"]=="AUTO_CORS" && saved["auto_cors_source_mode"]=="nearest");
+    assert(saved["auto_base_previous_config"]["base_setup_method"]=="SURVEY_IN");
+    assert(local.executeAutoBaseCommand(pending.as<JsonObject>(), error, detail));
+    saved.clear(); assert(!deserializeJson(saved,local.baseConfig_));
+    assert(saved["auto_base_previous_config"]["base_setup_method"]=="SURVEY_IN");
+    assert(saved["auto_base_previous_config"]["auto_base_previous_config"].isNull());
     BackendAgent blocked; lockOk=false;
     assert(!blocked.executeAutoBaseCommand(pending.as<JsonObject>(), error, detail));
     assert(blocked.baseConfig_==R"({"base_setup_method":"SURVEY_IN"})"); lockOk=true;

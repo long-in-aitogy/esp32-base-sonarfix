@@ -572,10 +572,14 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
         }
         const String previousConfig = baseConfig_;
         const String previousSensor = sensorType_;
+        DynamicJsonDocument previous(CONFIG_DOCUMENT_SIZE);
+        deserializeJson(previous, previousConfig);
         JsonObject base = saved.as<JsonObject>();
         const JsonObjectConst requested = payload["auto_base_config"].as<JsonObjectConst>();
         for (JsonPairConst item : requested)
             base[item.key()] = item.value();
+        const JsonObjectConst snapshot = previous["auto_base_previous_config"].as<JsonObjectConst>();
+        base["auto_base_previous_config"].set(snapshot.isNull() ? previous.as<JsonObjectConst>() : snapshot);
         base["base_setup_method"] = "AUTO_CORS";
         base["auto_cors_source_mode"] = "nearest";
         base["mode"] = "BASE";
@@ -871,6 +875,9 @@ bool BackendAgent::executeStopWorkflowCommand(String &error, String &detail)
             return false;
         }
         JsonObjectConst base = saved.as<JsonObjectConst>();
+        const JsonObjectConst previous = base["auto_base_previous_config"].as<JsonObjectConst>();
+        if (!previous.isNull())
+            base = previous;
         JsonObjectConst coords = base["coords"].as<JsonObjectConst>();
         if (coords.isNull())
             coords = base;
@@ -889,6 +896,19 @@ bool BackendAgent::executeStopWorkflowCommand(String &error, String &detail)
             baseStartupState_ = "awaiting_configuration";
             baseStartupError_.clear();
             markStatusDirty();
+        }
+        if (!previous.isNull())
+        {
+            const String pendingConfig = baseConfig_;
+            baseConfig_.clear();
+            serializeJson(previous, baseConfig_);
+            if (!saveStatePreferences())
+            {
+                baseConfig_ = pendingConfig;
+                error = "cannot save previous Base configuration after stopping AutoNearest";
+                return false;
+            }
+            publishConfigState("base_config_state");
         }
     }
     setWorkflowProgress("stopped", 0, 4);

@@ -1034,6 +1034,7 @@ bool BackendAgent::completeAutoBaseSetup(
         failureReason = "cannot read previous Base configuration";
         return false;
     }
+    baseConfig.remove("auto_base_previous_config");
     JsonObject coordinates = baseConfig.createNestedObject("coords");
     coordinates["lat"] = result.latitude;
     coordinates["lon"] = result.longitude;
@@ -1155,6 +1156,14 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
     String selectedMountpoint;
     DynamicJsonDocument previousBase(CONFIG_DOCUMENT_SIZE);
     deserializeJson(previousBase, baseConfig_);
+    const JsonObjectConst savedPrevious = previousBase["auto_base_previous_config"].as<JsonObjectConst>();
+    const bool hasSavedPrevious = !savedPrevious.isNull();
+    if (hasSavedPrevious)
+    {
+        DynamicJsonDocument snapshot(CONFIG_DOCUMENT_SIZE);
+        snapshot.set(savedPrevious);
+        previousBase.set(snapshot.as<JsonObjectConst>());
+    }
     // Startup may use a different duration from the saved UI preference.
     if (previousBase.size() == 0 && surveyInTargetSeconds_ > 0)
         previousBase["base_setup_method"] = "SURVEY_IN";
@@ -1166,7 +1175,20 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         const bool roverStopped = stopNtripRoverLocked();
         const bool baseRestored = roverStopped && restoreWorkflowBase(previousBase.as<JsonObjectConst>());
         const bool transportRestored = baseRestored && restartConfiguredNtrip();
-        const bool cleanupSucceeded = baseRestored && transportRestored;
+        bool cleanupSucceeded = baseRestored && transportRestored;
+        if (cleanupSucceeded && hasSavedPrevious)
+        {
+            const String pendingConfig = baseConfig_;
+            baseConfig_.clear();
+            serializeJson(previousBase, baseConfig_);
+            if (saveStatePreferences())
+                publishConfigState("base_config_state");
+            else
+            {
+                baseConfig_ = pendingConfig;
+                cleanupSucceeded = false;
+            }
+        }
         if (cancelled && cleanupSucceeded && previousBase["base_setup_method"] == "AUTO_CORS"
             && previousBase["auto_cors_source_mode"] == "nearest")
         {
@@ -1187,7 +1209,7 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
             details["source_mountpoint"] = selectedMountpoint;
         if (!reason.isEmpty())
             details["reason"] = reason;
-        if (!transportRestored)
+        if (!cleanupSucceeded)
             details["cleanup_error"] = "could not safely restore base/NTRIP state";
         String serialized;
         serializeJson(details, serialized);

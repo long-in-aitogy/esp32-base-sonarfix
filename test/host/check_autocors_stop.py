@@ -13,9 +13,11 @@ harness=r'''
 constexpr int CONFIG_DOCUMENT_SIZE=4096;
 struct BackendAgent {
     String baseStartupState_="awaiting_auto_base", baseStartupError_, baseConfig_="{}", phase, state;
-    bool active=false, cancelled=false, dirty=false, restored=false, restarted=false, restoreOk=true, restartOk=true;
+    bool active=false, cancelled=false, dirty=false, restored=false, restarted=false, restoreOk=true, restartOk=true, saveOk=true;
     bool restoreWorkflowBase(JsonObjectConst) { restored=true; if (restoreOk) baseStartupState_="configured"; return restoreOk; }
     bool restartConfiguredNtrip() { restarted=true; return restartOk; }
+    bool saveStatePreferences() { return saveOk; }
+    void publishConfigState(const char *) {}
     bool workflowActive() { return active; }
     void requestWorkflowStop() { cancelled=true; }
     void setWorkflowProgress(const char *value,int,int) { phase=value; }
@@ -36,9 +38,15 @@ int main() {
     BackendAgent failed; failed.baseConfig_=saved.baseConfig_; failed.restoreOk=false;
     assert(!failed.executeStopWorkflowCommand(error, detail));
     assert(failed.restored && !failed.restarted && !error.isEmpty());
-    BackendAgent survey; survey.baseConfig_=R"({"base_setup_method":"SURVEY_IN"})";
+    BackendAgent survey; survey.baseConfig_=R"({"base_setup_method":"AUTO_CORS","auto_base_previous_config":{"base_setup_method":"SURVEY_IN","survey_in_duration":300}})";
     assert(survey.executeStopWorkflowCommand(error, detail));
     assert(survey.restored && survey.restarted);
+    DynamicJsonDocument restored(1024); assert(!deserializeJson(restored, survey.baseConfig_));
+    assert(restored["base_setup_method"]=="SURVEY_IN" && restored["survey_in_duration"]==300);
+    BackendAgent saveFailure; saveFailure.baseConfig_=R"({"base_setup_method":"AUTO_CORS","auto_base_previous_config":{"base_setup_method":"SURVEY_IN"}})";
+    const String pendingConfig=saveFailure.baseConfig_; saveFailure.saveOk=false;
+    assert(!saveFailure.executeStopWorkflowCommand(error, detail));
+    assert(saveFailure.baseConfig_==pendingConfig && !error.isEmpty());
     BackendAgent streamFailure; streamFailure.baseConfig_=saved.baseConfig_; streamFailure.restartOk=false;
     assert(!streamFailure.executeStopWorkflowCommand(error, detail));
     assert(streamFailure.restored && streamFailure.restarted && !error.isEmpty());
