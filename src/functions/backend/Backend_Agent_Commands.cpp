@@ -853,7 +853,7 @@ bool BackendAgent::executeBaseStatusCommand(String &error, String &detail)
     return true;
 }
 
-bool BackendAgent::executeStopWorkflowCommand(String &detail)
+bool BackendAgent::executeStopWorkflowCommand(String &error, String &detail)
 {
     if (workflowActive())
     {
@@ -864,8 +864,32 @@ bool BackendAgent::executeStopWorkflowCommand(String &detail)
     }
     if (baseStartupState_ == "awaiting_auto_base")
     {
-        baseStartupState_ = "awaiting_configuration";
-        markStatusDirty();
+        DynamicJsonDocument saved(CONFIG_DOCUMENT_SIZE);
+        if (deserializeJson(saved, baseConfig_) != DeserializationError::Ok || !saved.is<JsonObject>())
+        {
+            error = "cannot read previous Base configuration";
+            return false;
+        }
+        JsonObjectConst base = saved.as<JsonObjectConst>();
+        JsonObjectConst coords = base["coords"].as<JsonObjectConst>();
+        if (coords.isNull())
+            coords = base;
+        const bool hasSavedBase = base["base_setup_method"] == "SURVEY_IN"
+            || (!coords["lat"].isNull() && !coords["lon"].isNull() && !coords["alt"].isNull());
+        if (hasSavedBase)
+        {
+            if (!restoreWorkflowBase(base) || !restartConfiguredNtrip())
+            {
+                error = "could not restore saved Base after stopping nearest-source wait";
+                return false;
+            }
+        }
+        else
+        {
+            baseStartupState_ = "awaiting_configuration";
+            baseStartupError_.clear();
+            markStatusDirty();
+        }
     }
     setWorkflowProgress("stopped", 0, 4);
     setAgentState(normalAgentState());
@@ -957,7 +981,7 @@ void BackendAgent::executeCommand(const String &source, const String &command,
     }
     else if (command == "STOP_AUTO_BASE")
     {
-        success = executeStopWorkflowCommand(detail);
+        success = executeStopWorkflowCommand(error, detail);
     }
     else if (command == "APPLY_VN2000_PROVINCE")
     {

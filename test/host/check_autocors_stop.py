@@ -9,31 +9,47 @@ method=source[a:b]
 harness=r'''
 #include <Arduino.h>
 #include <cassert>
+#include <ArduinoJson.h>
+constexpr int CONFIG_DOCUMENT_SIZE=4096;
 struct BackendAgent {
-    String baseStartupState_="awaiting_auto_base", phase, state;
-    bool active=false, cancelled=false, dirty=false;
+    String baseStartupState_="awaiting_auto_base", baseStartupError_, baseConfig_="{}", phase, state;
+    bool active=false, cancelled=false, dirty=false, restored=false, restarted=false, restoreOk=true, restartOk=true;
+    bool restoreWorkflowBase(JsonObjectConst) { restored=true; if (restoreOk) baseStartupState_="configured"; return restoreOk; }
+    bool restartConfiguredNtrip() { restarted=true; return restartOk; }
     bool workflowActive() { return active; }
     void requestWorkflowStop() { cancelled=true; }
     void setWorkflowProgress(const char *value,int,int) { phase=value; }
     void setAgentState(const String &value) { state=value; }
     String normalAgentState() { return "ready"; }
     void markStatusDirty() { dirty=true; }
-    bool executeStopWorkflowCommand(String &);
+    bool executeStopWorkflowCommand(String &, String &);
 };
 '''
 checks=r'''
 int main() {
-    String detail; BackendAgent pending;
-    assert(pending.executeStopWorkflowCommand(detail));
+    String error, detail; BackendAgent pending;
+    assert(pending.executeStopWorkflowCommand(error, detail));
     assert(pending.baseStartupState_=="awaiting_configuration" && pending.phase=="stopped" && pending.dirty);
+    BackendAgent saved; saved.baseConfig_=R"({"base_setup_method":"AUTO_CORS","coords":{"lat":21,"lon":105,"alt":7}})";
+    assert(saved.executeStopWorkflowCommand(error, detail));
+    assert(saved.restored && saved.restarted && saved.baseStartupState_=="configured");
+    BackendAgent failed; failed.baseConfig_=saved.baseConfig_; failed.restoreOk=false;
+    assert(!failed.executeStopWorkflowCommand(error, detail));
+    assert(failed.restored && !failed.restarted && !error.isEmpty());
+    BackendAgent survey; survey.baseConfig_=R"({"base_setup_method":"SURVEY_IN"})";
+    assert(survey.executeStopWorkflowCommand(error, detail));
+    assert(survey.restored && survey.restarted);
+    BackendAgent streamFailure; streamFailure.baseConfig_=saved.baseConfig_; streamFailure.restartOk=false;
+    assert(!streamFailure.executeStopWorkflowCommand(error, detail));
+    assert(streamFailure.restored && streamFailure.restarted && !error.isEmpty());
     BackendAgent active; active.active=true;
-    assert(active.executeStopWorkflowCommand(detail));
+    assert(active.executeStopWorkflowCommand(error, detail));
     assert(active.cancelled && active.phase=="stopping");
 }
 '''
 with tempfile.TemporaryDirectory(prefix='autocors-stop-') as directory:
     path=Path(directory); (path/'check.cpp').write_text(harness+method+checks)
     subprocess.run(['c++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',
-                    '-I'+str(root/'test/host'),str(path/'check.cpp'),'-o',str(path/'check')],check=True)
+                    '-I'+str(root/'test/host'),'-I'+str(root/'.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),str(path/'check.cpp'),'-o',str(path/'check')],check=True)
     subprocess.run([str(path/'check')],check=True)
 print('PASS: pending and active AutoNearest stop handling')

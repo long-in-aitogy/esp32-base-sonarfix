@@ -300,7 +300,7 @@ private:
                              String &error, String &detail);
     bool executeStreamCommand(JsonObject payload, String &error, String &detail);
     bool executeBaseStatusCommand(String &error, String &detail);
-    bool executeStopWorkflowCommand(String &detail);
+    bool executeStopWorkflowCommand(String &error, String &detail);
     void finishCommand(const String &source, const String &command,
                        const String &commandId, bool success,
                        const String &error, const String &detail,
