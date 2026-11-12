@@ -1369,9 +1369,11 @@ bool BackendAgent::prepareReferenceCheckConfig(
     const double maxSurveyDuration = sensorType_ == "Unicorecomm" ? 3600 : 604800;
     const bool validSavedSurvey = savedSurvey && std::isfinite(surveyDuration) && surveyDuration >= 1
         && surveyDuration <= maxSurveyDuration && std::floor(surveyDuration) == surveyDuration;
+    const String altitudeReference = storedBaseObject["altitude_reference"] | "LEGACY";
     const bool validSavedPosition = std::isfinite(restoreLatitude) && std::isfinite(restoreLongitude)
         && std::isfinite(restoreAltitude) && std::abs(restoreLatitude) <= 90.0
-        && std::abs(restoreLongitude) <= 180.0 && restoreAltitude >= -12000.0 && restoreAltitude <= 100000.0;
+        && std::abs(restoreLongitude) <= 180.0 && restoreAltitude >= -12000.0 && restoreAltitude <= 100000.0
+        && (sensorType_ != "Unicorecomm" || altitudeReference == "ELLIPSOID" || altitudeReference == "LEGACY");
     return baseParsed && !reference.isNull() && std::isfinite(referenceLatitude) && std::isfinite(referenceLongitude)
         && std::isfinite(referenceAltitude) && std::abs(referenceLatitude) <= 90.0 && std::abs(referenceLongitude) <= 180.0
         && (validSavedSurvey || (!savedSurvey && validSavedPosition))

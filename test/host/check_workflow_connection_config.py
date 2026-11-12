@@ -64,11 +64,16 @@ int main() {
     agent.surveyInTargetSeconds_ = 0; agent.sensorType_ = "Ublox";
     assert(agent.prepareReferenceCheckConfig(payload, reference, lat, lon, alt, oldLat, oldLon, oldAlt, host, port, user, password, mountpoint, timeout, samples));
     agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":"21.25","lon":"105.75","alt":"10.5"}})";
+    agent.sensorType_ = "Unicorecomm";
     payload["reference_coords"]["lat"] = "21.25";
     payload["reference_coords"]["lon"] = "105.75";
     payload["reference_coords"]["alt"] = "10.5";
     assert(agent.prepareReferenceCheckConfig(payload, reference, lat, lon, alt, oldLat, oldLon, oldAlt, host, port, user, password, mountpoint, timeout, samples));
     assert(lat == 21.25 && lon == 105.75 && alt == 10.5 && oldLat == lat && oldLon == lon && oldAlt == alt);
+    agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","altitude_reference":"MSL","coords":{"lat":21.25,"lon":105.75,"alt":10.5}})";
+    assert(!agent.prepareReferenceCheckConfig(payload, reference, lat, lon, alt, oldLat, oldLon, oldAlt, host, port, user, password, mountpoint, timeout, samples));
+    agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","altitude_reference":"ELLIPSOID","coords":{"lat":21.25,"lon":105.75,"alt":10.5}})";
+    assert(agent.prepareReferenceCheckConfig(payload, reference, lat, lon, alt, oldLat, oldLon, oldAlt, host, port, user, password, mountpoint, timeout, samples));
     DynamicJsonDocument result(2048);
     assert(!deserializeJson(result, agent.buildReferenceCheckResult(reference, 21.25, 105.75, 11.5, 60)));
     assert(result["delta_n_m"] == 0 && result["delta_e_m"] == 0 && result["delta_u_m"] == 1);
