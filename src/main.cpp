@@ -29,14 +29,6 @@ namespace
         bool hasGnssReception = false;
         RtcmMessageCounts messageCounts;
     };
-
-    class DeviceRuntime
-    {
-    public:
-        inline static uint8_t mqttDisconnectCount = 0;
-        inline static uint8_t ntripDisconnectCount = 0;
-        inline static uint8_t gsmDisconnectCount = 0;
-    };
 }
 
 SemaphoreHandle_t rtcmBufferMutex = nullptr;
@@ -44,7 +36,7 @@ SemaphoreHandle_t tcpStreamMutex = nullptr;
 SemaphoreHandle_t gnssSerialMutex = nullptr;
 
 void initPrefs();
-static void serviceMqtt(const bool reconnect);
+static void serviceMqtt();
 static void settleModemBeforeNtrip();
 static bool tryWifiFallback(bool protocolsRunning);
 static void checkSimInternetFallback();
@@ -171,7 +163,7 @@ void setup()
         else
         {
             Serial.println("[SETUP] Su dung ket noi SIM/GSM");
-            DeviceRuntime::gsmDisconnectCount = 0;
+
             networkConnected = startSIM() && connectGSM(1);
             if (!networkConnected)
                 networkConnected = tryWifiFallback(false);
@@ -180,13 +172,13 @@ void setup()
         {
             Serial.println("[SETUP] Ket noi mang thanh cong!");
             setupNTRIP();
-            DeviceRuntime::ntripDisconnectCount = 0;
+
             if (isGsmConnection())
             {
                 settleModemBeforeNtrip();
             }
             connectNTRIP();
-            DeviceRuntime::mqttDisconnectCount = 0;
+
             setupMQTT();
         }
         else
@@ -260,7 +252,7 @@ __attribute__((noreturn)) void taskNtrip([[maybe_unused]] void *parameter)
                 vTaskDelay(pdMS_TO_TICKS(1000));
                 continue;
             }
-            DeviceRuntime::gsmDisconnectCount = 0;
+
         }
         if (xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)))
         {
@@ -329,7 +321,7 @@ __attribute__((noreturn)) void taskMQTT([[maybe_unused]] void *parameter)
         if (tcpStreamMutex && xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)))
         {
             checkSimInternetFallback();
-            serviceMqtt(true);
+            serviceMqtt();
             checkSimInternetFallback();
             backendAgent.loop();
             logNetworkStatus();
@@ -361,26 +353,16 @@ void loop()
 #if RTCM_COMMUNICATION_PROTOCOL == TCP_IP
             stopNtrip();
 #endif
-            if (tryWifiFallback(true))
+            if (!tryWifiFallback(true) && connectGSM(1))
             {
-                DeviceRuntime::gsmDisconnectCount = 0;
-            }
-            else if (connectGSM(1))
-            {
-                DeviceRuntime::gsmDisconnectCount = 0;
 #if RTCM_COMMUNICATION_PROTOCOL == TCP_IP
                 setupNTRIP();
                 connectNTRIP();
 #endif
             }
-            else
-            {
-                ++DeviceRuntime::gsmDisconnectCount;
-            }
         }
         else
         {
-            DeviceRuntime::gsmDisconnectCount = 0;
             digitalWrite(LED_PIN, LOW);
             checkSimInternetFallback();
         }
@@ -405,6 +387,7 @@ void loop()
 }
 
 // Called with the shared modem mutex held once worker tasks are running.
+
 /** @brief Implements tryWifiFallback. */
 static bool tryWifiFallback(bool protocolsRunning)
 {
@@ -424,6 +407,7 @@ static bool tryWifiFallback(bool protocolsRunning)
 }
 
 // Both switching directions close old sockets before selecting new clients.
+
 /** @brief Implements activateNetwork. */
 static void activateNetwork(ConnectionType type, bool protocolsRunning)
 {
@@ -443,6 +427,7 @@ static void activateNetwork(ConnectionType type, bool protocolsRunning)
 }
 
 // Only Wi-Fi entered through SIM fallback is eligible for automatic return.
+
 /** @brief Implements checkSimRecovery. */
 static void checkSimRecovery()
 {
@@ -562,20 +547,14 @@ void initPrefs()
 }
 
 /** @brief Implements serviceMqtt. */
-static void serviceMqtt(const bool reconnect)
+static void serviceMqtt()
 {
     if (mqtt.connected())
     {
-        DeviceRuntime::mqttDisconnectCount = 0;
         mqtt.loop();
         return;
     }
 
     backendAgent.onMqttDisconnected();
-    if (reconnect)
-    {
-        if (DeviceRuntime::mqttDisconnectCount < 255)
-            ++DeviceRuntime::mqttDisconnectCount;
-        connectMQTT();
-    }
+    connectMQTT();
 }

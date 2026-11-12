@@ -507,13 +507,15 @@ void BackendAgent::pollGnssStatus()
                 navigationMs_ = millis();
                 markStatusDirty();
             }
-            versionReadback_.clear();
-            versionReadbackError_.clear();
-            error.clear();
-            if (!UbloxReadback::readVersion(versionReadback_, error))
-                versionReadbackError_ = error;
-            receiverInfoMs_ = millis();
-            markStatusDirty();
+            if (versionReadback_.isEmpty())
+            {
+                versionReadbackError_.clear();
+                error.clear();
+                if (!UbloxReadback::readVersion(versionReadback_, error))
+                    versionReadbackError_ = error;
+                receiverInfoMs_ = millis();
+                markStatusDirty();
+            }
             String satellites;
             if (UbloxReadback::readSatellites(satellites, error))
             {

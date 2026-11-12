@@ -291,7 +291,7 @@ void BackendAgent::appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapsh
     doc["gnss_rf"] = nullptr;
     doc["gnss_spectrum"] = nullptr;
     doc["gnss_rf_monitor"] = nullptr;
-    if (sensorType_ == "Ublox" && receiverInfoMs_ && nowMs - receiverInfoMs_ <= 45000UL)
+    if (sensorType_ == "Ublox" && receiverInfoMs_ && (!versionReadback_.isEmpty() || nowMs - receiverInfoMs_ <= 45000UL))
     {
         JsonObject receiver = doc.createNestedObject("gnss_receiver");
         receiver["source"] = "ubx_mon_ver";
@@ -459,7 +459,7 @@ String BackendAgent::buildStatusPayload()
         gnssVerification_.clear();
     if (!satelliteReadback_.isEmpty() && millis() - satelliteReadbackMs_ > 45000UL)
         satelliteReadback_.clear();
-    if (receiverInfoMs_ && millis() - receiverInfoMs_ > 45000UL)
+    if (versionReadback_.isEmpty() && receiverInfoMs_ && millis() - receiverInfoMs_ > 45000UL)
     {
         versionReadback_.clear();
         versionReadbackError_.clear();

@@ -30,7 +30,6 @@ bool xSemaphoreTake(void *, int) { if (!lockOk) return false; ++locks; return tr
 void xSemaphoreGive(void *) { ++unlocks; }
 void vTaskDelay(int) {}
 void digitalWrite(int, int) {}
-namespace DeviceRuntime { int gsmDisconnectCount = 0; }
 uint32_t now = 1000, lastSimProbeMs = 0;
 int simRecoverySuccesses = 0, wifiAttempts = 0, probes = 0;
 std::string events;
@@ -96,9 +95,9 @@ int main() {
     lockOk = false; const int oldLocks = locks; loop();
     assert(locks == oldLocks && events.empty());
     lockOk = true; loop();
-    assert(DeviceRuntime::gsmDisconnectCount == 1 && events == "N");
+    assert(events == "N");
     gsmOk = true; events.clear(); loop();
-    assert(gprsUp && DeviceRuntime::gsmDisconnectCount == 0 && events == "NSC");
+    assert(gprsUp && events == "NSC");
     connectionType = ConnectionType::WIFI; wifiFallbackActive = false;
     wifiConnected = false; wifiOk = true; mqttUp = ntripUp = true; events.clear();
     loop();

@@ -298,8 +298,6 @@ String BackendAgent::normalAgentState() const
 }
 
 String BackendAgent::serviceConfigJson() const { return serviceConfig_; }
-String BackendAgent::baseConfigJson() const { return baseConfig_; }
-String BackendAgent::licenseToken() const { return licenseToken_; }
 
 String BackendAgent::statusTopic() const
 {
@@ -709,11 +707,6 @@ void BackendAgent::handleWebsocketText(const String &message)
     handleCommand("websocket", message);
 }
 
-void BackendAgent::publishTextFallback(const String &message)
-{
-    if (websocketConnected())
-        websocket_->sendText(message);
-}
 
 bool backendDeviceLocked(uint8_t serverId) { return serverId == 0 ? backendAgent.isLocked() : backendAgent.isServerLocked(serverId); }
 bool backendControlPlaneFailOpen() { return backendAgent.controlPlaneFailOpen(); }

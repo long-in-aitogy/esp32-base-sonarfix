@@ -61,8 +61,6 @@ public:
     bool workflowActive() const { return workflowTask_ != nullptr; }
 
     String serviceConfigJson() const;
-    String baseConfigJson() const;
-    String licenseToken() const;
 
     // Resolve per-server stream activation from service settings and fail-open state.
     static bool effectiveStreamActive(const JsonObjectConst &service,
@@ -303,7 +301,6 @@ private:
     void publishConfigState(const char *kind);
     bool applyServiceStreamCommand(JsonObject payload, String &error);
     bool executeRawCommands(JsonArray commands, String &error, const String &sensorType = String());
-    void publishTextFallback(const String &message);
 
     friend class BackendAgentWebsocket;
 };

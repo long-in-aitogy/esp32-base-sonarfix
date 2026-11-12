@@ -922,7 +922,7 @@ bool BackendAgent::completeAutoBaseSetup(
         parameters["resN"] = numberText(datum.resN); parameters["resE"] = numberText(datum.resE); parameters["resHS"] = numberText(datum.resHS);
     }
     else
-        report["parameter_source"] = transformed ? "legacy_fixed" : "not_used";
+        report["parameter_source"] = "not_used";
     if (report.overflowed())
     {
         failureReason = "Auto Base report exceeds memory capacity";
