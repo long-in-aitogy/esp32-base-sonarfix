@@ -49,6 +49,11 @@ int main() {
     assert(!agent.executeStreamCommand(large.as<JsonObject>(), error, detail));
     assert(error == "service configuration exceeds memory capacity" && agent.serviceConfig_ == current);
     assert(setups == 1 && connections == 1);
+    agent.serviceConfig_ = String("{\"legacy\":\"") + String(std::string(2000, 'x')) + "\"}";
+    const String legacy = agent.serviceConfig_;
+    assert(!agent.executeStreamCommand(request.as<JsonObject>(), error, detail));
+    assert(error == "service configuration exceeds memory capacity" && agent.serviceConfig_ == legacy);
+    assert(setups == 1 && connections == 1);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='stream-persistence-') as directory:

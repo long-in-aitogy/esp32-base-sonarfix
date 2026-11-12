@@ -181,7 +181,13 @@ void BackendAgent::publishConfigState(const char *kind)
 bool BackendAgent::applyServiceStreamCommand(JsonObject payload, String &error)
 {
     DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
-    if (deserializeJson(serviceDoc, serviceConfig_) != DeserializationError::Ok || !serviceDoc.is<JsonObject>())
+    const auto parseError = deserializeJson(serviceDoc, serviceConfig_);
+    if (parseError == DeserializationError::NoMemory)
+    {
+        error = "service configuration exceeds memory capacity";
+        return false;
+    }
+    if (parseError != DeserializationError::Ok || !serviceDoc.is<JsonObject>())
     {
         serviceDoc.to<JsonObject>();
     }
@@ -434,7 +440,13 @@ bool BackendAgent::executeServiceConfigCommand(JsonObject payload, String &error
         return false;
     }
     DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
-    if (deserializeJson(serviceDoc, serviceConfig_) != DeserializationError::Ok || !serviceDoc.is<JsonObject>())
+    const auto parseError = deserializeJson(serviceDoc, serviceConfig_);
+    if (parseError == DeserializationError::NoMemory)
+    {
+        error = "service configuration exceeds memory capacity";
+        return false;
+    }
+    if (parseError != DeserializationError::Ok || !serviceDoc.is<JsonObject>())
     {
         serviceDoc.clear();
         serviceDoc.to<JsonObject>();

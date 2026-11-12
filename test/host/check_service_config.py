@@ -86,6 +86,12 @@ int main() {
     agent.active = false;
     assert(agent.executeBasicCommand("PROVISION_DEVICE", provision.as<JsonObject>(), error, detail));
     assert(setups == 4 && connections == 4);
+    agent.serviceConfig_ = String("{\"legacy\":\"") + String(std::string(7000, 'x')) + "\"}";
+    const String legacy = agent.serviceConfig_;
+    request["port1"] = 2101;
+    assert(!agent.executeServiceConfigCommand(request.as<JsonObject>(), error, detail));
+    assert(error == "service configuration exceeds memory capacity" && agent.serviceConfig_ == legacy);
+    assert(setups == 4 && connections == 4);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='service-config-') as directory:
