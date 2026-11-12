@@ -118,6 +118,7 @@ namespace BackendAgentInternal
         migrated &= copyString("LICENSE_KEY");
         migrated &= copyString("CMD_RESULT");
         migrated &= copyString("PROGRESS_JSON");
+        migrated &= copyString("SURVEY_RESULT");
         if (migrated)
             migrated = backendPrefs.putBool("MIGRATED", true) == 1;
         prefs.end();
