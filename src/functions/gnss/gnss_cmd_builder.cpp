@@ -53,7 +53,7 @@ namespace GnssCmdBuilder
 /** @brief Implements commandListToBytes. */
     Command commandListToBytes(const CommandList &commands)
     {
-        auto totalSize = 0;
+        size_t totalSize = 0;
         for (const Command &command : commands)
             totalSize += command.size();
 
