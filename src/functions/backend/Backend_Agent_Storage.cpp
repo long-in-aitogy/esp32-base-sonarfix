@@ -16,6 +16,19 @@ namespace BackendAgentInternal
     Preferences backendPrefs;
     bool useDedicatedBackendPrefs = false;
 
+    String restoreWorkflowProgress(const String &saved)
+    {
+        DynamicJsonDocument progress(CONFIG_DOCUMENT_SIZE);
+        if (deserializeJson(progress, saved) != DeserializationError::Ok)
+            return "{}";
+        const String phase = progress["phase"] | String();
+        if (phase == "ready_for_review" || phase == "completed" || phase == "failed" ||
+            phase == "stopped" || phase == "reference_check_completed" ||
+            phase == "reference_check_failed" || phase == "reprojected")
+            return saved;
+        return "{}";
+    }
+
     bool enforceBaseAccuracy(JsonObject base)
     {
         const bool survey = base["base_setup_method"] == "SURVEY_IN";
@@ -178,7 +191,7 @@ void BackendAgent::loadPreferences()
     serviceConfig_ = statePrefs.getString("SERVICE_JSON", "{}");
     licenseToken_ = statePrefs.getString("LICENSE_KEY", "");
     lastCommandResult_ = statePrefs.getString("CMD_RESULT", "{}");
-    autoBaseProgress_ = statePrefs.getString("PROGRESS_JSON", "{}");
+    autoBaseProgress_ = restoreWorkflowProgress(statePrefs.getString("PROGRESS_JSON", "{}"));
     surveyInResult_ = statePrefs.isKey("SURVEY_RESULT") ? statePrefs.getString("SURVEY_RESULT") : "{}";
     statePrefs.end();
     if (baseAccuracyChanged)
