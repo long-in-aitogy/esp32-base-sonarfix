@@ -4,6 +4,7 @@
 #include "Prog_Config.h"
 #include "hardware/Sim_handler.h"
 
+Preferences prefs;
 TinyGsmClient testClient(modem);
 
 void setUp(void)
@@ -31,8 +32,8 @@ void test_TCP_connection()
 
 void setup()
 {
-    UNITY_BEGIN();
     Serial.begin(115200);
+    UNITY_BEGIN();
     SerialAT.begin(115200, SERIAL_8N1, RX_TO_MODEM_TX, TX_TO_MODEM_RX);
     delay(2000);
 
@@ -43,6 +44,7 @@ void setup()
     // Run the test cases
     RUN_TEST(test_startSIM);
     RUN_TEST(test_TCP_connection);
+    UNITY_END();
 }
 
 void loop()
