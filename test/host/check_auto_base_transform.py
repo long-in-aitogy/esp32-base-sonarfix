@@ -15,6 +15,8 @@ run_end = workflow.index('\nbool BackendAgent::prepareReferenceCheckConfig(', fu
 run_method = workflow[full_end:run_end].replace('completeAutoBaseSetup(', 'completeAutoBaseSetupFull(')
 sampling = workflow[workflow.index('bool BackendAgent::waitForAutoBaseFix('):workflow.index('String BackendAgent::buildAutoBaseResult(')]
 reference_methods = workflow[workflow.index('bool BackendAgent::waitForReferenceFix('):]
+auto_config = workflow[workflow.index('bool BackendAgent::prepareAutoBaseConfig('):workflow.index('bool BackendAgent::startAutoBaseRover(')]
+reference_config = workflow[workflow.index('bool BackendAgent::prepareReferenceCheckConfig('):workflow.index('bool BackendAgent::startReferenceRover(')]
 result_method = workflow[workflow.index('String BackendAgent::buildAutoBaseResult('):begin]
 result_method = result_method.replace('BackendAgent::buildAutoBaseResult(', 'BackendAgent::buildRealAutoBaseResult(', 1)
 config_start = workflow.index('    DynamicJsonDocument baseConfig(CONFIG_DOCUMENT_SIZE);', begin)
@@ -40,9 +42,11 @@ int tcpStreamMutex = 1; constexpr int MUTEX_TIMEOUT_MS = 1500, pdTRUE = 1;
 constexpr size_t CONFIG_DOCUMENT_SIZE = 6144, AUTO_BASE_RESULT_SIZE = 6144, PROGRESS_DOCUMENT_SIZE = 8192;
 uint32_t now = 1000;
 uint32_t millis() { return now; }
+template<class T, class L, class H> T constrain(T value, L low, H high) { return value < low ? T(low) : value > high ? T(high) : value; }
 int pdMS_TO_TICKS(int n) { return n; }
 void vTaskDelay(int ticks) { now += ticks; }
 uint32_t disconnectAt = 0;
+bool sourceAvailable = true;
 const char *ntripRoverLastError() { return "caster disconnected"; }
 struct GnssTelemetrySnapshot {
     uint32_t lastGgaMs; std::array<char, 16> fixStatus; double latitude, longitude, altitude;
@@ -99,21 +103,14 @@ struct BackendAgent {
     bool restartConfiguredNtrip() { return restartOk; }
     bool applyRoverMode() { return true; }
     int loopNtripRoverLocked() { return disconnectAt && now >= disconnectAt ? 504 : 200; }
-    bool prepareAutoBaseConfig(JsonObject, String &host, uint16_t &port, String &user, String &password, String &mountpoint, uint8_t &version, uint32_t &timeout, uint8_t &streak) {
-        host = "other-caster.example"; port = 2101; user = "user"; password = "password"; mountpoint = "station"; version = 1; timeout = 30; streak = 5; return true;
-    }
-    bool startAutoBaseRover(const String &, uint16_t, const String &, const String &, const String &, uint8_t, String &, String *selected) {
+    bool prepareAutoBaseConfig(JsonObject, String &, uint16_t &, String &, String &, String &, uint8_t &, uint32_t &, uint8_t &);
+    bool startAutoBaseRover(const String &, uint16_t, const String &, const String &, const String &, uint8_t, String &error, String *selected) {
+        if (!sourceAvailable) { error = "ERROR - NO STATION WITHIN 20 KM"; return false; }
         if (selected) *selected = "station";
         return true;
     }
-    bool prepareReferenceCheckConfig(JsonObject payload, JsonObject &reference, double &lat, double &lon, double &alt,
-                                     double &oldLat, double &oldLon, double &oldAlt, String &host, uint16_t &port,
-                                     String &user, String &password, String &mountpoint, uint32_t &timeout, uint16_t &samples) {
-        reference = payload["reference_coords"].as<JsonObject>();
-        lat = oldLat = 21; lon = oldLon = 105; alt = oldAlt = 10;
-        host = "other-caster.example"; port = 2101; user = "user"; password = "password"; mountpoint = "station";
-        timeout = 30; samples = 5; return !reference.isNull();
-    }
+    bool prepareReferenceCheckConfig(JsonObject, JsonObject &, double &, double &, double &, double &, double &, double &,
+                                     String &, uint16_t &, String &, String &, String &, uint32_t &, uint16_t &);
     bool startReferenceRover(const String &, uint16_t, const String &, const String &, const String &, String &) { return true; }
     void setAgentState(const String &) {}
     String normalAgentState() { return "online"; }
@@ -298,6 +295,7 @@ int main() {
     allowLock = true;
     BackendAgent full;
     DynamicJsonDocument fullRequest(512); fullRequest["ip"] = "other-caster.example"; fullRequest["auto_apply"] = true;
+    fullRequest["port"] = 2101; fullRequest["user"] = "user"; fullRequest["password"] = "password"; fullRequest["mountpoint"] = "station";
     const String previous = full.baseConfig_;
     assert(full.completeAutoBaseSetupFull(fullRequest.as<JsonObject>(), lat, lon, alt, resultJson, error, "station"));
     DynamicJsonDocument finalConfig(8192), finalResult(8192);
@@ -324,6 +322,14 @@ int main() {
     assert(finalConfig["base_setup_method"] == "FIXED_LLA" && finalConfig["accuracy"] == 5);
     finalResult.clear(); assert(!deserializeJson(finalResult, workflow.phaseDetails));
     assert(finalResult["sample_count"] == 60 && finalResult["source_mountpoint"] == "station");
+    now = 1000; sourceAvailable = false; BackendAgent fallback;
+    assert(fallback.runAutoBaseWorkflow(fullRequest.as<JsonObject>()));
+    finalConfig.clear(); assert(!deserializeJson(finalConfig, fallback.baseConfig_));
+    assert(fallback.phase == "completed" && finalConfig["base_setup_method"] == "SURVEY_IN" && finalConfig["accuracy"] == 5);
+    sourceAvailable = true;
+    fullRequest["port"] = 0; BackendAgent invalidAuto;
+    assert(!invalidAuto.runAutoBaseWorkflow(fullRequest.as<JsonObject>()) && invalidAuto.configWrites == 0 && invalidAuto.phase == "failed");
+    fullRequest["port"] = 2101;
     now = 1000; disconnectAt = 7000;
     BackendAgent disconnected;
     assert(!disconnected.runAutoBaseWorkflow(fullRequest.as<JsonObject>()));
@@ -340,11 +346,17 @@ int main() {
     referenceRequest["reference_coords"]["lat"] = 21;
     referenceRequest["reference_coords"]["lon"] = 105;
     referenceRequest["reference_coords"]["alt"] = 10;
+    referenceRequest["ip"] = "other-caster.example"; referenceRequest["port"] = 2101;
+    referenceRequest["user"] = "user"; referenceRequest["password"] = "password"; referenceRequest["mountpoint"] = "station";
+    referenceRequest["samples"] = 5;
     now = 1000; BackendAgent reference;
     assert(reference.runReferenceCheckWorkflow(referenceRequest.as<JsonObject>()));
     assert(reference.phase == "reference_check_completed" && reference.baseConfig_ == previous && reference.configWrites == 1);
     finalResult.clear(); assert(!deserializeJson(finalResult, reference.phaseDetails));
     assert(finalResult["sample_count"] == 5 && finalResult["delta_n_m"] == 0 && finalResult["delta_e_m"] == 0);
+    referenceRequest["reference_coords"]["lat"] = 91; BackendAgent invalidReference;
+    assert(!invalidReference.runReferenceCheckWorkflow(referenceRequest.as<JsonObject>()) && invalidReference.configWrites == 0);
+    referenceRequest["reference_coords"]["lat"] = 21;
     now = 1000; disconnectAt = 3000; BackendAgent referenceDisconnected;
     assert(!referenceDisconnected.runReferenceCheckWorkflow(referenceRequest.as<JsonObject>()));
     assert(referenceDisconnected.phase == "reference_check_failed" && referenceDisconnected.baseConfig_ == previous && referenceDisconnected.configWrites == 1);
@@ -352,7 +364,7 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='auto-base-transform-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(harness + json_bool + validation + result_method + method + full_method + sampling + run_method + reference_methods + candidate + checks)
+    (path / 'check.cpp').write_text(harness + json_bool + validation + result_method + method + full_method + auto_config + sampling + run_method + reference_config + reference_methods + candidate + checks)
     subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / 'test/host'), '-I' + str(root / 'include'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)

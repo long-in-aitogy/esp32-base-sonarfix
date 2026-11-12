@@ -54,7 +54,8 @@ namespace
             jsonBool(service, "stream_on_demand", false));
         if (!active && !onDemand)
             return;
-        service[(prefix + "_stream_active").c_str()] = active;
+        const String activeKey = prefix + "_stream_active";
+        service[activeKey] = active;
         if (active && !mountpoint.isEmpty())
         {
             service["active_mountpoint"] = mountpoint;
