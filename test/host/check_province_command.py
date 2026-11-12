@@ -6,6 +6,9 @@ import tempfile
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Commands.cpp').read_text()
 method = source[source.index('bool BackendAgent::executeProvinceCommand('):source.index('bool BackendAgent::executeBasicCommand(')]
+projection = (root / 'src/functions/backend/Backend_Agent_Projection.cpp').read_text()
+catalog = projection[projection.index('    struct ProvinceProjection'):projection.index('    struct EcefCoordinate')]
+lookup = projection[projection.index('bool BackendAgent::getProvinceProjection('):projection.index('bool BackendAgent::transformToVn2000(')]
 harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -32,11 +35,7 @@ struct BackendAgent {
     int writes = 0, saves = 0, publishes = 0;
     double transformedInput = 0, sentLatitude = 0, usedMeridian = 0;
     bool workflowActive() { return active; }
-    bool getProvinceProjection(const String &p, double &meridian, double &scale, String &name, std::array<double, 3> &meridians) {
-        if (p != "HN" && p != "PHU_THO_VPHUC_HBINH") return false;
-        meridian = p == "HN" ? 105 : 104.75; scale = 0.9999; name = p;
-        meridians = p == "HN" ? std::array<double, 3>{105, 0, 0} : std::array<double, 3>{104.75, 105, 106}; return true;
-    }
+    bool getProvinceProjection(const String &, double &, double &, String &, std::array<double, 3> &) const;
     bool transformToVn2000(double lat, double lon, double alt, double meridian, double, ProjectedPosition &r) {
         transformedInput = lat; usedMeridian = meridian; r = {lat + 0.01, lon, alt, 10, 20, 30}; return true;
     }
@@ -55,7 +54,7 @@ struct BackendAgent {
 '''
 checks = r'''
 int main() {
-    BackendAgent agent; DynamicJsonDocument request(256); request["province_code"] = "hn";
+    BackendAgent agent; DynamicJsonDocument request(256); request["province_code"] = "ha_noi";
     String error, detail; const String original = agent.baseConfig_;
     agent.active = true;
     assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail) && agent.writes == 0);
@@ -111,11 +110,13 @@ int main() {
     assert(agent.usedMeridian == 106);
     request["l0_deg"] = 105; assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
     assert(agent.usedMeridian == 105);
+    request.remove("l0_deg"); request["province_code"] = "LAI_CHAU";
+    assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail) && agent.usedMeridian == 103);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='esp-province-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(harness + method + checks)
+    (path / 'check.cpp').write_text(harness + catalog + lookup + method + checks)
     subprocess.run(['c++', '-std=c++17', '-fsanitize=address,undefined', '-I' + str(root / 'test/host'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'), str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     subprocess.run([str(path / 'check')], check=True)
 print('PASS: province change preserves original coordinates, requires readback and handles save failure')
