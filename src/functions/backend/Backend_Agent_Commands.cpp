@@ -774,8 +774,10 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
         : "Collect RTK Fixed LLH; results wait for review.";
     String progressJson;
     serializeJson(progress, progressJson);
-    const String previousState = agentState_, previousProgress = autoBaseProgress_;
-    const String previousStartupState = baseStartupState_, previousStartupError = baseStartupError_;
+    const String previousState = agentState_;
+    const String previousProgress = autoBaseProgress_;
+    const String previousStartupState = baseStartupState_;
+    const String previousStartupError = baseStartupError_;
     setAgentState("auto_setup_queued");
     setWorkflowProgress("queued", 0, 4, progressJson);
     if (sourceMode == "nearest")
@@ -817,7 +819,8 @@ bool BackendAgent::executeReferenceCheckCommand(JsonObject payload, String &erro
     }
     String workflowPayload;
     serializeJson(payload, workflowPayload);
-    const String previousState = agentState_, previousProgress = autoBaseProgress_;
+    const String previousState = agentState_;
+    const String previousProgress = autoBaseProgress_;
     setAgentState("reference_check_queued");
     setWorkflowProgress("reference_check_queued", 0, 4);
     if (!startWorkflow("reference_check", workflowPayload))

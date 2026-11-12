@@ -270,7 +270,8 @@ void BackendAgent::startBootAutoBaseWhenReady()
     request["enable_itrf_vn2000_transform"] = false;
     request["timeout"] = 3600;
     request["samples"] = 60;
-    String error, detail;
+    String error;
+    String detail;
     baseStartupState_ = "auto_base_running";
     if (!executeAutoBaseCommand(request.as<JsonObject>(), error, detail))
     {

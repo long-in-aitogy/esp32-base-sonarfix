@@ -77,14 +77,17 @@ bool BackendAgent::verifyUnicoreConfig(JsonObjectConst payload, const String &co
         JsonObject group = groups.createNestedObject(name);
         group["checked"] = 0; group["mismatched"] = 0; group["unread"] = 0;
     }
-    String mode, modeError;
+    String mode;
+    String modeError;
     bool positionRead = UnicoreReadback::readMode(mode, modeError);
     if (positionRead) actualPosition["mode"] = mode;
     if (positionRead && String(UnicoreReadback::modeKind(mode)) != "base") {
         groups["fixed"]["checked"] = 1;
         groups["fixed"]["mismatched"] = 1;
     } else if (positionRead) {
-        double lat = 0, lon = 0, alt = 0;
+        double lat = 0;
+        double lon = 0;
+        double alt = 0;
         positionRead = UnicoreConfigVerification::parseFixedMode(mode.c_str(), lat, lon, alt);
         if (positionRead) {
             JsonObject positionDetails = actualPosition.createNestedObject("self_position");
@@ -102,7 +105,8 @@ bool BackendAgent::verifyUnicoreConfig(JsonObjectConst payload, const String &co
         }
     }
     if (!positionRead) { groups["fixed"]["unread"] = 1; result["mode_error"] = modeError; }
-    String rawLogs, outputError;
+    String rawLogs;
+    String outputError;
     std::vector<UnicoreConfigVerification::Log> logs;
     bool logsRead = UnicoreReadback::readLogList(rawLogs, outputError)
         && UnicoreConfigVerification::parseLogs(rawLogs.c_str(), rawLogs.length(), logs);
@@ -152,7 +156,8 @@ bool BackendAgent::verifyUnicoreConfig(JsonObjectConst payload, const String &co
         groups["diagnostics"]["unread"] = groups["rtcm"]["unread"] = 1;
         result["output_error"] = outputError;
     }
-    bool mismatch = false, unread = false;
+    bool mismatch = false;
+    bool unread = false;
     for (JsonPair group : groups) {
         mismatch |= group.value()["mismatched"].as<unsigned>() > 0;
         unread |= group.value()["unread"].as<unsigned>() > 0;
@@ -184,7 +189,8 @@ void describeTmode(JsonObject object, const uint8_t *raw) {
 
 bool BackendAgent::verifyGnssConfig(JsonObjectConst payload, const String &commandId, String &error) {
     gnssVerification_.clear();
-    uint8_t expectedMode[40], expectedOutput[UbxConfigVerification::MAX_KEYS * 5];
+    uint8_t expectedMode[40];
+    uint8_t expectedOutput[UbxConfigVerification::MAX_KEYS * 5];
     const size_t modeLength = decodeBase64(payload["tmode_b64"] | "", expectedMode, sizeof(expectedMode));
     const size_t outputLength = decodeBase64(payload["output_b64"] | "", expectedOutput, sizeof(expectedOutput));
     if (modeLength != 40 || expectedMode[2] != 2 || expectedMode[3] != 1
@@ -196,8 +202,10 @@ bool BackendAgent::verifyGnssConfig(JsonObjectConst payload, const String &comma
     const uint32_t accuracy = static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000);
     for (size_t i = 0; i < 4; ++i)
         expectedMode[20 + i] = static_cast<uint8_t>(accuracy >> (8 * i));
-    uint8_t actualMode[40] = {}, values[UbxConfigVerification::MAX_KEYS] = {};
-    String modeError, outputError;
+    uint8_t actualMode[40] = {};
+    uint8_t values[UbxConfigVerification::MAX_KEYS] = {};
+    String modeError;
+    String outputError;
     const bool modeRead = UbloxReadback::readTmode(actualMode, modeError);
     const JsonObjectConst inspection = payload["readback"].as<JsonObjectConst>();
     bool interfaceRead = false;
@@ -227,7 +235,8 @@ bool BackendAgent::verifyGnssConfig(JsonObjectConst payload, const String &comma
             const int portIndex = name == "I2C" ? 0 : name == "UART1" ? 1 : name == "UART2" ? 2 : name == "USB" ? 3 : name == "SPI" ? 4 : -1;
             if (portIndex < 0 || (seen & (1U << portIndex))) { error = "Invalid GNSS readback port"; return false; }
             seen |= 1U << portIndex;
-            uint8_t records[UbxConfigVerification::MAX_KEYS * 5], observed[UbxConfigVerification::MAX_KEYS];
+            uint8_t records[UbxConfigVerification::MAX_KEYS * 5];
+            uint8_t observed[UbxConfigVerification::MAX_KEYS];
             const size_t length = decodeBase64(request["output_b64"] | "", records, sizeof(records));
             if (length != fields.size() * 5 || !UbxConfigVerification::validExpected(records, length)) {
                 error = "Invalid GNSS readback keys"; return false;
@@ -291,7 +300,8 @@ bool BackendAgent::verifyGnssConfig(JsonObjectConst payload, const String &comma
         protocols[count] = protocols[count].as<unsigned>() + 1;
         if (interfaceRead && interfaceEnabled != 1) protocols["mismatched"] = protocols["mismatched"].as<unsigned>() + 1;
     }
-    bool mismatch = false, unread = false;
+    bool mismatch = false;
+    bool unread = false;
     for (JsonPair group : groups) {
         mismatch |= group.value()["mismatched"].as<unsigned>() > 0;
         unread |= group.value()["unread"].as<unsigned>() > 0 || !group.value()["checked"].as<unsigned>();

@@ -62,7 +62,8 @@ void appendStorageStatus(JsonObject system) {
     const char *partition = BackendAgentInternal::backendPreferencesPartition();
     const char *space = strcmp(partition, "nvs") == 0 ? "myPrefs" : "backend";
     if (nvs_open_from_partition(partition, space, NVS_READONLY, &handle) == ESP_OK) {
-        size_t count = 0, length = 0;
+        size_t count = 0;
+        size_t length = 0;
         for (const char *key : {"PROGRESS_JSON"}) {
             if (nvs_get_str(handle, key, nullptr, &length) == ESP_OK && length > 3) ++count;
         }
@@ -95,8 +96,10 @@ bool saveMigratedWifi(const String &ssid, const String &password) {
     if (!validWifiSsid(ssid) || !validWifiPassword(password)) return false;
     Preferences active;
     if (!active.begin("myPrefs", false)) return false;
-    const bool hadSsid = active.isKey("WIFI_SSID"), hadPassword = active.isKey("WIFI_PASS");
-    const String oldSsid = active.getString("WIFI_SSID", ""), oldPassword = active.getString("WIFI_PASS", "");
+    const bool hadSsid = active.isKey("WIFI_SSID");
+    const bool hadPassword = active.isKey("WIFI_PASS");
+    const String oldSsid = active.getString("WIFI_SSID", "");
+    const String oldPassword = active.getString("WIFI_PASS", "");
     active.putString("WIFI_SSID", ssid);
     active.putString("WIFI_PASS", password);
     const bool saved = active.isKey("WIFI_SSID") && active.isKey("WIFI_PASS")
@@ -267,7 +270,7 @@ bool readNvsInventory(uint32_t offset, const String &commandId, String &output, 
                     if (nvs_open_from_partition(partition, entry.namespace_name, NVS_READONLY, &handle) == ESP_OK) {
                         size_t length = 0;
                         if (nvs_get_str(handle, entry.key, nullptr, &length) == ESP_OK && length <= 8192) {
-                            std::unique_ptr<char[]> text(new char[length]);
+                            auto text = std::make_unique<char[]>(length);
                             DynamicJsonDocument config(12288);
                             if (nvs_get_str(handle, entry.key, text.get(), &length) == ESP_OK
                                 && deserializeJson(config, text.get()) == DeserializationError::Ok) {

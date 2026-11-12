@@ -44,7 +44,8 @@ namespace
             0xB5, 0x62, cls, id, static_cast<uint8_t>(length), 0};
         if (length)
             std::memcpy(poll.data() + 6, payload, length);
-        uint8_t a = 0, b = 0;
+        uint8_t a = 0;
+        uint8_t b = 0;
         for (size_t i = 2; i < length + 6; ++i)
         {
             a += poll[i];

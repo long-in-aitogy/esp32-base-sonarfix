@@ -208,7 +208,8 @@ namespace
             };
             if (star != static_cast<int>(sentence.length()) - 3)
                 return;
-            const int high = hex(sentence[star + 1]), low = hex(sentence[star + 2]);
+            const int high = hex(sentence[star + 1]);
+            const int low = hex(sentence[star + 2]);
             if (high < 0 || low < 0)
                 return;
             uint8_t checksum = 0;

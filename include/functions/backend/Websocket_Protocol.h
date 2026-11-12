@@ -30,7 +30,9 @@ inline bool validUpgrade(const std::string &response, const std::string &accept)
     const auto firstEnd = response.find("\r\n");
     const auto status = response.substr(0, firstEnd);
     if (status != "HTTP/1.1 101" && status.compare(0, 13, "HTTP/1.1 101 ") != 0) return false;
-    bool upgrade = false, connection = false, accepted = false;
+    bool upgrade = false;
+    bool connection = false;
+    bool accepted = false;
     for (size_t start = firstEnd + 2; start + 2 < response.size();) {
         const auto end = response.find("\r\n", start);
         const auto line = response.substr(start, end - start);

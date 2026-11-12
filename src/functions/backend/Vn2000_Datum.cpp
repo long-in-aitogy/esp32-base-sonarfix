@@ -194,7 +194,8 @@ bool transformVn2000(double latitude, double longitude, double altitude,
 namespace {
 struct Bits {
     const uint8_t *data;
-    size_t limit, pos = 36;
+    size_t limit;
+    size_t pos = 36;
     bool ok = true;
     uint64_t u(size_t width) {
         if (width > 63 || pos + width > limit) { ok = false; return 0; }
@@ -268,10 +269,14 @@ void Vn2000Session::decode(size_t length) {
         const double meanB = double(bits.s(8)) * 0.001;
         const double meanL = double(bits.s(8)) * 0.001;
         const double meanH = double(bits.s(15)) * 0.01;
-        double b = 0, l = 0, h = 0;
+        double b = 0;
+        double l = 0;
+        double h = 0;
         // Retain the reference algorithm's central-four residual mean.
         for (int i = 0; i < 16; ++i) {
-            const double db = bits.s(9), dl = bits.s(9), dh = bits.s(9);
+            const double db = bits.s(9);
+            const double dl = bits.s(9);
+            const double dh = bits.s(9);
             if (i == 5 || i == 6 || i == 9 || i == 10) { b += db; l += dl; h += dh; }
         }
         next.resB = (meanB + b * 0.00003 / 4.0) * ARCSEC_TO_RAD;

@@ -111,7 +111,9 @@ namespace BackendAgentInternal
     {
         uint32_t value = 0;
         int bits = -8;
-        size_t outputLength = 0, symbols = 0, padding = 0;
+        size_t outputLength = 0;
+        size_t symbols = 0;
+        size_t padding = 0;
         for (const char character : encoded)
         {
             const auto c = character;

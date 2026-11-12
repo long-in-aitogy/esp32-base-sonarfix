@@ -665,7 +665,8 @@ String BackendAgent::buildAutoBaseResult(
             return String();
         serializeJson(completed, serialized);
     }
-    DynamicJsonDocument checked(AUTO_BASE_RESULT_SIZE), progress(PROGRESS_DOCUMENT_SIZE);
+    DynamicJsonDocument checked(AUTO_BASE_RESULT_SIZE);
+    DynamicJsonDocument progress(PROGRESS_DOCUMENT_SIZE);
     if (deserializeJson(checked, serialized) != DeserializationError::Ok)
         return String();
     checked["source_mountpoint"] = mountpoint;
@@ -845,9 +846,9 @@ bool BackendAgent::completeAutoBaseSetup(
     {
         if (sensorType_ == "Ublox")
         {
-            const double scale = altitude ? 100.0 : 10000000.0;
-            const auto units = UbloxCommands::fixedCoordinateUnits(value, scale);
-            return String(static_cast<double>(units) / (scale * 100.0), altitude ? 4 : 9);
+            const double coordinateScale = altitude ? 100.0 : 10000000.0;
+            const auto units = UbloxCommands::fixedCoordinateUnits(value, coordinateScale);
+            return String(static_cast<double>(units) / (coordinateScale * 100.0), altitude ? 4 : 9);
         }
         if (altitude)
             return String(value, 4);

@@ -32,7 +32,7 @@ bool setupWiFi(bool (*validateConnection)()) {
     if (nvs_open("wifi_config", NVS_READONLY, &legacy) == ESP_OK) {
         size_t length = 0;
         if (nvs_get_str(legacy, "profiles", nullptr, &length) == ESP_OK && length > 0 && length <= 3072) {
-            std::unique_ptr<char[]> value(new char[length]);
+            auto value = std::make_unique<char[]>(length);
             if (nvs_get_str(legacy, "profiles", value.get(), &length) == ESP_OK) profiles = value.get();
         }
         nvs_close(legacy);

@@ -35,11 +35,12 @@ inline bool parseLogs(const char *text, size_t length, std::vector<Log> &logs) {
     logs.clear();
     if (!text || length < 12 || length > 4096) return false;
     const std::string_view input(text, length);
-    if (input.find('\0') != input.npos || input.substr(0, 12) != "#UNILOGLIST,") return false;
-    const size_t separator = input.find(';'), checksum = input.rfind('*');
-    if (separator == input.npos) return false;
+    if (input.find('\0') != std::string_view::npos || input.substr(0, 12) != "#UNILOGLIST,") return false;
+    const size_t separator = input.find(';');
+    const size_t checksum = input.rfind('*');
+    if (separator == std::string_view::npos) return false;
     const char *cursor = text + separator;
-    const bool hasChecksum = checksum != input.npos;
+    const bool hasChecksum = checksum != std::string_view::npos;
     const char *end = text + (hasChecksum ? checksum : length);
     if (hasChecksum) {
         if (!validUnicoreLogChecksum(text, length)) return false;
