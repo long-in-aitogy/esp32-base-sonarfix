@@ -21,12 +21,19 @@ int main() {
     DynamicJsonDocument report(2048), decoded(4096);
     report["input_coord"]["lat"]="21.084990131093591";
     report["parameters"]["kT"]="1.00000008613";
+    report["output_coord"]["lat"]="21.0849901310";
+    report["output_coord"]["lon"]="105.7866560000";
+    report["output_coord"]["alt"]="-8.0624";
+    report["calculated_coord"]["lat"]="21.084990131093591";
     report["receiver_write_completed"]=true;
     BackendAgent agent;
     const String result=agent.buildAutoBaseResult(21,105,10,21,105,10,true,true,60,
                                                    "rtcm1025","01","Hanoi",105,0.9999,report.as<JsonObjectConst>());
     assert(!deserializeJson(decoded,result));
     assert(decoded["fixed_samples_only"]==true && decoded["sample_count"]==60);
+    assert(decoded["averaged_coord"]["lat"]=="21.0849901310");
+    assert(decoded["raw_coord"]["lat"]=="21.084990131093591");
+    assert(decoded["calculated_coord"]["lat"]=="21.084990131093591");
     assert(decoded["conversion_report"]["parameters"]["kT"]=="1.00000008613");
     assert(decoded["conversion_report"]["input_coord"]["lat"]=="21.084990131093591");
     assert(decoded["conversion_report"]["receiver_write_completed"]==true);

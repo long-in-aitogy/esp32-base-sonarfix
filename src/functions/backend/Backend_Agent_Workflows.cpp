@@ -729,6 +729,10 @@ String BackendAgent::buildAutoBaseResult(
     completed["raw_itrf_coord"]["lat"] = rawLatitude;
     completed["raw_itrf_coord"]["lon"] = rawLongitude;
     completed["raw_itrf_coord"]["alt"] = rawAltitude;
+    if (report["output_coord"].is<JsonObjectConst>())
+        completed["averaged_coord"].set(report["output_coord"]);
+    completed["raw_coord"].set(report["input_coord"]);
+    completed["calculated_coord"].set(report["calculated_coord"]);
     completed["sample_count"] = sampleCount;
     completed["fixed_samples_only"] = true;
     completed["transform_applied"] = transformed;
