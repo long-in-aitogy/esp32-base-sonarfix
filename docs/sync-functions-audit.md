@@ -61,3 +61,5 @@ Với Unicore, trường JSON `bestpos` hiện được tạo từ bản tin rec
 Phần SIM giữ cách chọn APN của `main`: ưu tiên APN đã lưu, tự nhận diện nhà mạng nếu để trống hoặc `auto`, rồi dùng APN cấu hình nếu không nhận diện được. CORS dùng APN mặc định ngay khi thiếu khóa lưu; không thay hành vi này để tránh bỏ qua lựa chọn nhà mạng trên thiết bị hiện tại. Kiểm tra APN, receiver và các luồng NTRIP liên quan đã được đưa vào CI.
 
 Ngày 12/11/2026, kiểm tra lại tại `afeb4e5`: 71 bài `check_*.py` chạy không cần thiết bị đều đạt; hai bài tích hợp lệnh CORS chạy riêng với bộ tạo lệnh thực cũng đạt. Ba cấu hình firmware `tdm240x_dev_general`, `tdm240x_dev_general_debug` và `tdm240x_dev_general_test` biên dịch thành công. `check_status_flash.py` cần cổng ESP32 thật và chưa được chạy; lúc kiểm tra không có cổng thiết bị phù hợp. Kết quả này không chứng minh hoạt động thực địa hay CI GitHub đã chạy.
+
+Khi đối chiếu lưu NVS với CORS, giữ phần chuyển `SURVEY_RESULT` và thử lưu lại kết quả Survey-In khi ghi thất bại của `main`. Các kiểm tra chuyển dữ liệu, lỗi NVS, che thông tin nhạy cảm và khôi phục tiến độ đã đạt và được bổ sung vào CI. Chưa thay phân vùng lưu trên thiết bị.
