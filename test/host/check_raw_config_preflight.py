@@ -6,9 +6,13 @@ import tempfile
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Commands.cpp').read_text()
 method = source[source.index('bool BackendAgent::executeRawCommand('):source.index('bool BackendAgent::executeAutoBaseCommand(')]
+validator = source[source.index('static bool validateRawCommands('):source.index('bool BackendAgent::executeRawCommands(')]
+codec = (root / 'src/functions/backend/Backend_Agent_Codec.cpp').read_text()
+codec = codec[codec.index('    int base64Value('):codec.index('    bool delayMarker(')]
 harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <array>
 #include <cassert>
 constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
 uint32_t millis() { return 0; }
@@ -46,6 +50,10 @@ int main() {
     assert(error == "Base configuration exceeds memory capacity");
     assert(agent.active && agent.stopped == 0 && agent.sent == 0 && agent.baseConfig_ == "old");
     config["params"].as<JsonObject>().remove("extra");
+    payload["commands_b64"][0] = "bad!";
+    assert(!agent.executeRawCommand(doc, payload, error, detail));
+    assert(agent.active && agent.stopped == 0 && agent.sent == 0 && error == "raw command is not valid base64");
+    payload["commands_b64"][0] = "AQ==";
     agent.failWrite = true;
     assert(!agent.executeRawCommand(doc, payload, error, detail));
     assert(agent.sent == 1 && agent.baseConfig_ == "old" && agent.published == 0);
@@ -61,7 +69,7 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='esp-raw-preflight-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(harness + method + checks)
+    (path / 'check.cpp').write_text(harness + codec + validator + method + checks)
     subprocess.run(['c++', '-std=c++17', '-fsanitize=address,undefined', '-I' + str(root / 'test/host'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'), str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     subprocess.run([str(path / 'check')], check=True)
 print('PASS: raw config validated before GNSS writes, and 5 m preserved on success')

@@ -5,7 +5,7 @@ import tempfile
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Commands.cpp').read_text()
-method = source[source.index('bool BackendAgent::executeRawCommands('):source.index('void BackendAgent::handleCommand(')]
+method = source[source.index('static bool validateRawCommands('):source.index('void BackendAgent::handleCommand(')]
 codec = (root / 'src/functions/backend/Backend_Agent_Codec.cpp').read_text()
 codec = codec[codec.index('    int base64Value('):codec.index('    String licenseCodeFromBase(')]
 harness = r'''
@@ -35,7 +35,7 @@ int main() {
     BackendAgent agent; String error;
     DynamicJsonDocument doc(8192); JsonArray commands = doc.to<JsonArray>();
     commands.add("AQ=="); commands.add("bad!");
-    assert(!agent.executeRawCommands(commands, error, "Ublox"));
+    assert(!validateRawCommands(commands, error));
     assert(writes == 0 && error == "raw command is not valid base64");
     commands[1] = "Ag=="; shortWrite = true;
     assert(!agent.executeRawCommands(commands, error, "Ublox"));

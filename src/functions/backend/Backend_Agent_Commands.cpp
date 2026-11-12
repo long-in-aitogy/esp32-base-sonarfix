@@ -247,7 +247,7 @@ bool BackendAgent::applyLockCommand(JsonObjectConst payload, String &error)
     return true;
 }
 
-bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const String &sensorType)
+static bool validateRawCommands(JsonArray commands, String &error)
 {
     if (commands.isNull() || commands.size() == 0)
     {
@@ -274,6 +274,12 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
             return false;
         }
     }
+    return true;
+}
+
+bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const String &sensorType)
+{
+    std::array<uint8_t, 3072> decoded{};
     for (JsonVariant item : commands)
     {
         const auto encoded = item.as<String>();
@@ -506,6 +512,11 @@ bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload,
             return false;
         }
         serializeJson(baseDoc, updatedConfig);
+    }
+    if (!validateRawCommands(commands, error))
+    {
+        detail = error;
+        return false;
     }
     if (workflowActive())
     {
