@@ -475,6 +475,29 @@ bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload,
     const JsonObject originalConfig = doc["original_config"].as<JsonObject>();
     const auto configuringBase = String(originalConfig["mode"] | "") == "BASE";
     const auto sensorType = originalConfig["sensor_type"] | sensorType_;
+    String updatedConfig;
+    if (!originalConfig.isNull() && !originalConfig["params"].isUnbound())
+    {
+        if (!originalConfig["params"].is<JsonObject>())
+        {
+            error = "Base configuration must be an object";
+            detail = error;
+            return false;
+        }
+        DynamicJsonDocument baseDoc(CONFIG_DOCUMENT_SIZE);
+        baseDoc.set(originalConfig["params"]);
+        JsonObject base = baseDoc.as<JsonObject>();
+        if (!originalConfig["mode"].isUnbound())
+            base["mode"] = originalConfig["mode"];
+        enforceBaseAccuracy(base);
+        if (baseDoc.overflowed())
+        {
+            error = "Base configuration exceeds memory capacity";
+            detail = error;
+            return false;
+        }
+        serializeJson(baseDoc, updatedConfig);
+    }
     if (workflowActive())
     {
         requestWorkflowStop();
@@ -510,22 +533,9 @@ bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload,
         lastReceiverPollMs_ = 0;
         setAgentState(normalAgentState());
     }
-    if (!originalConfig.isNull() && !originalConfig["params"].isUnbound())
+    if (!updatedConfig.isEmpty())
     {
-        DynamicJsonDocument baseDoc(CONFIG_DOCUMENT_SIZE);
-        baseDoc.set(originalConfig["params"]);
-        JsonObject base = baseDoc.as<JsonObject>();
-        if (!originalConfig["mode"].isUnbound())
-            base["mode"] = originalConfig["mode"];
-        enforceBaseAccuracy(base);
-        if (baseDoc.overflowed())
-        {
-            error = "Base configuration exceeds memory capacity";
-            detail = error;
-            return false;
-        }
-        baseConfig_.clear();
-        serializeJson(baseDoc, baseConfig_);
+        baseConfig_ = updatedConfig;
         publishConfigState("base_config_state");
     }
     return true;
