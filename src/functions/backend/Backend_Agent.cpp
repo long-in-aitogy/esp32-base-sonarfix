@@ -542,7 +542,7 @@ void BackendAgent::evaluateControlPlaneFailover()
         recoveryStartedMs_ = 0;
         return;
     }
-    if (statusSequence_ <= 0)
+    if (statusSequence_ <= 0 || workflowActive())
         return;
 
     const uint32_t now = millis();
