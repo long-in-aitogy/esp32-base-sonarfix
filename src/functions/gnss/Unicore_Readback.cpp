@@ -205,6 +205,7 @@ namespace UnicoreReadback
 /** @brief Implements readBestPosition. */
     bool readBestPosition(JsonObject position, String &error)
     {
+        position.remove("state");
         String response;
         if (!queryUnicoreLine("BESTNAVA", "#BESTNAVA,", response, error))
             return false;
@@ -274,7 +275,6 @@ namespace UnicoreReadback
             error = "Unicore BESTNAV coordinates are invalid";
             return false;
         }
-        position["state"] = "ok";
         position["latitude"] = latitude;
         position["longitude"] = longitude;
         position["height_msl"] = height;
@@ -285,6 +285,7 @@ namespace UnicoreReadback
             return false;
         }
         position["undulation"] = undulation;
+        position["state"] = "ok";
         if (!fields[7].isEmpty() && !fields[8].isEmpty())
         {
             const double latSigma = std::strtod(fields[7].c_str(), &end);

@@ -37,8 +37,8 @@ int main() {
     doc.clear(); assert(readBestPosition(doc.to<JsonObject>(), error));
     assert(doc["horizontal_sigma_m"].isNull());
     response = "#BESTNAVA,header;SOL_COMPUTED,FIXEDPOS,21.25,105.75,9.5,1.0,OTHER,0.03,0.04*12345678";
-    doc.clear(); assert(!readBestPosition(doc.to<JsonObject>(), error));
-    assert(error == "Unicore BESTNAV undulation/datum is invalid");
+    assert(!readBestPosition(doc.as<JsonObject>(), error));
+    assert(error == "Unicore BESTNAV undulation/datum is invalid" && doc["state"].isNull());
     checksumOk = false;
     assert(!readBestPosition(doc.to<JsonObject>(), error) && error == "Unicore BESTNAV checksum mismatch");
     queryOk = false;
