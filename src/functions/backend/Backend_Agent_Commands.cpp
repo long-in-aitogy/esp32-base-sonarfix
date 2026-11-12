@@ -8,6 +8,7 @@
 #include "functions/ntrip/RTCM_Receiver.h"
 #include <array>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 
 #include "functions/mqtt/MQTT_Manager.h"
@@ -833,9 +834,20 @@ bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
         rawCoordinates = base["coords"].as<JsonObject>();
     if (rawCoordinates.isNull())
         rawCoordinates = base;
-    const auto rawLatitude = rawCoordinates["lat"] | NAN;
-    const auto rawLongitude = rawCoordinates["lon"] | NAN;
-    const auto rawAltitude = rawCoordinates["alt"] | NAN;
+    const auto coordinate = [](JsonVariantConst value) -> double
+    {
+        if (value.is<const char *>())
+        {
+            const char *text = value.as<const char *>();
+            char *end = nullptr;
+            const double number = std::strtod(text, &end);
+            return end != text && *end == '\0' && std::isfinite(number) ? number : NAN;
+        }
+        return value.is<double>() ? value.as<double>() : NAN;
+    };
+    const double rawLatitude = coordinate(rawCoordinates["lat"]);
+    const double rawLongitude = coordinate(rawCoordinates["lon"]);
+    const double rawAltitude = coordinate(rawCoordinates["alt"]);
     ProjectedPosition result{rawLatitude, rawLongitude, rawAltitude};
     if (province.isEmpty())
     {

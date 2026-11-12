@@ -74,6 +74,16 @@ int main() {
     int writes = agent.writes;
     assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
     assert(agent.writes == writes && error == "original coordinates are missing; cannot transform again");
+    agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":"21.25","lon":"105.75","alt":"10.5"}})";
+    assert(agent.executeProvinceCommand(request.as<JsonObject>(), error, detail));
+    assert(agent.transformedInput == 21.25 && agent.sentLatitude == 21.26);
+    agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":"21bad","lon":"105.75","alt":"10.5"}})";
+    writes = agent.writes;
+    assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail) && agent.writes == writes);
+    agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":true,"lon":"105.75","alt":"10.5"}})";
+    assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail) && agent.writes == writes);
+    agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":"nan","lon":"105.75","alt":"10.5"}})";
+    assert(!agent.executeProvinceCommand(request.as<JsonObject>(), error, detail) && agent.writes == writes);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='esp-province-') as directory:
