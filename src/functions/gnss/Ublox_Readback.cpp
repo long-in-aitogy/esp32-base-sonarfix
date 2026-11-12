@@ -6,6 +6,7 @@
 #include <freertos/semphr.h>
 #include <freertos/task.h>
 #include <array>
+#include <cstring>
 
 extern SemaphoreHandle_t rtcmBufferMutex;
 extern SemaphoreHandle_t gnssSerialMutex;
@@ -71,13 +72,32 @@ namespace
 
 } // namespace
 
+bool UbloxReadback::readTmode(uint8_t *payload, String &error)
+{
+    if (!payload)
+    {
+        error = "Missing CFG-TMODE3 output buffer";
+        return false;
+    }
+    UbxReply reply;
+    if (!query(0x06, 0x71, reply, error))
+        return false;
+    if (reply.length != 48 || reply.frame[6] != 0)
+    {
+        error = "Invalid CFG-TMODE3 response";
+        return false;
+    }
+    std::memcpy(payload, reply.frame.data() + 6, 40);
+    return true;
+}
+
 /** @brief Implements UbloxReadback::readBaseStatus. */
 bool UbloxReadback::readBaseStatus(UbxBaseStatus &status, String &error)
 {
-    UbxReply mode;
-    if (!query(0x06, 0x71, mode, error))
+    std::array<uint8_t, 40> mode{};
+    if (!readTmode(mode.data(), error))
         return false;
-    if (!status.tmode(mode.frame.data() + 6, mode.length - 8))
+    if (!status.tmode(mode.data(), mode.size()))
     {
         error = "Invalid CFG-TMODE3 response";
         return false;
