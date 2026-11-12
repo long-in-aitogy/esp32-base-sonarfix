@@ -39,12 +39,25 @@ int main() {
     Client http; http.wire = "HTTP/1.1 200 OK\r\nServer: caster\r\n\r\n";
     http.wire += char(0xD3);
     assert(waitForNtripResponse(http, nullptr) && http.read() == 0xD3);
+    Client customReason; customReason.wire = "HTTP/1.0 200 Success\r\n\r\n";
+    assert(waitForNtripResponse(customReason, nullptr));
     Client rejected; rejected.wire = "HTTP/1.1 401 Unauthorized\r\n\r\n";
     assert(!waitForNtripResponse(rejected, nullptr));
     assert(now == 0);
+    Client spoofed; spoofed.wire = "HTTP/1.1 401 Unauthorized\r\nX-Diagnostic: HTTP/1.1 200 OK\r\n\r\n";
+    assert(!waitForNtripResponse(spoofed, nullptr));
+    Client wrongStatus; wrongStatus.wire = "HTTP/1.1 2000 OK\r\n\r\n";
+    assert(!waitForNtripResponse(wrongStatus, nullptr));
+    Client partial; partial.wire = "HTTP/1.1 200 OK\r\nServer: caster\r\n";
+    assert(!waitForNtripResponse(partial, nullptr));
+    now = 0;
     Client silent; String error;
     assert(!waitForNtripResponse(silent, &error));
     assert(now == 10000 && !error.isEmpty());
+    now = UINT32_MAX - 500;
+    Client wraparound;
+    assert(!waitForNtripResponse(wraparound, nullptr));
+    assert(now == static_cast<uint32_t>(UINT32_MAX - 500U + 10000U));
 }
 '''
 with tempfile.TemporaryDirectory(prefix='ntrip-handshake-') as directory:

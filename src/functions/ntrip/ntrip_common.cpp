@@ -247,10 +247,10 @@ namespace ntrip_common
     {
         String response;
         response.reserve(512);
-        const uint32_t deadline = millis() + 10000UL;
+        const uint32_t started = millis();
         bool headerComplete = false;
         bool readFailed = false;
-        while ((client.connected() || client.available() > 0) && millis() < deadline && response.length() < 4096 && !headerComplete && !readFailed)
+        while ((client.connected() || client.available() > 0) && millis() - started < 10000UL && response.length() < 4096 && !headerComplete && !readFailed)
         {
             while (client.available() > 0 && response.length() < 4096 && !headerComplete && !readFailed)
             {
@@ -291,7 +291,10 @@ namespace ntrip_common
                 }
             }
         }
-        return response.indexOf("ICY 200 OK") >= 0 || response.indexOf("HTTP/1.1 200 OK") >= 0 || response.indexOf("HTTP/1.0 200 OK") >= 0;
+        return headerComplete && !readFailed
+            && (response == "ICY 200 OK\r\n"
+                || response.indexOf("HTTP/1.1 200 ") == 0 || response.indexOf("HTTP/1.1 200\r\n") == 0
+                || response.indexOf("HTTP/1.0 200 ") == 0 || response.indexOf("HTTP/1.0 200\r\n") == 0);
     }
 
 } // namespace ntrip_common
