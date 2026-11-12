@@ -61,7 +61,10 @@ with tempfile.TemporaryDirectory(prefix='esp32-coverage-') as directory:
     for name in ('service_config', 'backend_queues', 'license_reference_commands', 'control_failover_workflow',
                  'status_matrix', 'backend_save_state', 'autobase_command', 'auto_base_transform',
                  'network_lifecycle', 'unicore_survey_ack', 'ntrip_source_connect', 'workflow_restore',
-                 'unicore_fixed_readback', 'ntrip_handshake', 'gnss_stream', 'mqtt_dispatch', 'stream_targeting'):
+                 'unicore_fixed_readback', 'ntrip_handshake', 'gnss_stream', 'mqtt_dispatch', 'stream_targeting',
+                 'ntrip_config_capacity', 'rover_connect', 'unicore_verify_command', 'ublox_verify_command',
+                 'autocors_startup', 'projection_native', 'detection_lifecycle', 'ntrip_reconnect', 'nvs_inventory',
+                 'websocket_frames'):
         report = build / f'{name}.lcov'
         environment = dict(os.environ, CXX=compiler, LLVM_PROFDATA=profdata, LLVM_COV=cov,
                            HOST_COVERAGE_OUTPUT=str(report))

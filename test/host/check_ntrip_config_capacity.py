@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/ntrip/ntrip_common.cpp').read_text()
@@ -66,9 +67,12 @@ with tempfile.TemporaryDirectory(prefix='ntrip-config-capacity-') as directory:
     path = Path(directory)
     shim = (root / 'test/host/Arduino.h').read_text().replace('    void trim()', '    bool startsWith(const char *s) const { return find(s) == 0; }\n    void remove(size_t p, size_t n) { erase(p, n); }\n    void trim()')
     (path / 'Arduino.h').write_text(shim)
-    (path / 'check.cpp').write_text(harness + helpers + endpoints + loader + 'namespace BackendAgentInternal {\n' + backend_capacity + '\n}\n' + capacity + '\n' + load + checks)
-    subprocess.run(['c++', '-std=c++17', '-fsanitize=address,undefined', '-I' + str(path),
+    source_path = root / 'src/functions/ntrip/ntrip_common.cpp'
+    (path / 'check.cpp').write_text(harness + mapped(source_path, helpers) + mapped(source_path, endpoints) +
+                                    mapped(source_path, loader) + 'namespace BackendAgentInternal {\n' + backend_capacity +
+                                    '\n}\n' + capacity + '\n' + mapped(source_path, load) + checks)
+    compile_cpp(['c++', '-std=c++17', '-fsanitize=address,undefined', '-I' + str(path),
                     '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: real NTRIP endpoint loading, gating and service configuration capacity')

@@ -2,6 +2,7 @@
 from pathlib import Path
 import tempfile
 import subprocess
+from host_coverage import compile_cpp, run_cpp
 
 root = Path(__file__).resolve().parents[2]
 
@@ -98,8 +99,8 @@ with tempfile.TemporaryDirectory(prefix='projection-native-') as directory:
     for index, packet in enumerate(packets):
         file = path / f'{index}.bin'; file.write_bytes(packet); inputs.append(str(file))
     (path / 'check.cpp').write_text(harness)
-    subprocess.run(['c++', '-std=c++17', '-fsanitize=address,undefined', '-I' + str(root / 'include'),
+    compile_cpp(['c++', '-std=c++17', '-fsanitize=address,undefined', '-I' + str(root / 'include'),
                  str(root / 'src/functions/backend/Vn2000_Datum.cpp'), str(path / 'check.cpp'),
                  '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check'), *inputs], check=True)
+    run_cpp([str(path / 'check'), *inputs], check=True)
 print('PASS: complete datum decoder, CRC/fragmentation/truncation, invalid projection, session reset, logged 0.1 mm reference')

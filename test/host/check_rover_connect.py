@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 root = Path(__file__).resolve().parents[2]
 rover = (root / 'src/functions/ntrip/ntrip_rover.cpp').read_text()
 start = rover[rover.index('bool startNtripRover('):rover.index('/** @brief Implements loopNtripRover.')]
@@ -116,10 +117,11 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='rover-connect-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + harness + declarations + wait + start.replace('String *selectedMountpoint, const String &receiverId)', 'String *selectedMountpoint = nullptr, const String &receiverId = String())') + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    prototype = 'bool startNtripRover(const String &, uint16_t, const String &, const String &, String, uint8_t, String * = nullptr, const String & = String());\n'
+    (path / 'check.cpp').write_text(shim + harness + declarations + prototype + mapped(root / 'src/functions/ntrip/ntrip_common.cpp', wait) + mapped(root / 'src/functions/ntrip/ntrip_rover.cpp', start) + checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: allowlisted caster errors, sanitized fallback, invalid input and successful Rover connection')
 
 workflow = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_text()
@@ -174,8 +176,8 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='rover-connect-wrapper-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + wrapper_harness + '\n'.join(methods) + wrapper_checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    (path / 'check.cpp').write_text(shim + wrapper_harness + ''.join(mapped(root / 'src/functions/backend/Backend_Agent_Workflows.cpp', method) for method in methods) + wrapper_checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: workflow distinguishes busy transport from caster errors and releases mutex')

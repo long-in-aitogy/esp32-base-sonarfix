@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/ntrip/ntrip_base.cpp').read_text()
 loop = source[source.index('int loopNTRIP('):source.index('/** @brief Implements stopNtrip.')]
@@ -79,8 +80,8 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='ntrip-reconnect-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(harness + loop + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
+    (path / 'check.cpp').write_text(harness + mapped(root / 'src/functions/ntrip/ntrip_base.cpp', loop) + checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
                     '-fsanitize=address,undefined', str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: immediate reconnect status, retry backoff, dual servers, stream gates and Rover exclusion')

@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 root=Path(__file__).resolve().parents[2]
 source=(root/'src/functions/backend/Backend_Agent_Startup.cpp').read_text()
 start=source.index('bool BackendAgent::initializeBaseAtBoot(')
@@ -16,7 +17,7 @@ harness=r'''
 #include "functions/gnss/gnss_cmd_builder.h"
 constexpr size_t CONFIG_DOCUMENT_SIZE=6144;
 namespace {
-'''+helper+r'''
+'''+mapped(root/'src/functions/backend/Backend_Agent_Startup.cpp',helper)+r'''
 }
 struct BackendAgent {
     struct StartupPosition {};
@@ -55,10 +56,10 @@ int main() {
 }
 '''
 with tempfile.TemporaryDirectory(prefix='autocors-startup-') as directory:
-    path=Path(directory); (path/'check.cpp').write_text(harness+method+checks)
-    subprocess.run(['c++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',
+    path=Path(directory); (path/'check.cpp').write_text(harness+mapped(root/'src/functions/backend/Backend_Agent_Startup.cpp',method)+checks)
+    compile_cpp(['c++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',
                     '-I'+str(root/'test/host'),'-I'+str(root/'include'),
                     '-I'+str(root/'.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path/'check.cpp'),'-o',str(path/'check')],check=True)
-    subprocess.run([str(path/'check')],check=True)
+    run_cpp([str(path/'check')],check=True)
 print('PASS: unconfigured Auto CORS stays gated; saved coordinates remain preserved')

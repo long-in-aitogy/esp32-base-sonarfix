@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Gnss.cpp').read_text()
 begin = source.index('bool BackendAgent::verifyUnicoreConfig(')
@@ -54,9 +55,9 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='unicore-verify-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + harness + method + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    (path / 'check.cpp').write_text(shim + harness + mapped(root / 'src/functions/backend/Backend_Agent_Gnss.cpp', method) + checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(root / 'include'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), str(root / 'src/functions/gnss/Unicore_Log.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: Unicore verification match, mismatch, unread and invalid request')

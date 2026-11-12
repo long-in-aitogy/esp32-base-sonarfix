@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Storage_Status.cpp').read_text()
@@ -53,9 +54,9 @@ int main() {
 with tempfile.TemporaryDirectory(prefix='esp-nvs-inventory-') as directory:
     path = Path(directory)
     (path / 'Arduino.h').write_text('#pragma once\n' + shim)
-    (path / 'check.cpp').write_text(harness + functions + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    (path / 'check.cpp').write_text(harness + mapped(root / 'src/functions/backend/Storage_Status.cpp', functions) + checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     '-I' + str(path), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: saved config values, nested fields/arrays, pagination, secret redaction and truncation')

@@ -6,10 +6,12 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 
 root = Path(__file__).resolve().parents[2]
 source_root = Path(sys.argv[1]) if len(sys.argv) > 1 else root
-source = next((source_root / 'src/functions').rglob('Backend_Agent_Websocket.cpp')).read_text()
+source_path = next((source_root / 'src/functions').rglob('Backend_Agent_Websocket.cpp'))
+source = source_path.read_text()
 start = source.index('bool BackendAgentWebsocket::readFrame(') if 'bool BackendAgentWebsocket::readFrame(' in source else source.index('void BackendAgentWebsocket::parseFrames(')
 source = source[start:source.index('\nvoid BackendAgentWebsocket::sendControl', start)]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
@@ -81,10 +83,10 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='esp-websocket-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + harness + source + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    (path / 'check.cpp').write_text(shim + harness + mapped(source_path, source) + checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: WebSocket parser; partial/coalesced frames, payload limits, invalid headers, ping/close and command delivery')
 
 # Exercise the actual receive loop too: its buffer cap applies to frame headers as well.
@@ -146,10 +148,10 @@ int main() {
 """
 with tempfile.TemporaryDirectory(prefix='esp-websocket-loop-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + loop_harness + loop + source + loop_checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    (path / 'check.cpp').write_text(shim + loop_harness + mapped(root / 'src/functions/backend/Backend_Agent_Websocket.cpp', loop) + mapped(source_path, source) + loop_checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: actual receive loop handles split data, rejects fragmentation and bounds total buffering')
 
 # Verify disconnect frees its buffer while preserving reconnect scheduling.
@@ -185,8 +187,8 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='esp-websocket-disconnect-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + disconnect_harness + disconnect + disconnect_checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    (path / 'check.cpp').write_text(shim + disconnect_harness + mapped(root / 'src/functions/backend/Backend_Agent_Websocket.cpp', disconnect) + disconnect_checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: disconnect frees buffers and preserves reconnect scheduling')

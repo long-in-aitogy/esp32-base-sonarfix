@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 
 root=Path(__file__).resolve().parents[2]
 source_path=root/'src/functions/ntrip/ntrip_base.cpp'
@@ -9,7 +10,7 @@ text=source_path.read_text()
 poll=text[text.index('  inline constexpr std::array<uint8_t, 8> ubxMonVerPoll'):text.index('/** @brief Implements waitForUm980Input.')]
 helpers=text[text.index('  void clearGnssInput()'):text.index('} // namespace')]
 detect=text[text.index('GnssCmdBuilder::GnssSensorType detectGnssSensorType()'):text.index('/** @brief Implements setupNTRIP.')]
-source=poll+helpers+detect
+source=mapped(source_path,poll)+mapped(source_path,helpers)+mapped(source_path,detect)
 harness=r'''
 #include <Arduino.h>
 #include "functions/gnss/gnss_cmd_builder.h"
@@ -63,6 +64,6 @@ int main(){
 with tempfile.TemporaryDirectory(prefix='detection-lifecycle-') as directory:
     path=Path(directory)
     (path/'check.cpp').write_text(harness+source+checks)
-    subprocess.run(['c++','-std=c++17','-fsanitize=address,undefined','-I'+str(root/'test/host'),'-I'+str(root/'include'),str(path/'check.cpp'),'-o',str(path/'check')],check=True)
-    subprocess.run([str(path/'check')],check=True)
+    compile_cpp(['c++','-std=c++17','-fsanitize=address,undefined','-I'+str(root/'test/host'),'-I'+str(root/'include'),str(path/'check.cpp'),'-o',str(path/'check')],check=True)
+    run_cpp([str(path/'check')],check=True)
 print('PASS: complete GNSS baud scan, boot delay/retry, CRC-valid MON-VER, poll rejection, oversize/noise and Unicore identity')
