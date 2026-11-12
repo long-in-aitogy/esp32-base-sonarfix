@@ -13,6 +13,24 @@
 
 namespace BackendAgentInternal
 {
+    String encodeBase64(const uint8_t *data, size_t length) {
+    static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    String encoded;
+    encoded.reserve(((length + 2) / 3) * 4);
+    for (size_t i = 0; i < length; i += 3) {
+        const uint32_t a = data[i];
+        const uint32_t b = i + 1 < length ? data[i + 1] : 0;
+        const uint32_t c = i + 2 < length ? data[i + 2] : 0;
+        const uint32_t value = (a << 16) | (b << 8) | c;
+        encoded += alphabet[(value >> 18) & 0x3F];
+        encoded += alphabet[(value >> 12) & 0x3F];
+        encoded += i + 1 < length ? alphabet[(value >> 6) & 0x3F] : '=';
+        encoded += i + 2 < length ? alphabet[value & 0x3F] : '=';
+    }
+    return encoded;
+}
+
+
     String urlEncode(const String &value)
     {
         static constexpr char hexDigits[] = "0123456789ABCDEF";

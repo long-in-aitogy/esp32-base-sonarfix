@@ -508,6 +508,13 @@ void BackendAgent::pollGnssStatus()
                 navigationMs_ = millis();
                 markStatusDirty();
             }
+            String satellites;
+            if (UbloxReadback::readSatellites(satellites, error))
+            {
+                satelliteReadback_ = satellites;
+                satelliteReadbackMs_ = millis();
+                markStatusDirty();
+            }
             UbxDop dop;
             if (UbloxReadback::readDop(dop, error))
             {

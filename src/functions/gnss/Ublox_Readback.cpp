@@ -1,5 +1,7 @@
 #include "functions/gnss/Ublox_Readback.h"
 #include "functions/gnss/Ubx_Reply.h"
+#include "functions/gnss/Ubx_Satellites.h"
+#include "functions/backend/Backend_Agent_Codec.h"
 #include "functions/gnss/Ubx_Config_Verification.h"
 #include "functions/ntrip/RTCM_Receiver.h"
 #include "Prog_Config.h"
@@ -153,6 +155,26 @@ bool UbloxReadback::readDop(UbxDop &status, String &error)
         return true;
     error = "Invalid NAV-DOP response";
     return false;
+}
+
+bool UbloxReadback::readSatellites(String &payloadBase64, String &error)
+{
+    UbxReplyBuffer<UbxSatellites::MAX_PAYLOAD + 8> reply;
+    if (!query(0x01, 0x35, reply, error))
+        return false;
+    if (!UbxSatellites::valid(reply.frame.data() + 6, reply.length - 8))
+    {
+        error = "Invalid NAV-SAT response";
+        return false;
+    }
+    String encoded = BackendAgentInternal::encodeBase64(reply.frame.data() + 6, reply.length - 8);
+    if (encoded.isEmpty())
+    {
+        error = "Cannot encode NAV-SAT response";
+        return false;
+    }
+    payloadBase64 = encoded;
+    return true;
 }
 
 bool UbloxReadback::readBaud(uint8_t port, uint32_t &baud, String &error)
