@@ -5,7 +5,9 @@
 #include "functions/backend/Backend_Agent.h"
 #include "functions/backend/Base_Sample.h"
 #include <array>
+#include <cmath>
 #include <cstdio>
+#include <cstdlib>
 
 namespace
 {
@@ -60,15 +62,26 @@ namespace
     }
 
 /** @brief Implements nmeaCoordinate. */
-    double nmeaCoordinate(const char *raw, const char *hemisphere)
+    double nmeaCoordinate(const char *raw, const char *hemisphere, bool latitude)
     {
-        if (!raw || !*raw)
-            return 0.0;
-        const auto value = atof(raw);
+        if (!raw || !*raw || !hemisphere || !hemisphere[0] || hemisphere[1] != '\0')
+            return NAN;
+        const char direction = hemisphere[0];
+        if (latitude ? (direction != 'N' && direction != 'S') : (direction != 'E' && direction != 'W'))
+            return NAN;
+        for (const char *p = raw; *p; ++p)
+            if ((*p < '0' || *p > '9') && *p != '.')
+                return NAN;
+        char *end = nullptr;
+        const double value = std::strtod(raw, &end);
+        if (end == raw || *end != '\0' || !std::isfinite(value) || value < 0 || value > (latitude ? 9000.0 : 18000.0))
+            return NAN;
         const auto degrees = static_cast<int>(value / 100.0);
         const auto minutes = value - degrees * 100.0;
+        if (minutes < 0 || minutes >= 60)
+            return NAN;
         auto coordinate = degrees + minutes / 60.0;
-        if (hemisphere && (hemisphere[0] == 'S' || hemisphere[0] == 'W'))
+        if (direction == 'S' || direction == 'W')
         {
             coordinate = -coordinate;
         }
@@ -122,14 +135,21 @@ namespace
     GgaReading parseGgaFields(char *const *fields, size_t fieldCount)
     {
         GgaReading reading;
-        reading.hasFixQuality = fieldCount > 6;
-        if (reading.hasFixQuality)
-            reading.fixQuality = atoi(fields[6]);
+        reading.hasFixQuality = true;
+        if (fieldCount > 6)
+        {
+            char *end = nullptr;
+            const long quality = std::strtol(fields[6], &end, 10);
+            if (end != fields[6] && *end == '\0' && quality >= 0 && quality <= 8)
+                reading.fixQuality = static_cast<int>(quality);
+        }
         if (fieldCount <= 9 || !fields[2][0] || !fields[3][0] || !fields[4][0] || !fields[5][0])
             return reading;
 
-        reading.latitude = nmeaCoordinate(fields[2], fields[3]);
-        reading.longitude = nmeaCoordinate(fields[4], fields[5]);
+        reading.latitude = nmeaCoordinate(fields[2], fields[3], true);
+        reading.longitude = nmeaCoordinate(fields[4], fields[5], false);
+        if (!std::isfinite(reading.latitude) || !std::isfinite(reading.longitude))
+            return reading;
         reading.satellites = static_cast<uint8_t>(constrain(atoi(fields[7]), 0, 255));
         reading.hdop = static_cast<float>(atof(fields[8]));
         reading.altitude = fieldCount > 12

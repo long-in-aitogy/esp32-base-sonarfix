@@ -55,6 +55,21 @@ int main() {
     assert(std::isnan(telemetry.altitude)); // Missing H is unknown too.
     parseNmeaSentence("$GNGGA,010006,2105.0994,N,10547.19936,E,4,20,0.7,20.5,M,0,M,,*00");
     assert(telemetry.altitude == 20.5); // A real zero N is valid.
+    for (const char *bad : {
+        "$GNGGA,010007,garbage,N,10547.19936,E,4,20,0.7,20.5,M,0,M,,*00",
+        "$GNGGA,010007,2160.0000,N,10547.19936,E,4,20,0.7,20.5,M,0,M,,*00",
+        "$GNGGA,010007,2105.0994,E,10547.19936,N,4,20,0.7,20.5,M,0,M,,*00",
+        "$GNGGA,010007,nan,N,10547.19936,E,4,20,0.7,20.5,M,0,M,,*00",
+        "$GNGGA,010007,9000.0001,N,10547.19936,E,4,20,0.7,20.5,M,0,M,,*00"}) {
+        parseNmeaSentence(bad);
+        assert(std::isnan(telemetry.latitude) && std::isnan(telemetry.longitude) && std::isnan(telemetry.altitude));
+    }
+    parseNmeaSentence("$GNGGA,010008,2105.0994,N,10547.19936,E,4bad,20,0.7,20.5,M,0,M,,*00");
+    assert(strcmp(telemetry.fixStatus.data(), "NO_FIX") == 0);
+    parseNmeaSentence("$GNGGA,010009,0000.0000,S,00000.0000,W,4,20,0.7,20.5,M,0,M,,*00");
+    assert(telemetry.latitude == 0 && telemetry.longitude == 0 && telemetry.altitude == 20.5);
+    parseNmeaSentence("$GNGGA,010010,0000.0000,S");
+    assert(strcmp(telemetry.fixStatus.data(), "NO_FIX") == 0 && std::isnan(telemetry.latitude));
 }
 '''
 with tempfile.TemporaryDirectory(prefix='esp-gga-') as directory:
