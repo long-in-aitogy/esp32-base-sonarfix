@@ -20,6 +20,7 @@ harness = r'''
 #include <cstdlib>
 #include <cstring>
 #include "functions/gnss/gnss_cmd_builder.h"
+#include "functions/gnss/Unicore_Config_Verification.h"
 constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
 uint32_t restoredDuration;
 float restoredAccuracy;
@@ -94,6 +95,12 @@ int main() {
     assert(!agent.lastCommands.empty());
     const auto &undulation = agent.lastCommands.front();
     assert(std::string(undulation.begin(), undulation.end()) == "config undulation 0.0\r\n");
+    agent.receiverBaseReadback_ = R"({"mode_kind":"base","mode_raw":"MODE BASE 21.25 105.75 10.5"})";
+    assert(agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
+    agent.receiverBaseReadback_ = R"({"mode_kind":"base","mode_raw":"MODE BASE 21.26 105.75 10.5"})";
+    assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
+    agent.receiverBaseReadback_ = R"({"mode_kind":"base","mode_raw":"MODE BASE invalid"})";
+    assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
     base["coords"]["lat"] = 100;
     writes = agent.writes;
     assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>()) && agent.writes == writes);
