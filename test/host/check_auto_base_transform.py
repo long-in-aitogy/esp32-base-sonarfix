@@ -41,8 +41,9 @@ double coordinateNumber(JsonVariantConst v) {
     if (v.is<const char *>()) { const char *p = v.as<const char *>(); char *end = nullptr; double value = std::strtod(p, &end); return end != p && *end == 0 ? value : NAN; }
     return v.as<double>();
 }
+bool datumTransformOk = true;
 bool transformVn2000(double lat, double lon, double alt, const Vn2000Datum &, Vn2000Result &out) {
-    out.latitude = lat; out.longitude = lon; out.altitude = alt; return true;
+    out.latitude = lat; out.longitude = lon; out.altitude = alt; return datumTransformOk;
 }
 MATCHER_PLACEHOLDER
 struct BackendAgent {
@@ -77,12 +78,20 @@ int main() {
     DynamicJsonDocument doc(256); JsonObject payload = doc.to<JsonObject>();
     std::vector<double> lat{21}, lon{105}, alt{10}; String resultJson, error;
     payload["enable_itrf_vn2000_transform"] = true;
-    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
-    assert(!agent.reachedWrite && error == "VN2000 conversion failed; no candidate coordinates were installed");
+    payload["ip"] = "other-caster.example";
+    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    DynamicJsonDocument report(4096);
+    assert(!deserializeJson(report, agent.reportJson));
+    assert(report["transform_applied"] == false && report["projection_source"] == "not_used");
+    assert(report["calculated_coord"]["lat"] == report["input_coord"]["lat"]);
+    assert(agent.conversions == 0);
     payload["enable_itrf_vn2000_transform"] = false;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
-    assert(!agent.reachedWrite && resultJson == "measured" && agent.conversions == 1);
+    assert(!agent.reachedWrite && resultJson == "measured" && agent.conversions == 0);
     payload["ip"] = "VNGEONET.VN";
+    assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    report.clear(); assert(!deserializeJson(report, agent.reportJson));
+    assert(report["transform_applied"] == false && report["projection_source"] == "not_used");
     payload["enable_itrf_vn2000_transform"] = true;
     assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(error == "missing RTCM 1021 from this CORS session");
@@ -100,8 +109,12 @@ int main() {
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     sessionDatum.has1025 = true; sessionDatum.centralMeridianDeg = 105; sessionDatum.scale = 0.9999;
     sessionDatum.kT = 1.00000008613; sessionDatum.count1021 = 2;
+    datumTransformOk = false;
+    assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    assert(!agent.reachedWrite && error == "VN2000 conversion failed; no candidate coordinates were installed");
+    datumTransformOk = true;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
-    DynamicJsonDocument report(4096);
+    report.clear();
     assert(!deserializeJson(report, agent.reportJson));
     assert(report["source"]["mountpoint"] == "station" && report["projection_source"] == "rtcm1025");
     assert(report["parameter_source"] == "rtcm1021" && report["received_messages"]["1021"] == 2);
@@ -136,4 +149,4 @@ with tempfile.TemporaryDirectory(prefix='auto-base-transform-') as directory:
                     '-I' + str(root / 'test/host'), '-I' + str(root / 'include'), '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     subprocess.run([str(path / 'check')], check=True)
-print('PASS: invalid projection and conversion failure never apply candidate coordinates')
+print('PASS: only enabled VNGEONET uses session datum; failed conversion never applies coordinates')

@@ -661,61 +661,6 @@ bool BackendAgent::collectAutoBaseSamples(const int configuredSamples,
     return true;
 }
 
-bool BackendAgent::resolveAutoBaseProjection(JsonObject payload, const double rawLongitude,
-                                             double &centralMeridianDeg, double &scale,
-                                             String &provinceName, String &provinceCode,
-                                             String &failureReason)
-{
-    centralMeridianDeg = 105.0;
-    scale = 0.9999;
-    provinceName = "Khong xac dinh (fallback theo kinh do)";
-    provinceCode = "UNKNOWN";
-    if (const auto requestedProvince = payload["province_code"] | String(); !requestedProvince.isEmpty())
-    {
-        if (!getProvinceProjection(requestedProvince, centralMeridianDeg, scale, provinceName))
-        {
-            failureReason = "invalid province_code";
-            return false;
-        }
-        provinceCode = requestedProvince;
-    }
-    else if (payload["l0_deg"].isNull())
-    {
-        static constexpr std::array candidates = {
-            103.0,
-            104.0,
-            104.5,
-            104.75,
-            105.0,
-            105.5,
-            105.75,
-            106.0,
-            106.5,
-            107.0,
-            107.25,
-            107.75,
-            108.0,
-            108.25,
-            108.5,
-        };
-        auto bestDistance = 1e9;
-        for (const double candidate : candidates)
-        {
-            const auto distance = fabs(candidate - rawLongitude);
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                centralMeridianDeg = candidate;
-            }
-        }
-    }
-    if (!payload["l0_deg"].isNull())
-        centralMeridianDeg = payload["l0_deg"].as<double>();
-    if (!payload["k0"].isNull())
-        scale = payload["k0"].as<double>();
-    return true;
-}
-
 String BackendAgent::buildAutoBaseResult(
     const double finalLatitude, const double finalLongitude, const double finalAltitude,
     const double rawLatitude, const double rawLongitude, const double rawAltitude,
@@ -775,13 +720,13 @@ bool BackendAgent::completeAutoBaseSetup(
     host.trim();
     const bool vngeonet = strcasecmp(host.c_str(), "vngeonet.vn") == 0
         || strcasecmp(host.c_str(), "vngeonet.vn.") == 0 || host == "14.238.1.125";
-    const bool requestedTransform = payload["enable_itrf_vn2000_transform"] | true;
+    const bool requestedTransform = vngeonet && (payload["enable_itrf_vn2000_transform"] | true);
     const char *projectionSource = "not_used";
     bool transformed = false;
     Vn2000Datum datum;
     double projectedHeight = rawAltitude;
     ProjectedPosition result{rawLatitude, rawLongitude, rawAltitude};
-    if (vngeonet && requestedTransform)
+    if (requestedTransform)
     {
         if (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS * 4)) != pdTRUE)
         {
@@ -881,24 +826,6 @@ bool BackendAgent::completeAutoBaseSetup(
         centralMeridianDeg = datum.centralMeridianDeg;
         scale = datum.scale;
         transformed = true;
-    }
-    else
-    {
-        if (!resolveAutoBaseProjection(payload, rawLongitude, centralMeridianDeg, scale,
-                                       provinceName, provinceCode, failureReason))
-            return false;
-        const auto requestedProvince = payload["province_code"] | String();
-        projectionSource = requestedProvince.isEmpty() ? "lon_fallback" : "manual_province";
-        if (requestedTransform)
-        {
-            transformed = transformToVn2000(rawLatitude, rawLongitude, rawAltitude,
-                                            centralMeridianDeg, scale, result);
-            if (!transformed)
-            {
-                failureReason = "VN2000 conversion failed; no candidate coordinates were installed";
-                return false;
-            }
-        }
     }
     if (!std::isfinite(result.latitude) || !std::isfinite(result.longitude) || !std::isfinite(result.altitude)
         || std::abs(result.latitude) > 90.0 || std::abs(result.longitude) > 180.0

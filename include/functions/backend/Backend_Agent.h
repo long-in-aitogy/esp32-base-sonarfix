@@ -181,10 +181,6 @@ private:
                                 std::vector<double> &longitudes,
                                 std::vector<double> &altitudes, bool &cancelled,
                                 String &failureReason, const String &sourceMountpoint);
-    bool resolveAutoBaseProjection(JsonObject payload, double rawLongitude,
-                                   double &centralMeridianDeg, double &scale,
-                                   String &provinceName, String &provinceCode,
-                                   String &failureReason);
     bool completeAutoBaseSetup(JsonObject payload, const std::vector<double> &latitudes,
                                const std::vector<double> &longitudes,
                                const std::vector<double> &altitudes,
