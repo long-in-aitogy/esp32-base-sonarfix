@@ -1035,14 +1035,19 @@ bool BackendAgent::completeAutoBaseSetup(
         failureReason = "cannot read previous Base configuration";
         return false;
     }
-    if (baseConfig.containsKey("auto_base_previous_config"))
+    bool removedOldData = false;
+    for (const char *key : {"auto_base_previous_config", "coords", "auto_base_raw_itrf_llh", "conversion_report"})
     {
-        baseConfig.remove("auto_base_previous_config");
-        if (!baseConfig.garbageCollect())
+        if (baseConfig.containsKey(key))
         {
-            failureReason = "cannot allocate Auto Base configuration";
-            return false;
+            baseConfig.remove(key);
+            removedOldData = true;
         }
+    }
+    if (removedOldData && !baseConfig.garbageCollect())
+    {
+        failureReason = "cannot allocate Auto Base configuration";
+        return false;
     }
     JsonObject coordinates = baseConfig.createNestedObject("coords");
     coordinates["lat"] = result.latitude;

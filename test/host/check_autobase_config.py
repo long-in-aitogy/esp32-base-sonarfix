@@ -16,7 +16,7 @@ constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
 struct Position { double latitude = 21.25, longitude = 105.75, altitude = 10.5, northing = 1, easting = 2; };
 struct BackendAgent {
     String baseConfig_, published;
-    bool saveOk = true, restartOk = true, restoreOk = true;
+    bool saveOk = true, restartOk = true, restoreOk = true, largeReport = false;
     int saves = 0, failSave = 0;
     int publishes = 0, stops = 0, writes = 0;
     bool stopNtripRoverLocked() { ++stops; return true; }
@@ -37,6 +37,7 @@ struct BackendAgent {
         Position result;
         DynamicJsonDocument report(CONFIG_DOCUMENT_SIZE);
         report["source"]["mountpoint"] = "station";
+        if (largeReport) report["detail"] = String(900, 'n');
         const double rawLatitude = 21, rawLongitude = 105, rawAltitude = 11;
         const bool transformed = true;
         const double centralMeridianDeg = 105, scale = 0.9999;
@@ -89,6 +90,15 @@ int main() {
     assert(withSnapshot.apply(error));
     result.clear(); assert(!deserializeJson(result, withSnapshot.baseConfig_));
     assert(result["base_setup_method"]=="FIXED_LLA" && result["auto_base_previous_config"].isNull());
+    BackendAgent replacement;
+    DynamicJsonDocument oldConfig(4096);
+    oldConfig["base_setup_method"]="AUTO_CORS";
+    oldConfig["conversion_report"]["detail"]=String(2300, 'o');
+    serializeJson(oldConfig, replacement.baseConfig_);
+    replacement.largeReport=true;
+    assert(replacement.apply(error));
+    result.clear(); assert(!deserializeJson(result, replacement.baseConfig_));
+    assert(result["conversion_report"]["detail"].as<String>().length()==900);
     BackendAgent defaults;
     defaults.baseConfig_ = "{}";
     assert(defaults.apply(error));
