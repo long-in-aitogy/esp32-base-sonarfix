@@ -36,6 +36,11 @@ int main() {
     for (int i=0;i<30;++i) telemetry[String("status")+String(i)]=i;
     assert(!doc.overflowed());
     assert(doc["base_config"].size()==70 && doc["service_config"].size()==70 && doc["auto_base_progress"].size()==90 && telemetry.size()==30);
+    DynamicJsonDocument invalid(512);
+    assert(!copyJsonObject(invalid,"base_config","{bad"));
+    assert(!copyJsonObject(invalid,"service_config","[]"));
+    assert(!invalid.containsKey("base_config") && !invalid.containsKey("service_config"));
+    assert(copyJsonObject(invalid,"base_config","{}") && invalid["base_config"].is<JsonObject>());
 }
 '''.replace('ALLOCATION',allocation)
 with tempfile.TemporaryDirectory(prefix='status-capacity-') as directory:

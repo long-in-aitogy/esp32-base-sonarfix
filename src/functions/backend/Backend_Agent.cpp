@@ -108,7 +108,6 @@ namespace BackendAgentInternal
         DynamicJsonDocument source(std::strcmp(key, "auto_base_progress") == 0 ? PROGRESS_DOCUMENT_SIZE : CONFIG_DOCUMENT_SIZE);
         if (deserializeJson(source, serialized) != DeserializationError::Ok || !source.is<JsonObject>())
         {
-            target.createNestedObject(key);
             return false;
         }
         JsonObject destination = target.createNestedObject(key);
