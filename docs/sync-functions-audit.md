@@ -136,15 +136,15 @@ Chạy `python3 test/host/check_cors_unicore_verify.py /duong-dan/cors` để ki
 | Bài hoặc nhóm của CORS | Bằng chứng trên nhánh này và phần cần chú ý |
 | --- | --- |
 | `check_auto_base_boot.py` | `check_autocors_startup.py`, `check_autocors_scheduler.py`; chủ ý giữ cấu hình đã lưu thay vì khởi động AutoNearest mới ở mọi lần boot. |
-| `check_backend_lifecycle.py` | Từng phần: `check_optional_backend_allocations.py`, `check_mqtt_dispatch.py`, `check_control_failover_workflow.py`, `check_detection_lifecycle.py`; chưa chạy vòng đời tích hợp tương đương. |
-| `check_backend_storage.py` | Từng phần: `check_backend_migration.py`, `check_service_config.py`, `check_service_startup_capacity.py`, `check_workflow_connection_config.py`; chưa chạy bài tích hợp nguyên bản. |
+| `check_backend_lifecycle.py` | Từng phần: `check_backend_queues.py` chạy hàng đợi thật với MQTT/WebSocket giả lập; `check_optional_backend_allocations.py`, `check_mqtt_dispatch.py`, `check_control_failover_workflow.py`, `check_detection_lifecycle.py` kiểm tra các bước khác. Chưa chạy toàn bộ vòng đời trong một bài. |
+| `check_backend_storage.py` | Từng phần: `check_backend_save_state.py` kiểm tra ghi snapshot NVS thật với API giả lập và lỗi open/write/commit; `check_backend_migration.py`, `check_service_config.py`, `check_service_startup_capacity.py`, `check_workflow_connection_config.py` kiểm tra các bước khác. Chưa chạy bài tích hợp nguyên bản. |
 | `check_base_startup_confirmation.py` | Từng phần: `check_boot_progress_restore.py`, `check_workflow_restore.py`, `check_unicore_verify_command.py`, `check_unicore_fixed_readback.py`. |
 | `check_command_dispatch.py` | Bài cùng tên trên nhánh đích chạy các hàm định tuyến ESP, MQTT, NTRIP, GNSS và CONFIG; phần lưu preferences và receiver được giả lập. |
 | `check_gnss_lifecycle.py` | Từng phần: kiểm tra UBX/Unicore, readback, Survey-In và Rover riêng; `readback_checks.cpp` của nguồn chạy trực tiếp với mã đích. |
 | `check_network_lifecycle.py` | Bài cùng tên trên nhánh đích chạy chuyển SIM/Wi-Fi, thời gian chờ và thử phục hồi với kết nối giả lập. Các bài riêng kiểm tra lưu Wi-Fi và bảo vệ workflow; chưa mô phỏng toàn bộ khởi động/khóa như bài nguồn. |
 | `check_ntrip_source.py` | Từng phần: `check_ntrip_config_capacity.py` chạy nạp hai endpoint và điều kiện khóa/cấp phép thực; `check_ntrip_source_connect.py`, `check_ntrip_port.py`, `check_ntrip_handshake.py`, `check_ntrip_reconnect.py` kiểm tra kết nối. Chưa gộp toàn bộ vòng đời SOURCE. |
 | `check_projection_audit.py` | Từng phần: `check_vn2000.py` so bộ giải mã với Python; `check_auto_base_transform.py` kiểm tra trường RTCM và báo cáo/lưu cấu hình. Chưa chạy bài nguồn nguyên bản vì cấu trúc báo cáo khác. |
-| `check_status_stream.py` | `check_stream_targeting.py` chạy 44 lệnh chọn nguồn tương ứng trên mã đích. Các bài `check_status_config_capacity.py`, `check_config_publish_capacity.py` kiểm tra trạng thái riêng; chưa chạy tập 144 trạng thái nguồn như một bài. |
+| `check_status_stream.py` | `check_stream_targeting.py` chạy 44 lệnh chọn nguồn; `check_status_matrix.py` chạy 144 tổ hợp trạng thái theo bài CORS với mã tạo trạng thái thực và kết nối giả lập. Hai bài kiểm tra capacity chạy riêng. |
 | `check_ublox_verification.py` | `check_cors_verify.py` dùng payload CORS thật với chín cấu hình MSM/chòm sao; receiver giả lập và có thêm tình huống sai/không đọc được. |
 | `check_wifi_handover.py` | Từng phần: `check_wifi_recovery.py`, `check_sim_recovery_workflow.py`; đường gọi hàm đã khác, chưa chạy nguyên bài nguồn. |
 | `check_wifi_nvs.py` | Đã chạy bài nguồn với mã đích, thay kỳ vọng mật khẩu dự phòng theo `develop`; dữ liệu và kết nối đều mô phỏng. |

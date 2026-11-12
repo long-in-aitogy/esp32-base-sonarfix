@@ -62,12 +62,15 @@ jobs:
           python3 test/host/check_control_failover_workflow.py
           python3 test/host/check_sim_recovery_workflow.py
           python3 test/host/check_backend_migration.py
+          python3 test/host/check_backend_save_state.py
           python3 test/host/check_nvs_cleanup.py
           python3 test/host/check_nvs_inventory.py
           python3 test/host/check_survey_result_retry.py
           python3 test/host/check_status_config_capacity.py
+          python3 test/host/check_status_matrix.py
           python3 test/host/check_status_publish_failure.py
           python3 test/host/check_optional_backend_allocations.py
+          python3 test/host/check_backend_queues.py
           python3 test/host/check_config_publish_capacity.py
           python3 test/host/check_connection_preference.py
           python3 test/host/check_network_status.py
