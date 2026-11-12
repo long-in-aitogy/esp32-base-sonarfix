@@ -14,6 +14,7 @@ harness=r'''
 #include <Arduino.h>
 #include "functions/gnss/gnss_cmd_builder.h"
 #include "functions/gnss/Unicore_Identification.h"
+#include <array>
 #include <cassert>
 #include <deque>
 #include <vector>

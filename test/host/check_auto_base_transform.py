@@ -28,6 +28,7 @@ validation = projection[begin:]
 harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <cstring>

@@ -13,6 +13,7 @@ method = source[a:b]
 harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <array>
 #include <cassert>
 #include <cstring>
 #include "functions/gnss/Ubx_Config_Verification.h"
