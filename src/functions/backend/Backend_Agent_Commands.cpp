@@ -1,6 +1,7 @@
 #include "functions/backend/Backend_Agent.h"
 #include "functions/backend/Backend_Agent_Internal.h"
 #include "functions/backend/Storage_Status.h"
+#include "helper.h"
 #include "Prog_Config.h"
 #include "functions/ntrip/ntrip_base.h"
 #include "functions/ntrip/ntrip_rover.h"
@@ -1073,7 +1074,7 @@ void BackendAgent::finishCommand(const String &source, const String &command,
     if (success && restartAfterCommand)
     {
         delay(500);
-        mqtt.disconnect();
+        shutdownTcpTransportBeforeRestart();
         ESP.restart();
     }
 }
@@ -1207,7 +1208,7 @@ void BackendAgent::executeCommand(const String &source, const String &command,
         saveStatePreferences();
         publishStatus(true);
         delay(500);
-        mqtt.disconnect();
+        shutdownTcpTransportBeforeRestart();
         ESP.restart();
     }
     else if (command == "DELETE_DEVICE")
@@ -1226,7 +1227,7 @@ void BackendAgent::executeCommand(const String &source, const String &command,
             backendPreferences().clear();
             backendPreferences().end();
         }
-        mqtt.disconnect();
+        shutdownTcpTransportBeforeRestart();
         ESP.restart();
     }
 
