@@ -6,6 +6,7 @@ root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Commands.cpp').read_text()
 method = source[source.index('bool BackendAgent::executeServiceConfigCommand('):source.index('bool BackendAgent::executeRawCommand(')]
 stream = source[source.index('bool BackendAgent::executeStreamCommand('):source.index('bool BackendAgent::executeBaseStatusCommand(')]
+basic = source[source.index('bool BackendAgent::executeBasicCommand('):source.index('bool BackendAgent::executeStreamCommand(')]
 agent = (root / 'src/functions/backend/Backend_Agent.cpp').read_text()
 boolean = agent[agent.index('    bool jsonBool('):agent.index('    String jsonString(')]
 harness = r'''
@@ -19,14 +20,20 @@ void setupNTRIP() { ++setups; }
 void connectNTRIP() { ++connections; }
 struct BackendAgent {
     String serviceConfig_ = "{}";
+    String deviceName_, baseStartupState_;
     int published = 0, saves = 0, streamChanges = 0;
-    bool saveOk = true, active = false;
+    bool saveOk = true, active = false, provisioned_ = false, baseStartupAttempted_ = false;
+    struct { void restore(bool, int) {} } stationLock_;
     bool workflowActive() { return active; }
+    bool applyLockCommand(JsonObjectConst, String &) { return true; }
+    String normalAgentState() { return "online"; }
+    void setAgentState(const String &) {}
     bool saveStatePreferences() { ++saves; return saveOk; }
     void publishConfigState(const String &) { ++published; }
     void applyServiceStreamCommand(JsonObject) { ++streamChanges; }
     bool executeServiceConfigCommand(JsonObject, String &, String &);
     bool executeStreamCommand(JsonObject, String &, String &);
+    bool executeBasicCommand(const String &, JsonObject, String &, String &);
 };
 '''
 checks = r'''
@@ -72,14 +79,21 @@ int main() {
     request.clear(); request.to<JsonObject>();
     assert(!agent.executeServiceConfigCommand(request.as<JsonObject>(), error, detail));
     assert(setups == 3 && connections == 3 && agent.published == 4);
+    DynamicJsonDocument provision(128); provision["name"] = "station";
+    agent.active = true;
+    assert(agent.executeBasicCommand("PROVISION_DEVICE", provision.as<JsonObject>(), error, detail));
+    assert(agent.provisioned_ && agent.deviceName_ == "station" && setups == 3 && connections == 3);
+    agent.active = false;
+    assert(agent.executeBasicCommand("PROVISION_DEVICE", provision.as<JsonObject>(), error, detail));
+    assert(setups == 4 && connections == 4);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='service-config-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(harness + boolean + method + stream + checks)
+    (path / 'check.cpp').write_text(harness + boolean + method + basic + stream + checks)
     subprocess.run(['c++', '-std=c++17', '-fsanitize=address,undefined',
                     '-I' + str(root / 'test/host'),
                     '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     subprocess.run([str(path / 'check')], check=True)
-print('PASS: repeated config preserves connections, changed config reconnects, empty config is rejected')
+print('PASS: service configuration and provisioning preserve active workflows')

@@ -1056,8 +1056,11 @@ bool BackendAgent::executeBasicCommand(const String &command, JsonObject payload
     }
     deviceName_ = name;
     provisioned_ = true;
-    setupNTRIP();
-    connectNTRIP();
+    if (!workflowActive())
+    {
+        setupNTRIP();
+        connectNTRIP();
+    }
     detail = "device provisioned";
     return true;
 }
