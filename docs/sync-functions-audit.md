@@ -124,3 +124,5 @@ Tại `45f2699`, 83/83 bài `check_*.py` không cần thiết bị và không c�
 Ba bài CORS `check_backend_storage.py`, `check_base_startup_confirmation.py`, `check_workflow_lifecycle.py` chưa thể chạy trực tiếp trên cây đích: harness phụ thuộc cấu trúc hàm và kiểu dữ liệu trước khi tách mô-đun. Đích đã kiểm tra riêng nhiều phần, bao gồm chờ RTK, lấy mẫu và phục hồi, nhưng chưa có bằng chứng tương đương cho toàn bộ bài workflow tích hợp CORS. Cần chuyển harness hoặc đối chiếu từng kịch bản trước khi coi mục này hoàn tất.
 
 Chạy `python3 test/host/check_cors_verify.py /duong-dan/cors` để kiểm tra payload xác minh u-blox do backend CORS tạo. Chín cấu hình MSM/chòm sao đã đạt với readback mô phỏng khớp và accuracy receiver 5 m; bài này cần cây CORS cục bộ, không được chạy trong CI firmware độc lập và không thay thế receiver thực.
+
+Chạy `python3 test/host/check_cors_unicore_verify.py /duong-dan/cors` để kiểm tra payload Unicore do CORS tạo cho MSM4, MSM7 và cả hai, với COM3 hoặc CURRENT. Kiểm tra khớp, sai tọa độ, thiếu log và không đọc được đều đạt với MODE/UNILOGLIST mô phỏng. Bài cần cây CORS cục bộ và không xác nhận receiver thực.
