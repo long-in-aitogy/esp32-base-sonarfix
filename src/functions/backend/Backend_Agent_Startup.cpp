@@ -89,7 +89,7 @@ bool BackendAgent::buildStartupCommands(JsonObjectConst base,
     options.outputMode = String(output["output_mode"] | "rtcm_only") == "rtcm_only"
                              ? OutputMode::RtcmOnly
                              : OutputMode::DiagnosticsRtcm;
-    if (const String level = output["msm_level"] | "both"; level == "7")
+    if (const String level = output["msm_level"].isNull() ? "both" : output["msm_level"].as<String>(); level == "7")
         options.msmLevel = MsmLevel::Msm7;
     else if (level == "4")
         options.msmLevel = MsmLevel::Msm4;

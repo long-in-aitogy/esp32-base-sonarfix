@@ -380,18 +380,20 @@ bool BackendAgent::applyBaseCoordinates(const double latitude, const double long
     options.ports = {"UART1"};
     options.outputMode = GnssCmdBuilder::OutputMode::RtcmOnly;
     const JsonObjectConst output = base["gnss_options"];
-    const String level = output["msm_level"].isNull() ? "4" : output["msm_level"].as<String>();
+    const String level = output["msm_level"].isNull() ? "both" : output["msm_level"].as<String>();
     if (level == "7")
         options.msmLevel = GnssCmdBuilder::MsmLevel::Msm7;
-    else if (level == "both")
+    else if (level == "4")
+        options.msmLevel = GnssCmdBuilder::MsmLevel::Msm4;
+    else
         options.msmLevel = GnssCmdBuilder::MsmLevel::Both;
     const JsonObjectConst systems = output["constellations"];
     options.gps = systems["gps"] | true;
     options.glo = systems["glo"] | true;
     options.gal = systems["gal"] | true;
     options.bds = systems["bds"] | true;
-    options.qzss = systems["qzss"] | false;
-    options.sbas = systems["sbas"] | false;
+    options.qzss = systems["qzss"] | true;
+    options.sbas = systems["sbas"] | true;
     return writeGnssCommands(GnssCmdBuilder::buildBaseFixedLlaCommand(
         latitude, longitude, altitude, GnssCmdBuilder::BASE_ACCURACY_METERS,
         sensorType_ == "Ublox" ? GnssCmdBuilder::GnssSensorType::Ublox

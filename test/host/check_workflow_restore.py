@@ -71,6 +71,15 @@ int main() {
     assert(agent.buildStartupCommands(base.as<JsonObjectConst>(), GnssCmdBuilder::GnssSensorType::Ublox,
                                       false, startupCommands, startupPosition, startupError));
     assert(restoredDuration == 300 && restoredAccuracy == 5 && agent.surveyInTargetSeconds_ == 300);
+    base["gnss_options"]["msm_level"] = 7;
+    assert(agent.buildStartupCommands(base.as<JsonObjectConst>(), GnssCmdBuilder::GnssSensorType::Ublox,
+                                      false, startupCommands, startupPosition, startupError));
+    assert(restoredOptions.msmLevel == GnssCmdBuilder::MsmLevel::Msm7);
+    base["gnss_options"]["msm_level"] = 4;
+    assert(agent.buildStartupCommands(base.as<JsonObjectConst>(), GnssCmdBuilder::GnssSensorType::Ublox,
+                                      false, startupCommands, startupPosition, startupError));
+    assert(restoredOptions.msmLevel == GnssCmdBuilder::MsmLevel::Msm4);
+    base.remove("gnss_options");
     base.remove("survey_in_duration");
     assert(agent.buildStartupCommands(base.as<JsonObjectConst>(), GnssCmdBuilder::GnssSensorType::Ublox,
                                       false, startupCommands, startupPosition, startupError));

@@ -42,6 +42,7 @@ jobs:
         run: |
           python3 test/host/check_base_accuracy.py
           python3 test/host/check_province_command.py
+          python3 test/host/check_fixed_output_options.py
           python3 test/host/check_raw_config_preflight.py
           python3 test/host/check_raw_batch.py
           python3 test/host/check_service_config.py
