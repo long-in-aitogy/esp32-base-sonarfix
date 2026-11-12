@@ -187,11 +187,13 @@ ACK xác nhận receiver nhận lệnh; chưa thay thế readback cấu hình sa
 Các lệnh ATG qua terminal và cấu hình khởi động cũ vẫn dùng cơ chế gửi UART.
 
 Với u-blox, bước chuyển Rover trong auto base kiểm tra ACK và đọc lại
-CFG-TMODE3; các batch cấu hình base còn lại vẫn chỉ xác nhận gửi UART.
-ESP32 chuyển tiếp RTCM nguyên byte, không giải
-mã datum RTCM 1021/1023/1025 như Python agent. Phần chuyển VN2000 hiện có của
-ESP32 dùng tham số tích hợp/tỉnh; cần kiểm chứng hệ tọa độ thực tế trước khi
-dùng kết quả auto base cho đo đạc.
+CFG-TMODE3. Khi áp dụng hoặc khôi phục cấu hình Base trong workflow, firmware
+cũng đọc lại receiver để xác nhận chế độ và tọa độ.
+
+ESP32 chuyển tiếp RTCM nguyên byte và đọc các bản tin datum 1021/1023/1025
+để sử dụng trong chuyển đổi VN2000 khi phù hợp. Nếu thiếu tham số cần thiết,
+workflow báo lỗi thay vì áp dụng tọa độ chưa chuyển đổi. Cần kiểm chứng hệ tọa
+độ trên thiết bị và thực địa trước khi dùng kết quả auto base cho đo đạc.
 
 ## Tách giao thức GNSS
 
