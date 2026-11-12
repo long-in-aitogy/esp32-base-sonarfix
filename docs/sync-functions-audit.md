@@ -65,3 +65,5 @@ Ngày 12/11/2026, kiểm tra lại tại `afeb4e5`: 71 bài `check_*.py` chạy 
 Khi đối chiếu lưu NVS với CORS, giữ phần chuyển `SURVEY_RESULT` và thử lưu lại kết quả Survey-In khi ghi thất bại của `main`. Các kiểm tra chuyển dữ liệu, lỗi NVS, che thông tin nhạy cảm và khôi phục tiến độ đã đạt và được bổ sung vào CI. Chưa thay phân vùng lưu trên thiết bị.
 
 Build bổ sung tại `d1ba249` với cả `BACKEND_WEBSOCKET_ENABLED=1` và `BACKEND_PUBLISH_RAW_RTCM=1` đã thành công. Đây là kiểm tra biên dịch hai tùy chọn, chưa chứng minh kết nối thực hoặc lượng heap khi chạy.
+
+Đã đối chiếu đọc cấu hình u-blox với CORS và giữ kiểm tra đầu vào, lỗi mã hóa và giới hạn tuổi dữ liệu của `main`. Kiểm tra MON-VER, TMODE3, VALGET, NAV-SAT, NAV-PVT/NAV-DOP và bộ đệm phản hồi đã đạt trên host và được thêm vào CI.

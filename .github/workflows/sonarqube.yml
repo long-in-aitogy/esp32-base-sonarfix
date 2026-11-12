@@ -72,6 +72,12 @@ jobs:
           python3 test/host/check_unicore_fixed_readback.py
           python3 test/host/check_unicore_verify_command.py
           python3 test/host/check_ublox_verify_command.py
+          python3 test/host/check_ublox_version.py
+          python3 test/host/check_ublox_tmode_readback.py
+          python3 test/host/check_ublox_output_readback.py
+          python3 test/host/check_ublox_reply_capacity.py
+          python3 test/host/check_ublox_satellites.py
+          python3 test/host/check_ublox_navigation.py
           python3 test/host/check_ntrip_handshake.py
           python3 test/host/check_ntrip_reconnect.py
           python3 test/host/check_ntrip_chunk_write.py
