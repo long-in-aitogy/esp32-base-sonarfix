@@ -22,7 +22,8 @@ harness = r'''
 constexpr size_t CONFIG_DOCUMENT_SIZE = 6144;
 #define constrain(value, low, high) ((value) < (low) ? (low) : (value) > (high) ? (high) : (value))
 struct BackendAgent {
-    String baseConfig_ = R"({"base_setup_method":"SURVEY_IN"})";
+    String baseConfig_ = R"({"base_setup_method":"SURVEY_IN"})", sensorType_ = "Unicorecomm";
+    uint32_t surveyInTargetSeconds_ = 0;
     bool prepareAutoBaseConfig(JsonObject, String &, uint16_t &, String &, String &, String &, uint8_t &, uint32_t &, uint8_t &);
     bool prepareReferenceCheckConfig(JsonObject, JsonObject &, double &, double &, double &, double &, double &, double &, String &, uint16_t &, String &, String &, String &, uint32_t &, uint16_t &);
     String buildReferenceCheckResult(JsonObject, double, double, double, size_t);
@@ -49,8 +50,20 @@ int main() {
         assert(agent.prepareReferenceCheckConfig(payload, reference, lat, lon, alt, oldLat, oldLon, oldAlt, host, port, user, password, mountpoint, timeout, samples) == valid);
         assert(host == "caster.example" && port == (valid ? input : 0));
     }
-    agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":"21.25","lon":"105.75","alt":"10.5"}})";
     payload["port"] = 2101;
+    for (const char *invalid : {
+        R"({"base_setup_method":"SURVEY_IN","survey_in_duration":0})",
+        R"({"base_setup_method":"SURVEY_IN","survey_in_duration":1.5})",
+        R"({"base_setup_method":"SURVEY_IN","survey_in_duration":3601})"}) {
+        agent.baseConfig_ = invalid;
+        assert(!agent.prepareReferenceCheckConfig(payload, reference, lat, lon, alt, oldLat, oldLon, oldAlt, host, port, user, password, mountpoint, timeout, samples));
+    }
+    agent.baseConfig_ = R"({"base_setup_method":"SURVEY_IN","survey_in_duration":3601})";
+    agent.surveyInTargetSeconds_ = 300;
+    assert(agent.prepareReferenceCheckConfig(payload, reference, lat, lon, alt, oldLat, oldLon, oldAlt, host, port, user, password, mountpoint, timeout, samples));
+    agent.surveyInTargetSeconds_ = 0; agent.sensorType_ = "Ublox";
+    assert(agent.prepareReferenceCheckConfig(payload, reference, lat, lon, alt, oldLat, oldLon, oldAlt, host, port, user, password, mountpoint, timeout, samples));
+    agent.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":"21.25","lon":"105.75","alt":"10.5"}})";
     payload["reference_coords"]["lat"] = "21.25";
     payload["reference_coords"]["lon"] = "105.75";
     payload["reference_coords"]["alt"] = "10.5";
