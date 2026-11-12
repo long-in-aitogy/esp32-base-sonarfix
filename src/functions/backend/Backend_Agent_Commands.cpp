@@ -567,7 +567,15 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
     progress["ntrip_host"] = payload["ip"];
     progress["ntrip_port"] = payload["port"];
     progress["mountpoint"] = payload["mountpoint"];
-    progress["note"] = "ESP32 forwards opaque RTCM and uses GNSS RTK/GGA; no RTCM decoder is running on the ESP32.";
+    if (!String(payload["source_name"] | "").isEmpty())
+        progress["source_name"] = payload["source_name"];
+    if (!String(payload["source_serial"] | "").isEmpty())
+        progress["source_serial"] = payload["source_serial"];
+    if (!payload["source_distance_m"].isNull())
+        progress["source_distance_m"] = payload["source_distance_m"];
+    progress["note"] = (payload["auto_apply"] | false)
+        ? "Collect RTK Fixed LLH and apply Base coordinates after quality checks."
+        : "Collect RTK Fixed LLH; results wait for review.";
     String progressJson;
     serializeJson(progress, progressJson);
     setAgentState("auto_setup_queued");

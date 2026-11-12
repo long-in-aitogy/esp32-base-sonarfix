@@ -14,11 +14,11 @@ harness = r'''
 constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
 struct BackendAgent {
     String sensorType_ = "Ublox";
-    bool running = false; int started = 0;
+    bool running = false; int started = 0; String progress;
     bool workflowActive() { return running; }
     bool startWorkflow(const char *, const String &) { ++started; return true; }
     void setAgentState(const char *) {}
-    void setWorkflowProgress(const char *, int, int, const String &) {}
+    void setWorkflowProgress(const char *, int, int, const String &value) { progress = value; }
     bool executeAutoBaseCommand(JsonObject, String &, String &);
 };
 '''
@@ -27,13 +27,19 @@ int main() {
     DynamicJsonDocument doc(1024); JsonObject request = doc.to<JsonObject>();
     request["ip"]="host"; request["port"]=2101; request["user"]="user";
     request["password"]="secret"; request["mountpoint"]="station";
+    request["source_name"]="Station A"; request["source_serial"]="serial-a"; request["source_distance_m"]=12.5;
     BackendAgent agent; String error, detail;
     assert(agent.executeAutoBaseCommand(request, error, detail) && agent.started == 1);
+    DynamicJsonDocument progress(4096); assert(!deserializeJson(progress, agent.progress));
+    assert(progress["source_name"] == "Station A" && progress["source_serial"] == "serial-a");
+    assert(progress["source_distance_m"] == 12.5 && progress["note"] == "Collect RTK Fixed LLH; results wait for review.");
     request["auto_apply"] = true;
     assert(!agent.executeAutoBaseCommand(request, error, detail) && agent.started == 1);
     assert(error == "automatic apply is only supported for nearest CORS mode");
     request["source_mode"] = "nearest";
     assert(agent.executeAutoBaseCommand(request, error, detail) && agent.started == 2);
+    progress.clear(); assert(!deserializeJson(progress, agent.progress));
+    assert(progress["note"] == "Collect RTK Fixed LLH and apply Base coordinates after quality checks.");
     request["source_mode"] = "unknown";
     assert(!agent.executeAutoBaseCommand(request, error, detail) && agent.started == 2);
     assert(error == "unsupported CORS source mode");
