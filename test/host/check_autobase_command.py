@@ -87,10 +87,15 @@ int main() {
     assert(boot.executeAutoBaseCommand(startup.as<JsonObject>(), error, detail));
     saved.clear(); assert(!deserializeJson(saved,boot.baseConfig_));
     assert(saved["auto_base_started_boot_id"]=="old-boot" && saved["auto_base_started_request_id"]=="other-request");
-    BackendAgent startFailed; startFailed.startOk=false;
+    BackendAgent immediate; immediate.startImmediately=true;
+    assert(immediate.executeAutoBaseCommand(startup.as<JsonObject>(), error, detail));
+    assert(immediate.agentState_=="running" && immediate.autoBaseProgress_=="running" && immediate.baseStartupState_=="running");
+    BackendAgent startFailed; startFailed.startOk=false; startFailed.baseStartupState_="configured"; startFailed.baseStartupError_="previous-error";
     assert(!startFailed.executeAutoBaseCommand(startup.as<JsonObject>(), error, detail));
     saved.clear(); assert(!deserializeJson(saved,startFailed.baseConfig_) && saved["base_setup_method"]=="AUTO_CORS");
     assert(error=="cannot start auto base workflow" && startFailed.published==1);
+    assert(startFailed.agentState_=="ready" && startFailed.autoBaseProgress_=="old-progress");
+    assert(startFailed.baseStartupState_=="configured" && startFailed.baseStartupError_=="previous-error");
     pending["ip"]="partial"; BackendAgent partial;
     assert(partial.executeAutoBaseCommand(pending.as<JsonObject>(), error, detail));
     request["source_mode"] = "unknown";

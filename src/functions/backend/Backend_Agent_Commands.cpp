@@ -774,11 +774,8 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
         : "Collect RTK Fixed LLH; results wait for review.";
     String progressJson;
     serializeJson(progress, progressJson);
-    if (!startWorkflow("auto_base", workflowPayload))
-    {
-        error = "cannot start auto base workflow";
-        return false;
-    }
+    const String previousState = agentState_, previousProgress = autoBaseProgress_;
+    const String previousStartupState = baseStartupState_, previousStartupError = baseStartupError_;
     setAgentState("auto_setup_queued");
     setWorkflowProgress("queued", 0, 4, progressJson);
     if (sourceMode == "nearest")
@@ -786,6 +783,16 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
         baseStartupState_ = "auto_base_running";
         baseStartupError_.clear();
         markStatusDirty();
+    }
+    if (!startWorkflow("auto_base", workflowPayload))
+    {
+        setAgentState(previousState);
+        autoBaseProgress_ = previousProgress;
+        baseStartupState_ = previousStartupState;
+        baseStartupError_ = previousStartupError;
+        markStatusDirty();
+        error = "cannot start auto base workflow";
+        return false;
     }
     detail = "auto base workflow queued";
     return true;
