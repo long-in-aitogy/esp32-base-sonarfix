@@ -77,6 +77,7 @@ jobs:
           python3 test/host/check_detection_lifecycle.py
           python3 test/host/check_ublox_retry_probe.py
           python3 test/host/check_unicore_quality.py
+          python3 test/host/check_unicore_log_list.py
           python3 test/host/check_unicore_survey_ack.py
           python3 test/host/check_unicore_fixed_readback.py
           python3 test/host/check_unicore_verify_command.py

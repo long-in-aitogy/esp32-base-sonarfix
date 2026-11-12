@@ -72,8 +72,7 @@ namespace UnicoreReadback
             }
             if (acknowledged)
                 Serial.printf("[GNSS][READBACK][ACK] %s\n", reply.line.data());
-            appendUnicoreCandidate(value, prefix, multiline, candidate, response);
-            return true;
+            return !appendUnicoreCandidate(value, prefix, multiline, candidate, response);
         }
 
 /** @brief Implements collectUnicoreResponse. */
