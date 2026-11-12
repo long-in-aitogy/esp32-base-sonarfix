@@ -45,6 +45,10 @@ jobs:
         run: |
           c++ -std=c++17 -fsanitize=address,undefined -g -Itest/host -Iinclude test/host/base_checks.cpp src/functions/gnss/Unicore_Log.cpp src/functions/gnss/gnss_cmd_builder.cpp src/functions/gnss/ublox_commands.cpp src/functions/gnss/unicore_commands.cpp -o /tmp/esp32-base-checks
           /tmp/esp32-base-checks
+          for check in protocol_checks mqtt_write_checks wifi_profiles_checks; do
+            c++ -std=c++17 -fsanitize=address,undefined -Itest/host -Iinclude test/host/$check.cpp -o /tmp/esp32-$check
+            /tmp/esp32-$check
+          done
           python3 test/host/check_base_accuracy.py
           python3 test/host/check_province_command.py
           python3 test/host/check_fixed_output_options.py
