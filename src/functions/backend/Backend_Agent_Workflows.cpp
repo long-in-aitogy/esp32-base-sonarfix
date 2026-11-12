@@ -1035,7 +1035,15 @@ bool BackendAgent::completeAutoBaseSetup(
         failureReason = "cannot read previous Base configuration";
         return false;
     }
-    baseConfig.remove("auto_base_previous_config");
+    if (baseConfig.containsKey("auto_base_previous_config"))
+    {
+        baseConfig.remove("auto_base_previous_config");
+        if (!baseConfig.garbageCollect())
+        {
+            failureReason = "cannot allocate Auto Base configuration";
+            return false;
+        }
+    }
     JsonObject coordinates = baseConfig.createNestedObject("coords");
     coordinates["lat"] = result.latitude;
     coordinates["lon"] = result.longitude;

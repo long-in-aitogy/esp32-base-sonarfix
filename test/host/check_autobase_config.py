@@ -81,6 +81,14 @@ int main() {
     assert(result["gnss_options"]["constellations"]["qzss"] == true);
     assert(result["gnss_options"]["constellations"]["glo"] == false);
     assert(result["gnss_options"]["constellations"]["sbas"] == false);
+    BackendAgent withSnapshot;
+    DynamicJsonDocument pending(4096);
+    pending["base_setup_method"]="AUTO_CORS";
+    pending["auto_base_previous_config"]["padding"]=String(2900, 'x');
+    serializeJson(pending, withSnapshot.baseConfig_);
+    assert(withSnapshot.apply(error));
+    result.clear(); assert(!deserializeJson(result, withSnapshot.baseConfig_));
+    assert(result["base_setup_method"]=="FIXED_LLA" && result["auto_base_previous_config"].isNull());
     BackendAgent defaults;
     defaults.baseConfig_ = "{}";
     assert(defaults.apply(error));
