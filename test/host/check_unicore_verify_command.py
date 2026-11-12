@@ -5,7 +5,7 @@ import tempfile
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Gnss.cpp').read_text()
 begin = source.index('bool BackendAgent::verifyUnicoreConfig(')
-end = source.index('\nvoid BackendAgent::saveSurveyResult(', begin)
+end = source.index('\nnamespace\n{', begin)
 method = source[begin:end]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
 shim = shim.replace('    bool isEmpty() const', '''    bool startsWith(const String &value) const { return compare(0, value.size(), value) == 0; }

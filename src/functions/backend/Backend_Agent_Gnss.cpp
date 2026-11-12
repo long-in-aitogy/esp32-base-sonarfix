@@ -4,6 +4,7 @@
 #include "functions/gnss/Unicore_Config_Verification.h"
 #include "Prog_Config.h"
 #include "functions/gnss/Ublox_Readback.h"
+#include "functions/gnss/Ubx_Config_Verification.h"
 #include <array>
 #include <cinttypes>
 #include <cstdio>
@@ -163,6 +164,147 @@ bool BackendAgent::verifyUnicoreConfig(JsonObjectConst payload, const String &co
     return true;
 }
 
+
+namespace
+{
+void describeTmode(JsonObject object, const uint8_t *raw) {
+    object["mode"] = raw[2] == 2 ? "Fixed" : raw[2] == 1 ? "Survey-In" : "Rover";
+    object["coordinate_type"] = raw[3] & 1 ? "LLA" : "ECEF";
+    object["accuracy_m"] = UbxBaseStatus::u32(raw + 20) * 0.0001;
+    UbxBaseStatus status;
+    if (status.tmode(raw, 40) && status.hasPosition) {
+        JsonObject position = object.createNestedObject("self_position");
+        char value[32];
+        snprintf(value, sizeof(value), "%.11f", status.latitude); position["lat"] = value;
+        snprintf(value, sizeof(value), "%.11f", status.longitude); position["lon"] = value;
+        snprintf(value, sizeof(value), "%.4f", status.height); position["alt"] = value;
+    }
+}
+}
+
+bool BackendAgent::verifyGnssConfig(JsonObjectConst payload, const String &commandId, String &error) {
+    gnssVerification_.clear();
+    uint8_t expectedMode[40], expectedOutput[UbxConfigVerification::MAX_KEYS * 5];
+    const size_t modeLength = decodeBase64(payload["tmode_b64"] | "", expectedMode, sizeof(expectedMode));
+    const size_t outputLength = decodeBase64(payload["output_b64"] | "", expectedOutput, sizeof(expectedOutput));
+    if (modeLength != 40 || expectedMode[2] != 2 || expectedMode[3] != 1
+        || !UbxConfigVerification::validExpected(expectedOutput, outputLength)) {
+        error = "Invalid GNSS verification expectation";
+        return false;
+    }
+    // The receiver is always configured with a 5 m Fixed LLA accuracy.
+    const uint32_t accuracy = static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000);
+    for (size_t i = 0; i < 4; ++i)
+        expectedMode[20 + i] = static_cast<uint8_t>(accuracy >> (8 * i));
+    uint8_t actualMode[40] = {}, values[UbxConfigVerification::MAX_KEYS] = {};
+    String modeError, outputError;
+    const bool modeRead = UbloxReadback::readTmode(actualMode, modeError);
+    const JsonObjectConst inspection = payload["readback"].as<JsonObjectConst>();
+    bool interfaceRead = false;
+    uint8_t interfaceEnabled = 0;
+    bool outputRead = inspection.isNull()
+        && UbloxReadback::readOutputValues(expectedOutput, outputLength, values, outputError);
+    DynamicJsonDocument result(VERIFICATION_DOCUMENT_SIZE);
+    result["command_id"] = commandId;
+    JsonObject details = result.createNestedObject("details");
+    details["kind"] = "Ublox";
+    JsonObject fixedDetails = details.createNestedObject("fixed");
+    describeTmode(fixedDetails.createNestedObject("expected"), expectedMode);
+    if (modeRead) describeTmode(fixedDetails.createNestedObject("actual"), actualMode);
+    if (!inspection.isNull()) {
+        const JsonArrayConst fields = inspection["fields"].as<JsonArrayConst>();
+        const JsonArrayConst ports = inspection["ports"].as<JsonArrayConst>();
+        if (fields.size() < 3 || fields.size() > UbxConfigVerification::MAX_KEYS || ports.size() != 5) {
+            error = "Invalid GNSS readback catalogue"; return false;
+        }
+        details["fields"].set(fields);
+        details["expected"].set(inspection["expected"]);
+        details.createNestedArray("compare_ports").add("UART1");
+        JsonArray observedPorts = details.createNestedArray("ports");
+        unsigned seen = 0;
+        for (JsonObjectConst request : ports) {
+            const String name = request["name"] | "";
+            const int portIndex = name == "I2C" ? 0 : name == "UART1" ? 1 : name == "UART2" ? 2 : name == "USB" ? 3 : name == "SPI" ? 4 : -1;
+            if (portIndex < 0 || (seen & (1U << portIndex))) { error = "Invalid GNSS readback port"; return false; }
+            seen |= 1U << portIndex;
+            uint8_t records[UbxConfigVerification::MAX_KEYS * 5], observed[UbxConfigVerification::MAX_KEYS];
+            const size_t length = decodeBase64(request["output_b64"] | "", records, sizeof(records));
+            if (length != fields.size() * 5 || !UbxConfigVerification::validExpected(records, length)) {
+                error = "Invalid GNSS readback keys"; return false;
+            }
+            String readError;
+            const bool read = UbloxReadback::readOutputValues(records, length, observed, readError);
+            JsonObject port = observedPorts.createNestedObject();
+            port["name"] = name;
+            port["state"] = read ? "ok" : "unread";
+            if (read) {
+                JsonArray array = port.createNestedArray("values");
+                for (size_t i = 0; i < fields.size(); ++i) {
+                    array.add(observed[i]);
+                    if (UbxBaseStatus::u32(records + i * 5) == UbxConfigVerification::enabledKey(portIndex)) {
+                        port["enabled"] = observed[i];
+                        if (portIndex == 1) { interfaceRead = true; interfaceEnabled = observed[i]; }
+                    }
+                }
+            } else port["error"] = readError;
+            if (portIndex == 1 || portIndex == 2) {
+                uint32_t baud = 0;
+                String baudError;
+                if (UbloxReadback::readBaud(portIndex, baud, baudError)) port["baud"] = baud;
+                else port["baud"] = nullptr;
+            }
+            if (name == "UART1") {
+                // Match by key, never by the ordering of a catalogue supplied over the wire.
+                outputRead = read;
+                for (size_t i = 0; read && i < outputLength; i += 5) {
+                    bool found = false;
+                    for (size_t j = 0; j < length; j += 5) if (UbxBaseStatus::u32(expectedOutput + i) == UbxBaseStatus::u32(records + j)) {
+                        values[i / 5] = observed[j / 5]; found = true; break;
+                    }
+                    if (!found) outputRead = false;
+                }
+                if (!outputRead) outputError = readError.length() ? readError : "Missing UART1 readback keys";
+            }
+        }
+    }
+    JsonObject groups = result.createNestedObject("groups");
+    JsonObject fixed = groups.createNestedObject("fixed");
+    fixed["checked"] = modeRead ? 1 : 0;
+    fixed["mismatched"] = modeRead && !UbxConfigVerification::fixedMatches(expectedMode, actualMode, 40) ? 1 : 0;
+    fixed["unread"] = modeRead ? 0 : 1;
+    for (const char *name : {"protocols", "diagnostics", "rtcm"}) {
+        JsonObject group = groups.createNestedObject(name);
+        group["checked"] = 0; group["mismatched"] = 0; group["unread"] = 0;
+    }
+    for (size_t i = 0; i < outputLength; i += 5) {
+        const uint32_t key = UbxBaseStatus::u32(expectedOutput + i);
+        const char *name = key >> 28 == 1 ? "protocols" : key >= 0x209102BD ? "rtcm" : "diagnostics";
+        JsonObject group = groups[name];
+        const char *count = outputRead ? "checked" : "unread";
+        group[count] = group[count].as<unsigned>() + 1;
+        if (outputRead && values[i / 5] != expectedOutput[i + 4])
+            group["mismatched"] = group["mismatched"].as<unsigned>() + 1;
+    }
+    if (!inspection.isNull()) {
+        JsonObject protocols = groups["protocols"];
+        const char *count = interfaceRead ? "checked" : "unread";
+        protocols[count] = protocols[count].as<unsigned>() + 1;
+        if (interfaceRead && interfaceEnabled != 1) protocols["mismatched"] = protocols["mismatched"].as<unsigned>() + 1;
+    }
+    bool mismatch = false, unread = false;
+    for (JsonPair group : groups) {
+        mismatch |= group.value()["mismatched"].as<unsigned>() > 0;
+        unread |= group.value()["unread"].as<unsigned>() > 0 || !group.value()["checked"].as<unsigned>();
+    }
+    result["state"] = unread ? "unread" : mismatch ? "mismatch" : "match";
+    if (!modeRead) result["mode_error"] = modeError;
+    if (!outputRead) result["output_error"] = outputError;
+    if (result.overflowed()) { error = "GNSS verification result overflow"; return false; }
+    serializeJson(result, gnssVerification_);
+    gnssVerificationMs_ = millis();
+    markStatusDirty();
+    return true; // Command completion is separate from match/mismatch/unread.
+}
 
 void BackendAgent::saveSurveyResult(JsonObjectConst bestPosition, const String &mode)
 {

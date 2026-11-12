@@ -154,6 +154,25 @@ bool UbloxReadback::readDop(UbxDop &status, String &error)
     return false;
 }
 
+bool UbloxReadback::readBaud(uint8_t port, uint32_t &baud, String &error)
+{
+    if (port != 1 && port != 2)
+    {
+        error = "Invalid u-blox UART port";
+        return false;
+    }
+    UbxReply reply;
+    if (!query(0x06, 0x00, reply, error, &port, 1))
+        return false;
+    if (reply.length != 28 || reply.frame[6] != port)
+    {
+        error = "Invalid CFG-PRT response";
+        return false;
+    }
+    baud = UbxBaseStatus::u32(reply.frame.data() + 14);
+    return true;
+}
+
 bool UbloxReadback::readOutputValues(const uint8_t *expected, size_t length,
                                      uint8_t *values, String &error)
 {

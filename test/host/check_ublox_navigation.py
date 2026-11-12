@@ -87,7 +87,7 @@ print('PASS: NAV-PVT/NAV-DOP decoding, validity, freshness, accuracy units and G
 # Exercise actual readback entry points with fake query boundaries; transport parsing
 # and checksum validation remain owned by the existing shared UBX query.
 readback = (root / 'src/functions/gnss/Ublox_Readback.cpp').read_text()
-readback = readback[readback.index('bool UbloxReadback::readNavigation('):readback.index('bool UbloxReadback::readOutputValues(')]
+readback = readback[readback.index('bool UbloxReadback::readNavigation('):readback.index('bool UbloxReadback::readBaud(')]
 query_harness = r'''
 #include <Arduino.h>
 #include <cassert>

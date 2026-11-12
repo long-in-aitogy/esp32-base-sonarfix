@@ -285,6 +285,7 @@ private:
     bool executeRawCommand(JsonDocument &doc, JsonObject payload,
                            String &error, String &detail);
     bool executeAutoBaseCommand(JsonObject payload, String &error, String &detail);
+    bool verifyGnssConfig(JsonObjectConst payload, const String &commandId, String &error);
     bool verifyUnicoreConfig(JsonObjectConst payload, const String &commandId, String &error);
     bool executeReferenceCheckCommand(JsonObject payload, String &error, String &detail);
     bool executeProvinceCommand(JsonObject payload, String &error, String &detail);

@@ -108,8 +108,8 @@ void BackendAgent::appendSystemInfo(JsonDocument &doc, uint32_t nowMs,
                                     const String &timestamp) const
 {
     JsonObject system = doc.createNestedObject("system_info");
-    system["gnss_verification_supported"] = sensorType_ == "Unicorecomm";
-    system["gnss_verification_details_supported"] = sensorType_ == "Unicorecomm";
+    system["gnss_verification_supported"] = sensorType_ == "Unicorecomm" || sensorType_ == "Ublox";
+    system["gnss_verification_details_supported"] = sensorType_ == "Unicorecomm" || sensorType_ == "Ublox";
     if (!gnssVerification_.isEmpty() && nowMs - gnssVerificationMs_ < 60000UL)
     {
         DynamicJsonDocument verification(VERIFICATION_DOCUMENT_SIZE);

@@ -809,14 +809,15 @@ void BackendAgent::executeCommand(const String &source, const String &command,
     }
     else if (command == "VERIFY_GNSS_CONFIG")
     {
-        if (workflowActive() || sensorType_ != "Unicorecomm")
+        if (workflowActive() || (sensorType_ != "Unicorecomm" && sensorType_ != "Ublox"))
         {
             success = false;
-            error = "Verification requires an idle Unicore receiver";
+            error = "Verification requires an idle supported GNSS receiver";
         }
         else
         {
-            success = verifyUnicoreConfig(payload, commandId, error);
+            success = sensorType_ == "Ublox" ? verifyGnssConfig(payload, commandId, error)
+                                               : verifyUnicoreConfig(payload, commandId, error);
             if (success)
                 detail = "GNSS readback completed; inspect verification result";
         }
