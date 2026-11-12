@@ -163,7 +163,7 @@ bool BackendAgent::verifyStartupReadback(GnssCmdBuilder::GnssSensorType detected
     deserializeJson(readback, receiverBaseReadback_.c_str());
 
     if (const String expectedMode = restoreFixed ? "base" : "survey_in";
-        String(readback["mode_kind"] | "") != expectedMode)
+        readback["state"] != "ok" || String(readback["mode_kind"] | "") != expectedMode)
     {
         error = "Receiver mode does not match startup configuration";
         return false;
@@ -182,9 +182,9 @@ bool BackendAgent::verifyStartupReadback(GnssCmdBuilder::GnssSensorType detected
     double height = 0.0;
     if (detected == GnssCmdBuilder::GnssSensorType::Ublox)
     {
-        lat = position["lat"].as<double>();
-        lon = position["lon"].as<double>();
-        height = position["alt"].as<double>();
+        lat = configNumber(position["lat"], NAN);
+        lon = configNumber(position["lon"], NAN);
+        height = configNumber(position["alt"], NAN);
     }
     else
     {

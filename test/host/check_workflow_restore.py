@@ -60,7 +60,7 @@ int main() {
     base["survey_in_duration"] = 120;
     base["survey_in_accuracy"] = 3;
     BackendAgent agent;
-    agent.receiverBaseReadback_ = R"({"mode_kind":"survey_in"})";
+    agent.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"survey_in"})";
     assert(agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
     assert(restoredDuration == 120 && restoredAccuracy == 5 && agent.surveyInResultPending_);
     assert(agent.baseStartupState_ == "configured");
@@ -75,31 +75,31 @@ int main() {
     agent.writeOk = true; agent.readOk = false;
     assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
     agent.readOk = true;
-    agent.receiverBaseReadback_ = R"({"mode_kind":"rover"})";
+    agent.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"rover"})";
     assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
     base.clear(); base["base_setup_method"] = "FIXED_LLA";
     base["coords"]["lat"] = 21.25; base["coords"]["lon"] = 105.75; base["coords"]["alt"] = 10.5;
     base["accuracy"] = 0.5;
     base["gnss_options"]["msm_level"] = "7";
     base["gnss_options"]["constellations"]["glo"] = false;
-    agent.receiverBaseReadback_ = R"({"mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","lat":21.25,"lon":105.75,"alt":10.5}})";
+    agent.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","lat":21.25,"lon":105.75,"alt":10.5}})";
     assert(agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
     assert(restoredLatitude == 21.25 && restoredLongitude == 105.75 && restoredAltitude == 10.5);
     assert(restoredAccuracy == 5 && !restoredOptions.glo && restoredOptions.msmLevel == GnssCmdBuilder::MsmLevel::Msm7);
-    agent.receiverBaseReadback_ = R"({"mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","lat":22.0,"lon":105.75,"alt":10.5}})";
+    agent.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","lat":22.0,"lon":105.75,"alt":10.5}})";
     assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
     agent.sensorType_ = "Unicorecomm";
     base["altitude_reference"] = "ELLIPSOID";
-    agent.receiverBaseReadback_ = R"({"mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","raw":"#BESTPOSA;SOL_COMPUTED,FIXEDPOS,21.25,105.75,9.5,1.0,WGS84,"}})";
+    agent.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","raw":"#BESTPOSA;SOL_COMPUTED,FIXEDPOS,21.25,105.75,9.5,1.0,WGS84,"}})";
     assert(agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
     assert(!agent.lastCommands.empty());
     const auto &undulation = agent.lastCommands.front();
     assert(std::string(undulation.begin(), undulation.end()) == "config undulation 0.0\r\n");
-    agent.receiverBaseReadback_ = R"({"mode_kind":"base","mode_raw":"MODE BASE 21.25 105.75 10.5"})";
+    agent.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","mode_raw":"MODE BASE 21.25 105.75 10.5"})";
     assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>())); // MODE alone cannot confirm actual BESTPOS.
-    agent.receiverBaseReadback_ = R"({"mode_kind":"base","mode_raw":"MODE BASE 21.26 105.75 10.5"})";
+    agent.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","mode_raw":"MODE BASE 21.26 105.75 10.5"})";
     assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
-    agent.receiverBaseReadback_ = R"({"mode_kind":"base","mode_raw":"MODE BASE invalid"})";
+    agent.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","mode_raw":"MODE BASE invalid"})";
     assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>()));
     base["coords"]["lat"] = 100;
     writes = agent.writes;
@@ -116,14 +116,26 @@ int main() {
     agent.roverOk = true;
     base["coords"]["lat"] = 21;
     assert(!agent.restoreWorkflowBase(base.as<JsonObjectConst>())); // Partial coordinates are never treated as unconfigured.
+    BackendAgent zero;
+    DynamicJsonDocument zeroBase(256);
+    zeroBase["base_setup_method"]="FIXED_LLA";
+    zeroBase["coords"]["lat"]=0; zeroBase["coords"]["lon"]=0; zeroBase["coords"]["alt"]=0;
+    zero.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS"}})";
+    assert(!zero.restoreWorkflowBase(zeroBase.as<JsonObjectConst>()));
+    zero.receiverBaseReadback_ = R"({"state":"error","mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","lat":0,"lon":0,"alt":0}})";
+    assert(!zero.restoreWorkflowBase(zeroBase.as<JsonObjectConst>()));
+    zero.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","lat":"bad","lon":0,"alt":0}})";
+    assert(!zero.restoreWorkflowBase(zeroBase.as<JsonObjectConst>()));
+    zero.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","lat":"0.0","lon":0,"alt":0}})";
+    assert(zero.restoreWorkflowBase(zeroBase.as<JsonObjectConst>()));
     BackendAgent retry;
     retry.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","coords":{"lat":21.25,"lon":105.75,"alt":10.5}})";
     retry.baseStartupState_ = "error";
     retry.baseStartupError_ = "Receiver has not confirmed the saved fixed position";
-    retry.receiverBaseReadback_ = R"({"mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","lat":21.26,"lon":105.75,"alt":10.5}})";
+    retry.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","lat":21.26,"lon":105.75,"alt":10.5}})";
     retry.reconcileBaseStartupReadback();
     assert(retry.baseStartupState_ == "error"); // A different fixed position cannot enable output.
-    retry.receiverBaseReadback_ = R"({"mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","lat":21.25,"lon":105.75,"alt":10.5}})";
+    retry.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","lat":21.25,"lon":105.75,"alt":10.5}})";
     retry.baseStartupError_ = "Could not save Base configuration";
     retry.reconcileBaseStartupReadback();
     assert(retry.baseStartupState_ == "error"); // Persistence failures never self-clear.
@@ -134,7 +146,7 @@ int main() {
     retry.baseConfig_ = R"({"base_setup_method":"FIXED_LLA","altitude_reference":"ELLIPSOID","coords":{"lat":21.25,"lon":105.75,"alt":10.5}})";
     retry.baseStartupState_ = "error";
     retry.baseStartupError_ = "Receiver has not confirmed the saved fixed position";
-    retry.receiverBaseReadback_ = R"({"mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","raw":"#BESTPOSA;SOL_COMPUTED,FIXEDPOS,21.25,105.75,9.5,1.0,WGS84,"}})";
+    retry.receiverBaseReadback_ = R"({"state":"ok","mode_kind":"base","bestpos":{"state":"ok","position_type":"FIXEDPOS","raw":"#BESTPOSA;SOL_COMPUTED,FIXEDPOS,21.25,105.75,9.5,1.0,WGS84,"}})";
     retry.reconcileBaseStartupReadback();
     assert(retry.baseStartupState_ == "fixed_restored" && retry.baseStartupError_.isEmpty());
 }
