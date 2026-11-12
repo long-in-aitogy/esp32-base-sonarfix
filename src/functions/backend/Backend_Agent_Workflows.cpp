@@ -689,8 +689,25 @@ String BackendAgent::buildAutoBaseResult(
     completed["central_meridian_deg"] = centralMeridianDeg;
     completed["k0"] = scale;
     completed["conversion_report"].set(report);
+    const String mountpoint = report["source"]["mountpoint"] | String();
+    if (completed.overflowed())
+        return String();
     String serialized;
     serializeJson(completed, serialized);
+    DynamicJsonDocument checked(CONFIG_DOCUMENT_SIZE), progress(CONFIG_DOCUMENT_SIZE);
+    if (deserializeJson(checked, serialized) != DeserializationError::Ok)
+        return String();
+    checked["source_mountpoint"] = mountpoint;
+    checked["auto_applied"] = true;
+    checked["receiver_write_completed"] = true;
+    progress["phase"] = String("ready_for_review");
+    progress["step"] = 4;
+    progress["total_steps"] = 4;
+    progress["updated_at"] = 0;
+    for (JsonPairConst pair : checked.as<JsonObjectConst>())
+        progress[String(pair.key().c_str())] = pair.value();
+    if (checked.overflowed() || progress.overflowed())
+        return String();
     return serialized;
 }
 
@@ -724,6 +741,7 @@ bool BackendAgent::completeAutoBaseSetup(
     const char *projectionSource = "not_used";
     bool transformed = false;
     Vn2000Datum datum;
+    DynamicJsonDocument location(2048);
     double projectedHeight = rawAltitude;
     ProjectedPosition result{rawLatitude, rawLongitude, rawAltitude};
     if (requestedTransform)
@@ -772,7 +790,7 @@ bool BackendAgent::completeAutoBaseSetup(
             String requestJson;
             serializeJson(requestDoc, requestJson);
             setWorkflowProgress("resolving_location", 4, 4, requestJson);
-            DynamicJsonDocument location(2048), received(2048);
+            DynamicJsonDocument received(2048);
             AutoBaseLocationReply reply{};
             const uint32_t started = millis();
             bool located = false;
@@ -889,6 +907,7 @@ bool BackendAgent::completeAutoBaseSetup(
     report["processor"] = "esp32";
     report["province_code"] = provinceCode;
     report["province_name"] = provinceName;
+    report["location"].set(location.as<JsonObjectConst>());
     report["projection_source"] = projectionSource;
     report["central_meridian_deg"] = numberText(centralMeridianDeg);
     report["k0"] = numberText(scale);
@@ -936,14 +955,18 @@ bool BackendAgent::completeAutoBaseSetup(
         failureReason = "Auto Base report exceeds memory capacity";
         return false;
     }
-    if (!(payload["auto_apply"] | false))
+    resultJson = buildAutoBaseResult(
+        result.latitude, result.longitude, result.altitude, rawLatitude, rawLongitude, rawAltitude,
+        transformed, false, latitudes.size(), projectionSource,
+        provinceCode, provinceName, centralMeridianDeg, scale, report.as<JsonObjectConst>());
+    if (resultJson.isEmpty())
     {
-        resultJson = buildAutoBaseResult(
-            result.latitude, result.longitude, result.altitude, rawLatitude, rawLongitude, rawAltitude,
-            transformed, false, latitudes.size(), projectionSource,
-            provinceCode, provinceName, centralMeridianDeg, scale, report.as<JsonObjectConst>());
-        return true;
+        failureReason = "Auto Base result exceeds memory capacity";
+        return false;
     }
+    if (!(payload["auto_apply"] | false))
+        return true;
+    resultJson.clear();
 
     setAgentState("auto_setup_base");
     DynamicJsonDocument baseProgress(2048);
@@ -1022,6 +1045,7 @@ bool BackendAgent::completeAutoBaseSetup(
     raw["lat"] = rawLatitude;
     raw["lon"] = rawLongitude;
     raw["alt"] = rawAltitude;
+    baseConfig["conversion_report"].set(report.as<JsonObjectConst>());
     if (baseConfig.overflowed())
     {
         failureReason = "Auto Base configuration exceeds memory capacity";
@@ -1040,12 +1064,8 @@ bool BackendAgent::completeAutoBaseSetup(
 
     report["receiver_write_completed"] = true;
     report["auto_applied"] = true;
-    baseConfig["conversion_report"].set(report.as<JsonObjectConst>());
-    if (baseConfig.overflowed())
-    {
-        failureReason = "Auto Base configuration exceeds memory capacity";
-        return false;
-    }
+    baseConfig["conversion_report"]["receiver_write_completed"] = true;
+    baseConfig["conversion_report"]["auto_applied"] = true;
     const String previousConfig = baseConfig_;
     baseConfig_.clear();
     serializeJson(baseConfig, baseConfig_);
@@ -1070,6 +1090,11 @@ bool BackendAgent::completeAutoBaseSetup(
         result.latitude, result.longitude, result.altitude, rawLatitude, rawLongitude, rawAltitude,
         transformed, transportRestored, latitudes.size(), projectionSource,
         provinceCode, provinceName, centralMeridianDeg, scale, report.as<JsonObjectConst>());
+    if (resultJson.isEmpty())
+    {
+        failureReason = "cannot allocate Auto Base result";
+        return false;
+    }
     Serial.printf("[AUTO BASE] KET QUA: THANH CONG; samples=%u; lat=%.10f; lon=%.10f; alt=%.4f\n",
                   static_cast<unsigned>(latitudes.size()), result.latitude, result.longitude,
                   result.altitude);

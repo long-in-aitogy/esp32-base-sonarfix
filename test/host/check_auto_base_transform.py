@@ -29,7 +29,7 @@ int xQueueReset(int) { requestStarted = now; return 1; }
 int xQueueReceive(int, void *out, int timeout) {
     now += timeout;
     if (!provideLocation) return 0;
-    std::snprintf(static_cast<char *>(out), 1536, R"({"request_id":"boot:%u","location":{"input_coord":{"lat":21,"lon":105,"alt":10},"l0_deg":105,"k0":0.9999}})", requestStarted);
+    std::snprintf(static_cast<char *>(out), 1536, R"({"request_id":"boot:%u","location":{"input_coord":{"lat":21,"lon":105,"alt":10},"l0_deg":105,"k0":0.9999,"province_name":"Hanoi","projection_options":[{"l0_deg":105,"k0":0.9999}]}})", requestStarted);
     provideLocation = false; return 1;
 }
 int xSemaphoreTake(int, int) { return 1; }
@@ -107,6 +107,9 @@ int main() {
     agent.workflowCancelRequested_ = false;
     provideLocation = true;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
+    report.clear(); assert(!deserializeJson(report, agent.reportJson));
+    assert(report["location"]["province_name"] == "Hanoi");
+    assert(report["location"]["projection_options"][0]["l0_deg"] == 105);
     sessionDatum.has1025 = true; sessionDatum.centralMeridianDeg = 105; sessionDatum.scale = 0.9999;
     sessionDatum.kT = 1.00000008613; sessionDatum.count1021 = 2;
     datumTransformOk = false;

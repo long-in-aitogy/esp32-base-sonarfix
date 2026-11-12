@@ -18,7 +18,7 @@ struct BackendAgent {
 '''
 checks=r'''
 int main() {
-    DynamicJsonDocument report(2048), decoded(4096);
+    DynamicJsonDocument report(8192), decoded(4096);
     report["input_coord"]["lat"]="21.084990131093591";
     report["parameters"]["kT"]="1.00000008613";
     report["output_coord"]["lat"]="21.0849901310";
@@ -37,6 +37,10 @@ int main() {
     assert(decoded["conversion_report"]["parameters"]["kT"]=="1.00000008613");
     assert(decoded["conversion_report"]["input_coord"]["lat"]=="21.084990131093591");
     assert(decoded["conversion_report"]["receiver_write_completed"]==true);
+    report["location"]["extra"] = String(std::string(3500, 'x'));
+    const String oversized=agent.buildAutoBaseResult(21,105,10,21,105,10,true,true,60,
+                                                      "rtcm1025","01","Hanoi",105,0.9999,report.as<JsonObjectConst>());
+    assert(oversized.isEmpty());
 }
 '''
 with tempfile.TemporaryDirectory(prefix='autobase-report-') as directory:

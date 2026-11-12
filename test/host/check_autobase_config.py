@@ -99,6 +99,15 @@ int main() {
     assert(replacement.apply(error));
     result.clear(); assert(!deserializeJson(result, replacement.baseConfig_));
     assert(result["conversion_report"]["detail"].as<String>().length()==900);
+    BackendAgent tooLarge;
+    DynamicJsonDocument nearCapacity(4096);
+    nearCapacity["base_setup_method"] = "SURVEY_IN";
+    nearCapacity["extra"] = String(3000, 'x');
+    serializeJson(nearCapacity, tooLarge.baseConfig_);
+    tooLarge.largeReport = true;
+    assert(!tooLarge.apply(error));
+    assert(error == "Auto Base configuration exceeds memory capacity");
+    assert(tooLarge.stops == 0 && tooLarge.writes == 0 && tooLarge.saves == 0);
     BackendAgent defaults;
     defaults.baseConfig_ = "{}";
     assert(defaults.apply(error));
