@@ -117,9 +117,9 @@ Các trường `bestpos`, `mode_kind`, `mode_raw`, `position_type` và `state` m
 
 Đối chiếu lại commit CORS `7db656b`: cấu hình Auto Base giữ lựa chọn MSM/chòm sao và đặt đầu ra RTCM-only; phục hồi Fixed LLA đi qua `buildStartupCommands` và xác nhận readback. Khi áp dụng hoặc khôi phục Fixed LLA mà chưa có lựa chọn, bản đích đặt mặc định MSM4 và tắt QZSS/SBAS như CORS; Survey-In dùng MSM `both` và bật QZSS/SBAS khi thiếu lựa chọn. Accuracy cấu hình luôn là 5 m thay cho 0,01 m của CORS. `check_autobase_config.py` và `check_workflow_restore.py` kiểm tra các lựa chọn này với receiver giả lập.
 
-Với lệnh AutoNearest đã có địa chỉ CORS, `main` giữ cấu hình Base trước đó khi tác vụ đang chạy; CORS lưu `AUTO_CORS` ngay khi nhận lệnh. Giữ hành vi `main` để có thể khôi phục cấu hình cũ nếu tác vụ thất bại hoặc bị dừng. Với yêu cầu AutoNearest chưa có nguồn, firmware vẫn lưu yêu cầu và bản chụp cấu hình cũ để chờ nguồn.
+Lệnh AutoNearest đã đồng bộ theo geodetic: lưu cấu hình `AUTO_CORS` ngay trước khi khởi chạy; khi thông tin kết nối chưa đầy đủ, lưu yêu cầu và chuyển receiver sang Rover để chờ cấu hình cục bộ.
 
-Khi tự khởi động AutoNearest, mã đích ghi ID lần khởi động hiện tại và ID yêu cầu đã lưu trong cấu hình; CORS lấy hai trường này từ payload. Giữ cách của nhánh đích để thông tin khôi phục gắn với phiên và yêu cầu thực tế của thiết bị. `check_autobase_command.py` kiểm tra các ID được ghi và phục hồi khi bắt đầu workflow lỗi.
+Khi tự khởi động AutoNearest, ID boot và request được lấy từ payload như geodetic. `check_autobase_command.py` kiểm tra cấu hình đã lưu, lỗi lưu, lỗi Rover và lỗi khởi chạy.
 
 Kiểm tra lại tại `2345ed8`: 76 bài host không cần thiết bị đều đạt; hai bài dùng bộ tạo lệnh CORS thực cũng đạt, gồm kiểm tra accuracy 5 m cho Survey-In và Fixed LLA. Danh mục kinh tuyến 34 tỉnh khớp CORS. Ba cấu hình firmware `general`, `general_debug` và `general_test` cùng chương trình test modem biên dịch thành công; test modem chưa được chạy. Bộ tạo lệnh u-blox và báo cáo Auto Base dùng cùng cách tính tọa độ để giữ nguyên kết quả khi áp dụng lại. Chưa chạy kiểm tra flash hoặc xác nhận BESTPOS trên thiết bị thật; không có cổng ESP32 được kết nối. Các thay đổi CI mới chưa được chạy trên GitHub.
 
