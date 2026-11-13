@@ -11,7 +11,7 @@ location_method = workflow[workflow.index('bool BackendAgent::resolveAutoBaseLoc
 begin = workflow.index('bool BackendAgent::completeAutoBaseSetup(')
 end = workflow.index('    setAgentState("auto_setup_base");', begin)
 method = workflow[begin:end] + '    reachedWrite = true;\n    (void)resultJson;\n    return true;\n}\n'
-full_end = workflow.index('\nbool BackendAgent::runAutoBaseWorkflow(', begin)
+full_end = workflow.index('\nvoid BackendAgent::finishAutoBaseWorkflow(', begin)
 full_method = workflow[begin:full_end]
 run_end = workflow.index('\nbool BackendAgent::prepareReferenceCheckConfig(', full_end)
 run_method = workflow[full_end:run_end]
@@ -149,6 +149,7 @@ struct BackendAgent {
     bool completeAutoBaseSetupFull(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &, String &, const String &);
     bool waitForAutoBaseFix(uint32_t, uint8_t, bool &, String &, const String &);
     bool collectAutoBaseSamples(int, std::vector<double> &, std::vector<double> &, std::vector<double> &, bool &, String &, const String &);
+    void finishAutoBaseWorkflow(JsonDocument &, bool, const String &, bool, bool, const String &);
     bool runAutoBaseWorkflow(JsonObject);
     bool waitForReferenceFix(uint32_t, String &);
     bool collectReferenceSamples(uint16_t, std::vector<double> &, std::vector<double> &, std::vector<double> &, String &);

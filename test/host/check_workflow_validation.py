@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_text()
-methods = []
+methods = [source[source.index('void BackendAgent::finishAutoBaseWorkflow('):source.index('bool BackendAgent::runAutoBaseWorkflow(')]]
 for name, next_state in [('runAutoBaseWorkflow', 'auto_setup_rover'), ('runReferenceCheckWorkflow', 'reference_check_rover')]:
     start = source.index('bool BackendAgent::' + name + '(')
     end = source.index('    setAgentState("' + next_state + '");', start)
@@ -34,6 +34,7 @@ struct BackendAgent {
     void setWorkflowProgress(const String &s, int, int, const String &) { stage = s; }
     bool saveStatePreferences() { ++saved; return true; }
     void publishConfigState(const char *) {}
+    void finishAutoBaseWorkflow(JsonDocument &, bool, const String &, bool, bool, const String &);
     bool runAutoBaseWorkflow(JsonObject);
     bool runReferenceCheckWorkflow(JsonObject);
 };

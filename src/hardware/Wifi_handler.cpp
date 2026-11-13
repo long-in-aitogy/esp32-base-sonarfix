@@ -35,19 +35,16 @@ static bool tryLegacyWifi(bool (*validateConnection)()) {
         }
         nvs_close(legacy);
     }
-    if (!profiles.isEmpty()) {
-        DynamicJsonDocument doc(3072);
-        if (deserializeJson(doc, profiles) == DeserializationError::Ok && doc.is<JsonArray>()) {
-            for (JsonObjectConst profile : doc.as<JsonArrayConst>()) {
-                const String ssid = profile["ssid"] | "";
-                const String password = profile["password"] | "";
-                if (connectWifi(ssid, password, validateConnection)) {
-                    if (!saveMigratedWifi(ssid, password))
-                        Serial.println("[WIFI] Mang dang hoat dong; chua luu xong chuyen doi NVS.");
-                    return true;
-                }
-            }
-        }
+    if (profiles.isEmpty()) return false;
+    DynamicJsonDocument doc(3072);
+    if (deserializeJson(doc, profiles) != DeserializationError::Ok || !doc.is<JsonArray>()) return false;
+    for (JsonObjectConst profile : doc.as<JsonArrayConst>()) {
+        const String ssid = profile["ssid"] | "";
+        const String password = profile["password"] | "";
+        if (!connectWifi(ssid, password, validateConnection)) continue;
+        if (!saveMigratedWifi(ssid, password))
+            Serial.println("[WIFI] Mang dang hoat dong; chua luu xong chuyen doi NVS.");
+        return true;
     }
     return false;
 }

@@ -1086,6 +1086,58 @@ bool BackendAgent::completeAutoBaseSetup(
     return true;
 }
 
+void BackendAgent::finishAutoBaseWorkflow(JsonDocument &previousBase, bool hasSavedPrevious,
+                                          const String &selectedMountpoint, bool success,
+                                          bool cancelled, const String &reason)
+{
+    const bool roverStopped = stopNtripRoverLocked();
+    const bool baseRestored = roverStopped && restoreWorkflowBase(previousBase.as<JsonObjectConst>());
+    const bool transportRestored = baseRestored && restartConfiguredNtrip();
+    bool cleanupSucceeded = baseRestored && transportRestored;
+    if (cleanupSucceeded && hasSavedPrevious)
+    {
+        const String pendingConfig = baseConfig_;
+        baseConfig_.clear();
+        serializeJson(previousBase, baseConfig_);
+        if (saveStatePreferences())
+            publishConfigState("base_config_state");
+        else
+        {
+            baseConfig_ = pendingConfig;
+            cleanupSucceeded = false;
+        }
+    }
+    if (cancelled && cleanupSucceeded && previousBase["base_setup_method"] == "AUTO_CORS"
+        && previousBase["auto_cors_source_mode"] == "nearest")
+    {
+        JsonObjectConst coords = previousBase["coords"].as<JsonObjectConst>();
+        if (coords.isNull())
+            coords = previousBase.as<JsonObjectConst>();
+        if (!std::isfinite(coordinateNumber(coords["lat"]))
+            || !std::isfinite(coordinateNumber(coords["lon"]))
+            || !std::isfinite(coordinateNumber(coords["alt"])))
+        {
+            baseStartupState_ = "awaiting_configuration";
+            markStatusDirty();
+        }
+    }
+    setAgentState(normalAgentState());
+    DynamicJsonDocument details(1024);
+    if (!selectedMountpoint.isEmpty())
+        details["source_mountpoint"] = selectedMountpoint;
+    if (!reason.isEmpty())
+        details["reason"] = reason;
+    if (!cleanupSucceeded)
+        details["cleanup_error"] = "could not safely restore base/NTRIP state";
+    String serialized;
+    serializeJson(details, serialized);
+    const char *unfinishedStage = cancelled && cleanupSucceeded ? "stopped" : "failed";
+    const char *unfinishedResult = cancelled && cleanupSucceeded ? "DA DUNG" : "THAT BAI";
+    setWorkflowProgress(success && cleanupSucceeded ? "completed" : unfinishedStage, success && cleanupSucceeded ? 4 : 2, 4, serialized);
+    Serial.printf("[AUTO BASE] KET QUA: %s; %s\n", success && cleanupSucceeded ? "THANH CONG" : unfinishedResult, reason.c_str());
+    saveStatePreferences();
+}
+
 bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
 {
     String host;
@@ -1128,54 +1180,9 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
     if (previousBase["base_setup_method"] == "SURVEY_IN" && surveyInTargetSeconds_ > 0)
         previousBase["survey_in_duration"] = surveyInTargetSeconds_;
 
-    auto finish = [&](const bool success, const bool cancelled, const String &reason)
+    auto finish = [&](bool success, bool cancelled, const String &reason)
     {
-        const bool roverStopped = stopNtripRoverLocked();
-        const bool baseRestored = roverStopped && restoreWorkflowBase(previousBase.as<JsonObjectConst>());
-        const bool transportRestored = baseRestored && restartConfiguredNtrip();
-        bool cleanupSucceeded = baseRestored && transportRestored;
-        if (cleanupSucceeded && hasSavedPrevious)
-        {
-            const String pendingConfig = baseConfig_;
-            baseConfig_.clear();
-            serializeJson(previousBase, baseConfig_);
-            if (saveStatePreferences())
-                publishConfigState("base_config_state");
-            else
-            {
-                baseConfig_ = pendingConfig;
-                cleanupSucceeded = false;
-            }
-        }
-        if (cancelled && cleanupSucceeded && previousBase["base_setup_method"] == "AUTO_CORS"
-            && previousBase["auto_cors_source_mode"] == "nearest")
-        {
-            JsonObjectConst coords = previousBase["coords"].as<JsonObjectConst>();
-            if (coords.isNull())
-                coords = previousBase.as<JsonObjectConst>();
-            if (!std::isfinite(coordinateNumber(coords["lat"]))
-                || !std::isfinite(coordinateNumber(coords["lon"]))
-                || !std::isfinite(coordinateNumber(coords["alt"])))
-            {
-                baseStartupState_ = "awaiting_configuration";
-                markStatusDirty();
-            }
-        }
-        setAgentState(normalAgentState());
-        DynamicJsonDocument details(1024);
-        if (!selectedMountpoint.isEmpty())
-            details["source_mountpoint"] = selectedMountpoint;
-        if (!reason.isEmpty())
-            details["reason"] = reason;
-        if (!cleanupSucceeded)
-            details["cleanup_error"] = "could not safely restore base/NTRIP state";
-        String serialized;
-        serializeJson(details, serialized);
-        const char *unfinishedStage = cancelled && cleanupSucceeded ? "stopped" : "failed";
-        const char *unfinishedResult = cancelled && cleanupSucceeded ? "DA DUNG" : "THAT BAI";
-        setWorkflowProgress(success && cleanupSucceeded ? "completed" : unfinishedStage, success && cleanupSucceeded ? 4 : 2, 4, serialized);
-        Serial.printf("[AUTO BASE] KET QUA: %s; %s\n", success && cleanupSucceeded ? "THANH CONG" : unfinishedResult, reason.c_str());
-        saveStatePreferences();
+        finishAutoBaseWorkflow(previousBase, hasSavedPrevious, selectedMountpoint, success, cancelled, reason);
     };
 
     setAgentState("auto_setup_rover");

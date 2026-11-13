@@ -1,5 +1,6 @@
 #pragma once
 #include "functions/gnss/Unicore_Log.h"
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdio>
@@ -75,9 +76,40 @@ inline bool validLogEnvelope(std::string_view input, size_t checksum) {
         return validUnicoreLogChecksum(input.data(), input.size());
     if (input.substr(input.size() - 2) != "\n\n" && input.substr(input.size() - 4) != "\r\n\r\n")
         return false;
-    for (char value : input)
-        if ((static_cast<unsigned char>(value) < 32 && value != '\r' && value != '\n' && value != '\t')
-            || static_cast<unsigned char>(value) >= 127) return false;
+    return std::all_of(input.begin(), input.end(), [](char value) {
+        return (static_cast<unsigned char>(value) >= 32 || value == '\r' || value == '\n' || value == '\t')
+            && static_cast<unsigned char>(value) < 127;
+    });
+}
+
+inline bool parseLogEntry(const char *&cursor, const char *end, bool hasChecksum,
+                          long &count, std::vector<Log> &logs) {
+    if (!hasChecksum) {
+        while (cursor < end && (*cursor == '\r' || *cursor == '\n' || *cursor == ' ' || *cursor == '\t')) ++cursor;
+        if (cursor < end && *cursor != '<') return false;
+    }
+    while (cursor < end && (*cursor == '\r' || *cursor == '\n' || *cursor == ' ' || *cursor == '<')) ++cursor;
+    if (cursor == end) return true;
+    const char *lineEnd = cursor;
+    while (lineEnd < end && *lineEnd != '\r' && *lineEnd != '\n') ++lineEnd;
+    if (lineEnd - cursor > 159) return false;
+    std::array<char, 160> line{};
+    std::memcpy(line.data(), cursor, lineEnd - cursor);
+    cursor = lineEnd;
+    if (count < 0) {
+        char *tail = nullptr;
+        count = std::strtol(line.data(), &tail, 10);
+        while (tail && *tail == ' ') ++tail;
+        if (!tail || tail == line.data() || *tail || count < 0 || count > 64) return false;
+        logs.reserve(count);
+        return true;
+    }
+    if (logs.size() >= static_cast<size_t>(count)) return false;
+    Log log;
+    if (!parseLogLine(line.data(), log)) return false;
+    for (const Log &existing : logs)
+        if (existing.port == log.port && !std::strcmp(existing.name.data(), log.name.data())) return false;
+    logs.push_back(log);
     return true;
 }
 
@@ -96,34 +128,8 @@ inline bool parseLogs(const char *text, size_t length, std::vector<Log> &logs) {
     if (cursor >= end) return false;
     ++cursor;
     long count = -1;
-    while (cursor < end) {
-        if (!hasChecksum) {
-            while (cursor < end && (*cursor == '\r' || *cursor == '\n' || *cursor == ' ' || *cursor == '\t')) ++cursor;
-            if (cursor < end && *cursor != '<') return false;
-        }
-        while (cursor < end && (*cursor == '\r' || *cursor == '\n' || *cursor == ' ' || *cursor == '<')) ++cursor;
-        if (cursor == end) break;
-        const char *lineEnd = cursor;
-        while (lineEnd < end && *lineEnd != '\r' && *lineEnd != '\n') ++lineEnd;
-        if (lineEnd - cursor > 159) return false;
-        std::array<char, 160> line{};
-        std::memcpy(line.data(), cursor, lineEnd - cursor);
-        cursor = lineEnd;
-        if (count < 0) {
-            char *tail = nullptr;
-            count = std::strtol(line.data(), &tail, 10);
-            while (tail && *tail == ' ') ++tail;
-            if (!tail || tail == line.data() || *tail || count < 0 || count > 64) return false;
-            logs.reserve(count);
-            continue;
-        }
-        if (logs.size() >= static_cast<size_t>(count)) return false;
-        Log log;
-        if (!parseLogLine(line.data(), log)) return false;
-        for (const Log &existing : logs)
-            if (existing.port == log.port && !std::strcmp(existing.name.data(), log.name.data())) return false;
-        logs.push_back(log);
-    }
+    while (cursor < end)
+        if (!parseLogEntry(cursor, end, hasChecksum, count, logs)) return false;
     return count >= 0 && logs.size() == static_cast<size_t>(count);
 }
 } // namespace UnicoreConfigVerification

@@ -194,6 +194,9 @@ private:
                                double centralMeridianDeg, double scale, JsonObjectConst report);
     bool resolveAutoBaseLocation(double latitude, double longitude, double altitude,
                                  JsonDocument &location, String &failureReason);
+    void finishAutoBaseWorkflow(JsonDocument &previousBase, bool hasSavedPrevious,
+                                const String &selectedMountpoint, bool success,
+                                bool cancelled, const String &reason);
     bool runReferenceCheckWorkflow(JsonObject payload);
     bool prepareReferenceCheckConfig(JsonObject payload, JsonObject &reference,
                                      double &referenceLatitude, double &referenceLongitude,
