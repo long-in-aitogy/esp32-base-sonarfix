@@ -400,29 +400,8 @@ bool BackendAgent::restoreWorkflowBase(JsonObjectConst base)
     String error;
     if (method == "SURVEY_IN")
     {
-        const double duration = base["survey_in_duration"].isNull() ? 120 : coordinateNumber(base["survey_in_duration"]);
-        const double accuracy = GnssCmdBuilder::BASE_ACCURACY_METERS;
-        if (const double maxDuration = sensorType_ == "Unicorecomm" ? 3600 : 604800; !std::isfinite(duration) || duration < 1 || duration > maxDuration || std::floor(duration) != duration
-            || !std::isfinite(accuracy) || accuracy < 0.001 || accuracy > 10000)
-            return fail("invalid saved Survey-In parameters");
-        GnssOptions options;
-        options.ports = {"UART1"};
-        const JsonObjectConst output = base["gnss_options"];
-        options.outputMode = String(output["output_mode"] | "rtcm_only") == "rtcm_only"
-            ? OutputMode::RtcmOnly : OutputMode::DiagnosticsRtcm;
-        if (const String level = output["msm_level"].isNull() ? "both" : output["msm_level"].as<String>(); level == "7") options.msmLevel = MsmLevel::Msm7;
-        else if (level == "4") options.msmLevel = MsmLevel::Msm4;
-        else options.msmLevel = MsmLevel::Both;
-        const JsonObjectConst systems = output["constellations"];
-        options.gps = systems["gps"] | true;
-        options.glo = systems["glo"] | true;
-        options.gal = systems["gal"] | true;
-        options.bds = systems["bds"] | true;
-        options.qzss = systems["qzss"] | true;
-        options.sbas = systems["sbas"] | true;
-        if (!writeGnssCommands(buildBaseSurveyInCommand(static_cast<uint32_t>(duration), accuracy, chip, options)))
-            return fail("receiver rejected Survey-In restore");
-        surveyInResultPending_ = true;
+        if (!restoreSurveyInBase(base, chip, error))
+            return fail(error);
     }
     else
     {
@@ -439,6 +418,41 @@ bool BackendAgent::restoreWorkflowBase(JsonObjectConst base)
     baseStartupError_.clear();
     markStatusDirty();
     Serial.printf("[AUTO BASE][RESTORE] Previous %s mode confirmed\n", method.c_str());
+    return true;
+}
+
+bool BackendAgent::restoreSurveyInBase(JsonObjectConst base, GnssCmdBuilder::GnssSensorType chip, String &error)
+{
+    using namespace GnssCmdBuilder;
+    const double duration = base["survey_in_duration"].isNull() ? 120 : coordinateNumber(base["survey_in_duration"]);
+    const double accuracy = GnssCmdBuilder::BASE_ACCURACY_METERS;
+    if (const double maxDuration = sensorType_ == "Unicorecomm" ? 3600 : 604800; !std::isfinite(duration) || duration < 1 || duration > maxDuration || std::floor(duration) != duration
+        || !std::isfinite(accuracy) || accuracy < 0.001 || accuracy > 10000)
+    {
+        error = "invalid saved Survey-In parameters";
+        return false;
+    }
+    GnssOptions options;
+    options.ports = {"UART1"};
+    const JsonObjectConst output = base["gnss_options"];
+    options.outputMode = String(output["output_mode"] | "rtcm_only") == "rtcm_only"
+        ? OutputMode::RtcmOnly : OutputMode::DiagnosticsRtcm;
+    if (const String level = output["msm_level"].isNull() ? "both" : output["msm_level"].as<String>(); level == "7") options.msmLevel = MsmLevel::Msm7;
+    else if (level == "4") options.msmLevel = MsmLevel::Msm4;
+    else options.msmLevel = MsmLevel::Both;
+    const JsonObjectConst systems = output["constellations"];
+    options.gps = systems["gps"] | true;
+    options.glo = systems["glo"] | true;
+    options.gal = systems["gal"] | true;
+    options.bds = systems["bds"] | true;
+    options.qzss = systems["qzss"] | true;
+    options.sbas = systems["sbas"] | true;
+    if (!writeGnssCommands(buildBaseSurveyInCommand(static_cast<uint32_t>(duration), accuracy, chip, options)))
+    {
+        error = "receiver rejected Survey-In restore";
+        return false;
+    }
+    surveyInResultPending_ = true;
     return true;
 }
 
@@ -1086,6 +1100,21 @@ bool BackendAgent::completeAutoBaseSetup(
     return true;
 }
 
+namespace
+{
+    bool missingAutoNearestPosition(JsonObjectConst base)
+    {
+        if (base["base_setup_method"] != "AUTO_CORS" || base["auto_cors_source_mode"] != "nearest")
+            return false;
+        JsonObjectConst coords = base["coords"].as<JsonObjectConst>();
+        if (coords.isNull())
+            coords = base;
+        return !std::isfinite(coordinateNumber(coords["lat"]))
+            || !std::isfinite(coordinateNumber(coords["lon"]))
+            || !std::isfinite(coordinateNumber(coords["alt"]));
+    }
+} // namespace
+
 void BackendAgent::finishAutoBaseWorkflow(JsonDocument &previousBase, bool hasSavedPrevious,
                                           const String &selectedMountpoint, bool success,
                                           bool cancelled, const String &reason)
@@ -1107,19 +1136,10 @@ void BackendAgent::finishAutoBaseWorkflow(JsonDocument &previousBase, bool hasSa
             cleanupSucceeded = false;
         }
     }
-    if (cancelled && cleanupSucceeded && previousBase["base_setup_method"] == "AUTO_CORS"
-        && previousBase["auto_cors_source_mode"] == "nearest")
+    if (cancelled && cleanupSucceeded && missingAutoNearestPosition(previousBase.as<JsonObjectConst>()))
     {
-        JsonObjectConst coords = previousBase["coords"].as<JsonObjectConst>();
-        if (coords.isNull())
-            coords = previousBase.as<JsonObjectConst>();
-        if (!std::isfinite(coordinateNumber(coords["lat"]))
-            || !std::isfinite(coordinateNumber(coords["lon"]))
-            || !std::isfinite(coordinateNumber(coords["alt"])))
-        {
-            baseStartupState_ = "awaiting_configuration";
-            markStatusDirty();
-        }
+        baseStartupState_ = "awaiting_configuration";
+        markStatusDirty();
     }
     setAgentState(normalAgentState());
     DynamicJsonDocument details(1024);

@@ -2,6 +2,18 @@
 
 Project [`tundzai001_esp32-base-sonarfix`](https://sonarcloud.io/project/overview?id=tundzai001_esp32-base-sonarfix), nhánh `develop`. Trạng thái issue thuộc project SonarQube và được ghi lại ở đây để người dùng Git có thể đối chiếu. Các vị trí là ảnh chụp tại thời điểm ghi nhận.
 
+## 2026-11-13 · Ngoại lệ Wi-Fi trên main
+
+- `cpp:S5205`: callback kiểm tra kết nối không có trạng thái; giữ con trỏ hàm để tương thích giao diện và tránh thêm `std::function` hoặc template không cần thiết trên ESP32.
+- `cpp:S1874`: firmware dùng ArduinoJson 6 và document giới hạn 3072 byte. Đánh giá lại khi nâng ArduinoJson và kiểm tra lại bộ nhớ.
+
+| Issue | Quy tắc | Vị trí | Trạng thái |
+| --- | --- | --- | --- |
+| [AaHT6_zbDfen3veeSkJV](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_zbDfen3veeSkJV) | `cpp:S5205` | `src/hardware/Wifi_handler.cpp:11` | Accepted |
+| [AaHT6_zbDfen3veeSkJW](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_zbDfen3veeSkJW) | `cpp:S5205` | `src/hardware/Wifi_handler.cpp:26` | Accepted |
+| [AaHT6_zbDfen3veeSkJX](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_zbDfen3veeSkJX) | `cpp:S5205` | `src/hardware/Wifi_handler.cpp:55` | Accepted |
+| [AaHT6_zbDfen3veeSkJT](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_zbDfen3veeSkJT) | `cpp:S1874` | `src/hardware/Wifi_handler.cpp:39` | Accepted |
+
 ## 2026-11-09 · Chấp nhận 10 ngoại lệ
 
 Cả 10 issue đã được mở lại để rà soát và sau đó chuyển về **Accepted**. Lý do chấp nhận:

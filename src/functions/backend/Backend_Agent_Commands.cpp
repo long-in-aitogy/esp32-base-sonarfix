@@ -967,6 +967,22 @@ bool BackendAgent::executeStopWorkflowCommand(String &error, String &detail)
     return true;
 }
 
+bool BackendAgent::executeVerifyGnssCommand(JsonObject payload, const String &commandId,
+                                            String &error, String &detail)
+{
+    nvsInventory_.clear();
+    if (workflowActive() || (sensorType_ != "Unicorecomm" && sensorType_ != "Ublox"))
+    {
+        error = "Verification requires an idle supported GNSS receiver";
+        return false;
+    }
+    const bool success = sensorType_ == "Ublox" ? verifyGnssConfig(payload, commandId, error)
+                                                 : verifyUnicoreConfig(payload, commandId, error);
+    if (success)
+        detail = "GNSS readback completed; inspect verification result";
+    return success;
+}
+
 bool BackendAgent::executeStorageStatus(JsonObject payload, const String &commandId, String &error)
 {
     if (payload["inspect"] != true)
@@ -1078,19 +1094,7 @@ void BackendAgent::executeCommand(const String &source, const String &command,
     }
     else if (command == "VERIFY_GNSS_CONFIG")
     {
-        nvsInventory_.clear();
-        if (workflowActive() || (sensorType_ != "Unicorecomm" && sensorType_ != "Ublox"))
-        {
-            success = false;
-            error = "Verification requires an idle supported GNSS receiver";
-        }
-        else
-        {
-            success = sensorType_ == "Ublox" ? verifyGnssConfig(payload, commandId, error)
-                                               : verifyUnicoreConfig(payload, commandId, error);
-            if (success)
-                detail = "GNSS readback completed; inspect verification result";
-        }
+        success = executeVerifyGnssCommand(payload, commandId, error, detail);
     }
     else if (command == "CHECK_BASE_STATUS")
     {

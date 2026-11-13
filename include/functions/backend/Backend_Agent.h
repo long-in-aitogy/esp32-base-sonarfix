@@ -218,6 +218,7 @@ private:
     int loopNtripRoverLocked();
     bool stopNtripRoverLocked();
     bool restoreWorkflowBase(JsonObjectConst base);
+    bool restoreSurveyInBase(JsonObjectConst base, GnssCmdBuilder::GnssSensorType chip, String &error);
     void reconcileBaseStartupReadback();
     bool refreshReceiverReadback(String &error);
     bool refreshUbloxReadback(String &error);
@@ -297,6 +298,7 @@ private:
                              String &error, String &detail);
     bool executeStreamCommand(JsonObject payload, String &error, String &detail);
     bool executeStorageStatus(JsonObject payload, const String &commandId, String &error);
+    bool executeVerifyGnssCommand(JsonObject payload, const String &commandId, String &error, String &detail);
     bool executeNvsCleanup(JsonObject payload, String &error, String &detail);
     bool executeBaseStatusCommand(String &error, String &detail);
     bool executeStopWorkflowCommand(String &error, String &detail);

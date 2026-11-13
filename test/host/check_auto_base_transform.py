@@ -11,7 +11,7 @@ location_method = workflow[workflow.index('bool BackendAgent::resolveAutoBaseLoc
 begin = workflow.index('bool BackendAgent::completeAutoBaseSetup(')
 end = workflow.index('    setAgentState("auto_setup_base");', begin)
 method = workflow[begin:end] + '    reachedWrite = true;\n    (void)resultJson;\n    return true;\n}\n'
-full_end = workflow.index('\nvoid BackendAgent::finishAutoBaseWorkflow(', begin)
+full_end = workflow.index('\nnamespace\n{\n    bool missingAutoNearestPosition(', begin)
 full_method = workflow[begin:full_end]
 run_end = workflow.index('\nbool BackendAgent::prepareReferenceCheckConfig(', full_end)
 run_method = workflow[full_end:run_end]

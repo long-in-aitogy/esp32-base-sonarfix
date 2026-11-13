@@ -6,7 +6,7 @@ root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_text()
 start = source.index('bool BackendAgent::runAutoBaseWorkflow(')
 end = source.index('\nbool BackendAgent::', start + 5)
-method = source[source.index('void BackendAgent::finishAutoBaseWorkflow('):start] + source[start:end]
+method = source[source.index('namespace\n{\n    bool missingAutoNearestPosition('):start] + source[start:end]
 sampling = source[source.index('bool BackendAgent::waitForAutoBaseFix('):source.index('String BackendAgent::buildAutoBaseResult(')]
 harness = r'''
 #include <Arduino.h>

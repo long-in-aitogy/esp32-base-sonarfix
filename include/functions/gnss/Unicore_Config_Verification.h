@@ -82,6 +82,15 @@ inline bool validLogEnvelope(std::string_view input, size_t checksum) {
     });
 }
 
+inline bool parseLogCount(const char *line, long &count, std::vector<Log> &logs) {
+    char *tail = nullptr;
+    count = std::strtol(line, &tail, 10);
+    while (tail && *tail == ' ') ++tail;
+    if (!tail || tail == line || *tail || count < 0 || count > 64) return false;
+    logs.reserve(count);
+    return true;
+}
+
 inline bool parseLogEntry(const char *&cursor, const char *end, bool hasChecksum,
                           long &count, std::vector<Log> &logs) {
     if (!hasChecksum) {
@@ -96,14 +105,7 @@ inline bool parseLogEntry(const char *&cursor, const char *end, bool hasChecksum
     std::array<char, 160> line{};
     std::memcpy(line.data(), cursor, lineEnd - cursor);
     cursor = lineEnd;
-    if (count < 0) {
-        char *tail = nullptr;
-        count = std::strtol(line.data(), &tail, 10);
-        while (tail && *tail == ' ') ++tail;
-        if (!tail || tail == line.data() || *tail || count < 0 || count > 64) return false;
-        logs.reserve(count);
-        return true;
-    }
+    if (count < 0) return parseLogCount(line.data(), count, logs);
     if (logs.size() >= static_cast<size_t>(count)) return false;
     Log log;
     if (!parseLogLine(line.data(), log)) return false;

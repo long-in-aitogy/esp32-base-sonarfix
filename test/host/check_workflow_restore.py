@@ -50,6 +50,7 @@ struct BackendAgent {
     bool refreshReceiverReadback(String &error) { error = "read failed"; return readOk; }
     void markStatusDirty() {}
     bool restoreWorkflowBase(JsonObjectConst);
+    bool restoreSurveyInBase(JsonObjectConst, GnssCmdBuilder::GnssSensorType, String &);
     void reconcileBaseStartupReadback();
 };
 '''
