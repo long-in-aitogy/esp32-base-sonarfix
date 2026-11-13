@@ -328,7 +328,7 @@ Lệnh JSON có command, command_id và payload. original_config của EXECUTE_R
 | TRIGGER_AUTO_BASE | ip, port, user, password, mountpoint, sensor_type; các tùy chọn timeout, province_code, l0_deg, k0, enable_itrf_vn2000_transform. |
 | TRIGGER_BASE_REFERENCE_CHECK | Kết nối rover, reference_coords và cấu hình base đã lưu; đo so sánh, sau đó cố gắng khôi phục base cũ. |
 | STOP_AUTO_BASE | Yêu cầu hủy workflow; theo dõi phase stopped/failed và kết quả cleanup. |
-| APPLY_VN2000_PROVINCE | province_code và cấu hình tọa độ base hợp lệ; áp dụng phép chuyển tỉnh/kinh tuyến. |
+| APPLY_VN2000_PROVINCE | province_code và tọa độ base hợp lệ; với tỉnh có nhiều kinh tuyến cũ, cung cấp thêm l0_deg theo danh mục CORS. |
 | LOCK_DEVICE | Payload rỗng khóa cả thiết bị; locked_servers chọn server 1/2. |
 | UNLOCK_DEVICE | Xóa khóa toàn thiết bị và khóa server. |
 | CHECK_BASE_STATUS | Gửi poll trạng thái receiver; kết quả success chỉ xác nhận yêu cầu truy vấn đã gửi. |
@@ -380,20 +380,20 @@ Auto base chỉ lấy RTK_FIXED với GGA mới; mặc định cần 5 lần ki�
 
 Khi reference check dừng/kết thúc, cleanup cố gắng đặt lại tọa độ base đã lưu và phục hồi transport. Auto base thất bại trước bước đặt lại base chỉ khôi phục source transport, chưa luôn khôi phục receiver mode/tọa độ cũ. Kiểm tra lại receiver trước khi đưa mountpoint vào khai thác.
 
-VN2000 dùng tham số tích hợp; không có decoder datum từ RTCM. Tọa độ NMEA gồm độ cao anten theo bản tin receiver; kiểm tra quy đổi ellipsoid/geoid và chiều cao anten trước khi sử dụng kết quả như tọa độ mốc.
+VN2000 có thể dùng tham số tích hợp hoặc datum RTCM 1021/1023/1025 khi phù hợp. Tọa độ NMEA gồm độ cao anten theo bản tin receiver; kiểm tra quy đổi ellipsoid/geoid và chiều cao anten trước khi sử dụng kết quả như tọa độ mốc.
 
 ## 14. Lưu cấu hình, cập nhật và khôi phục
 
 | Nhóm dữ liệu | Vị trí/đặc điểm |
 | --- | --- |
 | Wi-Fi, APN, MQTT, legacy NTRIP | Preferences myPrefs; một số thay đổi chỉ nạp lại sau reboot. |
-| Serial, tên, chip, provision, license, khóa, BASE_JSON/SERVICE_JSON, kết quả | NVS agent_state; có nhánh tương thích dữ liệu cũ trong myPrefs. |
+| Serial, tên, chip, provision, license, khóa, BASE_JSON/SERVICE_JSON, kết quả | NVS agent_state khi có phân vùng; nếu không mở được thì dùng myPrefs. |
 | GNSS receiver | Cấu hình riêng trong receiver; cần SAVECONFIG/CFG-CFG và kiểm tra sau mất nguồn. |
 | CONFIG RESET | Xóa/nạp lại myPrefs và khởi tạo theo needReset; không bảo đảm xóa agent_state riêng hoặc trạng thái trên backend. |
 
 Serial mới có dạng esp_ + phần định danh MAC; ID LP_ cũ được đổi tiền tố và giữ suffix. Chỉ lưu trạng thái agent khi identity đã nạp; token được kiểm tra định dạng tại firmware, backend vẫn chịu trách nhiệm xác thực token thiết bị thực tế.
 
-Bảng phân vùng 4 MB hiện có app0/app1 mỗi 0x140000 byte, agent_state tại 0x3D0000 kích thước 0x20000 và coredump tại 0x3F0000. Có hai slot ứng dụng không có nghĩa firmware đã triển khai lệnh OTA; danh mục lệnh hiện không có cập nhật firmware qua mạng.
+Bản build `tdm240x_dev_general` dùng `no_ota.csv`: một app 0x200000 byte và không có phân vùng agent_state. Các môi trường còn lại dùng `partitions.csv`: app0/app1 mỗi 0x140000 byte và agent_state 0x20000 byte tại 0x3D0000. Hai bảng có vùng SPIFFS khác nhau; kiểm tra và sao lưu dữ liệu trên thiết bị trước khi đổi bảng. Hai slot ứng dụng không có nghĩa firmware đã triển khai lệnh OTA.
 
 Quy trình cập nhật: ghi lại dịch vụ/serial, dùng đúng board và partition, build rồi upload qua USB, kiểm tra log boot và nhận diện chip, triển khai lại dịch vụ nếu cần, thực hiện nghiệm thu. Không dùng erase-flash như bước sửa lỗi mặc định vì có thể mất identity/license/cấu hình.
 

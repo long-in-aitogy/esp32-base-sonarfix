@@ -45,7 +45,7 @@ namespace ntrip_common
     void loadEndpoints();
     bool streamActive(uint8_t index);
     void stopEndpoint(uint8_t index);
-    bool waitForNtripResponse(Client &client, String *statusLine = nullptr);
+    bool waitForNtripResponse(Client &client, String *statusLine = nullptr, String *selectedMountpoint = nullptr);
     void updateBps(NtripEndpoint &endpoint);
     bool sendEndpointRtcm(NtripEndpoint &endpoint, Client &client, const String &rtcmData);
 

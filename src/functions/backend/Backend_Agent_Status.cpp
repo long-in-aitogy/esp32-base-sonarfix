@@ -1,5 +1,6 @@
 #include "functions/backend/Backend_Agent.h"
 #include "functions/backend/Backend_Agent_Internal.h"
+#include "functions/backend/Storage_Status.h"
 #include "Prog_Config.h"
 #include "functions/ntrip/ntrip_base.h"
 #include "functions/ntrip/ntrip_rover.h"
@@ -87,7 +88,8 @@ void BackendAgent::appendAutoBaseProgress(JsonDocument &doc,
     JsonObject progress = doc["auto_base_progress"].as<JsonObject>();
     if (progress.isNull() || progress.size() == 0)
         return;
-    if (progress["phase"] == "completed" && !(progress["fixed_samples_only"] | false))
+    if (progress["phase"] == "completed" && progress["mode"] != "survey_in"
+        && !(progress["fixed_samples_only"] | false))
     {
         progress["phase"] = "unverified";
         progress["reason"] = "Ket qua cu chua duoc xac nhan RTK Fixed; can chay lai Auto Base";
@@ -107,10 +109,34 @@ void BackendAgent::appendSystemInfo(JsonDocument &doc, uint32_t nowMs,
                                     const String &timestamp) const
 {
     JsonObject system = doc.createNestedObject("system_info");
+    system["auto_base_review_supported"] = true;
+    system["auto_base_nearest_supported"] = true;
+    system["auto_base_firmware_profile"] = true;
+    system["gnss_verification_supported"] = sensorType_ == "Unicorecomm" || sensorType_ == "Ublox";
+    system["gnss_verification_details_supported"] = sensorType_ == "Unicorecomm" || sensorType_ == "Ublox";
+    system["gnss_verification_uart1"] = sensorType_ == "Unicorecomm" || sensorType_ == "Ublox";
+    system["gnss_rf_supported"] = false;
+    system["gnss_verification"] = nullptr;
+    if (!gnssVerification_.isEmpty() && nowMs - gnssVerificationMs_ < 60000UL)
+    {
+        DynamicJsonDocument verification(VERIFICATION_DOCUMENT_SIZE);
+        if (deserializeJson(verification, gnssVerification_) == DeserializationError::Ok)
+        {
+            system["gnss_verification"].set(verification.as<JsonObjectConst>());
+            system["gnss_verification"]["age_seconds"] = (nowMs - gnssVerificationMs_) / 1000UL;
+        }
+    }
     appendStartupInfo(system);
     JsonObject survey = appendSurveyInfo(system, nowMs);
     appendReceiverReadback(system, survey);
     appendResourceInfo(system, timestamp);
+    appendStorageStatus(system);
+    if (!nvsInventory_.isEmpty())
+    {
+        DynamicJsonDocument inventory(3072);
+        if (deserializeJson(inventory, nvsInventory_) == DeserializationError::Ok)
+            system["nvs"]["inventory"].set(inventory.as<JsonObjectConst>());
+    }
     JsonObject deviceLock = system.createNestedObject("device_lock");
     deviceLock["scoped"] = true;
     deviceLock["all"] = stationLock_.all;
@@ -257,10 +283,72 @@ void BackendAgent::appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapsh
     doc["rtk_fix_status"] = gnss.fixStatus.data();
     if (gnss.satellites > 0)
         doc["satellite_count"] = gnss.satellites;
-    if (gnss.gstHacc > 0 && gnss.lastGstMs > 0 && nowMs - gnss.lastGstMs <= 15000UL)
-        doc["hacc"] = gnss.gstHacc;
-    else if (gnss.hdop > 0)
-        doc["hacc"] = gnss.hdop;
+    doc["hacc"] = nullptr;
+    doc["gnss_quality"] = nullptr;
+    doc["gnss_dop"] = nullptr;
+    doc["gnss_satellites"] = nullptr;
+    doc["gnss_receiver"] = nullptr;
+    doc["gnss_rf"] = nullptr;
+    doc["gnss_spectrum"] = nullptr;
+    doc["gnss_rf_monitor"] = nullptr;
+    if (sensorType_ == "Ublox" && receiverInfoMs_ && (!versionReadback_.isEmpty() || nowMs - receiverInfoMs_ <= 45000UL))
+    {
+        JsonObject receiver = doc.createNestedObject("gnss_receiver");
+        receiver["source"] = "ubx_mon_ver";
+        receiver["age_seconds"] = (nowMs - receiverInfoMs_) / 1000.0;
+        if (!versionReadback_.isEmpty()) receiver["payload_b64"] = versionReadback_;
+        if (!versionReadbackError_.isEmpty()) receiver["error"] = versionReadbackError_;
+    }
+    if (sensorType_ == "Ublox" && !satelliteReadback_.isEmpty()
+        && nowMs - satelliteReadbackMs_ <= 45000UL)
+    {
+        JsonObject satellites = doc.createNestedObject("gnss_satellites");
+        satellites["source"] = "ubx_nav_sat";
+        satellites["age_seconds"] = (nowMs - satelliteReadbackMs_) / 1000.0;
+        satellites["payload_b64"] = satelliteReadback_;
+    }
+    if (sensorType_ == "Ublox" && dopMs_ > 0 && nowMs - dopMs_ <= 45000UL)
+    {
+        JsonObject dop = doc.createNestedObject("gnss_dop");
+        dop["source"] = "ubx_nav_dop";
+        dop["age_seconds"] = (nowMs - dopMs_) / 1000.0;
+        dop["hdop"] = dop_.hdop * 0.01;
+        dop["pdop"] = dop_.pdop * 0.01;
+    }
+    if (sensorType_ == "Ublox" && navigationMs_ > 0 && nowMs - navigationMs_ <= 45000UL)
+    {
+        JsonObject quality = doc.createNestedObject("gnss_quality");
+        quality["source"] = "ubx_nav_pvt";
+        quality["age_seconds"] = (nowMs - navigationMs_) / 1000.0;
+        quality["fix_valid"] = navigation_.valid;
+        quality["fix_type"] = navigation_.fixType;
+        quality["satellites"] = navigation_.satellites;
+        quality["pdop"] = navigation_.pdop * 0.01;
+        quality["hacc_m"] = nullptr;
+        doc["satellite_count"] = navigation_.satellites;
+        if (navigation_.valid)
+        {
+            quality["hacc_m"] = navigation_.haccMm * 0.001;
+            doc["hacc"] = navigation_.haccMm;
+        }
+    }
+    else if (sensorType_ == "Unicorecomm" && unicoreQualityMs_ > 0 && nowMs - unicoreQualityMs_ <= 45000UL)
+    {
+        JsonObject quality = doc.createNestedObject("gnss_quality");
+        quality["source"] = "unicore_bestnav_sigma";
+        quality["age_seconds"] = (nowMs - unicoreQualityMs_) / 1000.0;
+        quality["hacc_m"] = unicoreHorizontalSigma_;
+        doc["hacc"] = unicoreHorizontalSigma_ * 1000.0;
+    }
+    else if (gnss.gstHacc > 0 && gnss.lastGstMs > 0 && nowMs - gnss.lastGstMs <= 15000UL)
+    {
+        // The legacy hacc field is in mm; gnss_quality.hacc_m is in metres.
+        doc["hacc"] = gnss.gstHacc * 1000.0;
+        JsonObject quality = doc.createNestedObject("gnss_quality");
+        quality["source"] = "nmea_gst";
+        quality["age_seconds"] = (nowMs - gnss.lastGstMs) / 1000.0;
+        quality["hacc_m"] = gnss.gstHacc;
+    }
     JsonObject stats = doc.createNestedObject("gnss_stats");
     stats["rtcm_packets"] = gnss.traffic.rtcmFrames;
     stats["nmea_packets"] = gnss.traffic.nmeaSentences;
@@ -345,6 +433,11 @@ void BackendAgent::appendTransportStatus(JsonDocument &doc,
     transport["websocket_host"] = readPreference("BACKEND_HOST", BACKEND_HOST);
     transport["control_plane_fail_open"] = controlPlaneFailOpen_;
     copyJsonObject(doc, "last_command_result", lastCommandResult_);
+    JsonObject lastStorageAction = doc["system_info"]["nvs"].createNestedObject("last_action");
+    const JsonObjectConst lastCommand = doc["last_command_result"];
+    lastStorageAction["command_id"] = lastCommand["command_id"];
+    lastStorageAction["status"] = lastCommand["status"];
+    lastStorageAction["detail"] = lastCommand["detail"];
     JsonObject control = doc.createNestedObject("control_plane_failover");
     control["active"] = controlPlaneFailOpen_;
     control["stale_after_seconds"] = BACKEND_CONTROL_STALE_MS / 1000UL;
@@ -360,7 +453,25 @@ void BackendAgent::appendTransportStatus(JsonDocument &doc,
 
 String BackendAgent::buildStatusPayload()
 {
-    DynamicJsonDocument doc(STATUS_DOCUMENT_SIZE);
+    if (!nvsInventory_.isEmpty() && millis() - nvsInventoryMs_ >= 60000UL)
+        nvsInventory_.clear();
+    if (!gnssVerification_.isEmpty() && millis() - gnssVerificationMs_ >= 60000UL)
+        gnssVerification_.clear();
+    if (!satelliteReadback_.isEmpty() && millis() - satelliteReadbackMs_ > 45000UL)
+        satelliteReadback_.clear();
+    if (versionReadback_.isEmpty() && receiverInfoMs_ && millis() - receiverInfoMs_ > 45000UL)
+    {
+        versionReadback_.clear();
+        versionReadbackError_.clear();
+        receiverInfoMs_ = 0;
+    }
+    DynamicJsonDocument doc(STATUS_DOCUMENT_SIZE + 1024
+                            + (baseConfig_.length() > 2 ? CONFIG_DOCUMENT_SIZE : 0)
+                            + (serviceConfig_.length() > 2 ? CONFIG_DOCUMENT_SIZE : 0)
+                            + (autoBaseProgress_.length() > 2 ? PROGRESS_DOCUMENT_SIZE : 0)
+                            + (nvsInventory_.isEmpty() ? 0 : 3072) + (gnssVerification_.isEmpty() ? 0 : VERIFICATION_DOCUMENT_SIZE)
+                            + (satelliteReadback_.isEmpty() ? 0 : satelliteReadback_.length() + 256)
+                            + (receiverInfoMs_ ? versionReadback_.length() + versionReadbackError_.length() + 256 : 0));
     DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
     deserializeJson(serviceDoc, serviceConfig_);
     const JsonObjectConst service = serviceDoc.as<JsonObjectConst>();
@@ -378,7 +489,10 @@ String BackendAgent::buildStatusPayload()
     appendGnssStatus(doc, gnss, nowMs);
     appendNtripStatus(doc, service, server1Active, server2Active);
     appendTransportStatus(doc, gnss, nowMs, signal);
+    if (doc.overflowed())
+        return String();
     String payload;
-    serializeJson(doc, payload);
+    if (serializeJson(doc, payload) != measureJson(doc))
+        return String();
     return payload;
 }

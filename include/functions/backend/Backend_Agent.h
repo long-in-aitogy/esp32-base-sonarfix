@@ -6,11 +6,13 @@
 #include "functions/backend/Station_Lock.h"
 #include "functions/gnss/gnss_cmd_builder.h"
 #include "functions/gnss/Ubx_Base_Status.h"
+#include "functions/gnss/Ubx_Navigation.h"
 #include "functions/gnss/Unicore_Reply.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -59,8 +61,6 @@ public:
     bool workflowActive() const { return workflowTask_ != nullptr; }
 
     String serviceConfigJson() const;
-    String baseConfigJson() const;
-    String licenseToken() const;
 
     // Resolve per-server stream activation from service settings and fail-open state.
     static bool effectiveStreamActive(const JsonObjectConst &service,
@@ -75,6 +75,10 @@ private:
     String autoBaseProgress_ = "{}";
     String baseConfig_ = "{}";
     String serviceConfig_ = "{}";
+    String nvsInventory_;
+    uint32_t nvsInventoryMs_ = 0;
+    String gnssVerification_;
+    uint32_t gnssVerificationMs_ = 0;
     String receiverBaseReadback_ = R"({"state":"not_read","chip":"Unicorecomm","mode_kind":"unknown"})";
     String surveyInResult_ = "{}";
     String baseStartupState_ = "pending";
@@ -108,6 +112,17 @@ private:
     uint32_t receiverBaseReadbackMs_ = 0;
     uint32_t receiverBaseReadbackRevision_ = 0;
     uint32_t lastReceiverPollMs_ = 0;
+    String versionReadback_;
+    String versionReadbackError_;
+    uint32_t receiverInfoMs_ = 0;
+    String satelliteReadback_;
+    uint32_t satelliteReadbackMs_ = 0;
+    UbxNavigation navigation_;
+    UbxDop dop_;
+    uint32_t navigationMs_ = 0;
+    uint32_t dopMs_ = 0;
+    float unicoreHorizontalSigma_ = 0;
+    uint32_t unicoreQualityMs_ = 0;
     bool surveyInResultPending_ = false;
     bool surveyInReadbackReady_ = false;
     bool surveyInReadbackHasPosition_ = false;
@@ -116,6 +131,8 @@ private:
     uint32_t surveyInTargetSeconds_ = 0;
     String statusBootId_;
 
+    struct AutoBaseLocationReply { static constexpr size_t capacity = 1536; std::array<char, capacity> json{}; };
+    QueueHandle_t autoBaseLocationQueue_ = nullptr;
     QueueHandle_t nmeaQueue_ = nullptr;
     QueueHandle_t rtcmQueue_ = nullptr;
     std::unique_ptr<BackendAgentWebsocket> websocket_;
@@ -157,28 +174,24 @@ private:
                                uint8_t &fixedStreakRequired);
     bool startAutoBaseRover(const String &host, uint16_t port, const String &username,
                             const String &password, const String &mountpoint,
-                            uint8_t ntripVersion);
+                            uint8_t ntripVersion, String &error, String *selectedMountpoint = nullptr);
     bool waitForAutoBaseFix(uint32_t timeoutSeconds, uint8_t fixedStreakRequired,
-                            bool &cancelled, String &failureReason);
+                            bool &cancelled, String &failureReason, const String &sourceMountpoint);
     bool collectAutoBaseSamples(int configuredSamples, std::vector<double> &latitudes,
                                 std::vector<double> &longitudes,
                                 std::vector<double> &altitudes, bool &cancelled,
-                                String &failureReason);
-    bool resolveAutoBaseProjection(JsonObject payload, double rawLongitude,
-                                   double &centralMeridianDeg, double &scale,
-                                   String &provinceName, String &provinceCode,
-                                   String &failureReason);
+                                String &failureReason, const String &sourceMountpoint);
     bool completeAutoBaseSetup(JsonObject payload, const std::vector<double> &latitudes,
                                const std::vector<double> &longitudes,
                                const std::vector<double> &altitudes,
-                               String &resultJson, String &failureReason);
+                               String &resultJson, String &failureReason, const String &sourceMountpoint);
     String buildAutoBaseResult(double finalLatitude, double finalLongitude,
                                double finalAltitude, double rawLatitude,
                                double rawLongitude, double rawAltitude,
                                bool transformed, bool transportRestored,
                                size_t sampleCount, const String &projectionSource,
                                const String &provinceCode, const String &provinceName,
-                               double centralMeridianDeg, double scale);
+                               double centralMeridianDeg, double scale, JsonObjectConst report);
     bool runReferenceCheckWorkflow(JsonObject payload);
     bool prepareReferenceCheckConfig(JsonObject payload, JsonObject &reference,
                                      double &referenceLatitude, double &referenceLongitude,
@@ -188,7 +201,7 @@ private:
                                      String &password, String &mountpoint,
                                      uint32_t &timeoutSeconds, uint16_t &requestedSamples);
     bool startReferenceRover(const String &host, uint16_t port, const String &username,
-                                    const String &password, const String &mountpoint);
+                                    const String &password, const String &mountpoint, String &error);
     bool waitForReferenceFix(uint32_t timeoutSeconds, String &failureReason);
     bool collectReferenceSamples(uint16_t requestedSamples, std::vector<double> &latitudes,
                                  std::vector<double> &longitudes,
@@ -196,10 +209,11 @@ private:
     String buildReferenceCheckResult(JsonObject reference, double measuredLatitude,
                                      double measuredLongitude, double measuredAltitude,
                                      size_t sampleCount);
-    bool restartConfiguredNtrip();
+    bool restartConfiguredNtrip(bool transportLocked = false);
     int loopNtripRoverLocked();
     bool stopNtripRoverLocked();
-    bool applyBaseCoordinates(double latitude, double longitude, double altitude);
+    bool restoreWorkflowBase(JsonObjectConst base);
+    void reconcileBaseStartupReadback();
     bool refreshReceiverReadback(String &error);
     bool refreshUbloxReadback(String &error);
     void updateUbloxSurveyState(const UbxBaseStatus &status);
@@ -207,35 +221,28 @@ private:
     void appendUbloxPosition(JsonDocument &doc, const UbxBaseStatus &status,
                              const String &mode);
     bool refreshUnicoreReadback(String &error);
-    bool prepareStartupConfig(DynamicJsonDocument &config, JsonObject &base,
-                              bool &saved, String &method, String &error);
-    bool readStartupReceiverMode(GnssCmdBuilder::GnssSensorType detected, String &error);
     struct StartupPosition {
         double latitude = 0.0;
         double longitude = 0.0;
         double altitude = 0.0;
         bool ellipsoid = false;
     };
-    bool buildStartupCommands(JsonObject base, GnssCmdBuilder::GnssSensorType detected,
+    bool buildStartupCommands(JsonObjectConst base, GnssCmdBuilder::GnssSensorType detected,
                               bool restoreFixed, GnssCmdBuilder::CommandList &commands,
                               StartupPosition &position, String &error);
     bool verifyStartupReadback(GnssCmdBuilder::GnssSensorType detected, bool restoreFixed,
                                const StartupPosition &expected, String &error);
     void saveSurveyResult(JsonObjectConst bestPosition, const String &mode);
     void pollGnssStatus();
+    void startBootAutoBaseWhenReady();
     struct ProjectedPosition {
         double latitude;
         double longitude;
         double altitude;
         double northing = 0.0;
         double easting = 0.0;
+        double projectedHeight = 0.0;
     };
-    bool transformToVn2000(double latitude, double longitude, double altitude,
-                           double centralMeridianDeg, double scale, ProjectedPosition &result);
-    static bool transformItrfToVn2000(double latitude, double longitude, double altitude,
-                                     double centralMeridianDeg, double scale, ProjectedPosition &result);
-    bool getProvinceProjection(const String &code, double &centralMeridianDeg,
-                               double &scale, String &name) const;
     void markStatusDirty() { statusDirty_ = true; }
 
     String buildStatusPayload();
@@ -274,13 +281,15 @@ private:
     bool executeRawCommand(JsonDocument &doc, JsonObject payload,
                            String &error, String &detail);
     bool executeAutoBaseCommand(JsonObject payload, String &error, String &detail);
+    bool verifyGnssConfig(JsonObjectConst payload, const String &commandId, String &error);
+    bool verifyUnicoreConfig(JsonObjectConst payload, const String &commandId, String &error);
     bool executeReferenceCheckCommand(JsonObject payload, String &error, String &detail);
     bool executeProvinceCommand(JsonObject payload, String &error, String &detail);
     bool executeBasicCommand(const String &command, JsonObject payload,
                              String &error, String &detail);
     bool executeStreamCommand(JsonObject payload, String &error, String &detail);
     bool executeBaseStatusCommand(String &error, String &detail);
-    bool executeStopWorkflowCommand(String &detail);
+    bool executeStopWorkflowCommand(String &error, String &detail);
     void finishCommand(const String &source, const String &command,
                        const String &commandId, bool success,
                        const String &error, const String &detail,
@@ -291,9 +300,8 @@ private:
                              const String &status, const String &detail,
                              const String &commandId);
     void publishConfigState(const char *kind);
-    void applyServiceStreamCommand(JsonObject payload);
+    bool applyServiceStreamCommand(JsonObject payload, String &error);
     bool executeRawCommands(JsonArray commands, String &error, const String &sensorType = String());
-    void publishTextFallback(const String &message);
 
     friend class BackendAgentWebsocket;
 };

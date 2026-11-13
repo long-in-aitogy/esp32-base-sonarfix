@@ -7,6 +7,6 @@
 
 // ================= HÀM CẤU HÌNH WI-FI =================
 
-bool setupWiFi();
+bool setupWiFi(bool (*validateConnection)() = nullptr);
 
 #endif

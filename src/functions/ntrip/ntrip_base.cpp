@@ -215,7 +215,13 @@ bool connectEndpoint(uint8_t index)
               auth + "\r\n"
                      "Connection: Keep-Alive\r\n\r\n";
   }
-  client.print(request);
+  if (client.print(request) != request.length())
+  {
+    client.stop();
+    clearEndpointState(endpoint);
+    endpoint.lastError = "incomplete NTRIP request write";
+    return false;
+  }
 
   String responseLine;
   if (!waitForNtripResponse(client, &responseLine))
@@ -274,21 +280,25 @@ bool ntrip_common::sendEndpointRtcm(NtripEndpoint &endpoint, Client &client, con
     return false;
   }
 
-  const auto payloadLength = rtcmData.length();
-  auto sent = 0;
+  const auto failWrite = [&]()
+  {
+    client.stop();
+    clearEndpointState(endpoint);
+    endpoint.lastError = "incomplete RTCM write";
+    return false;
+  };
+  const size_t payloadLength = rtcmData.length();
   if (endpoint.version == 2)
   {
-    client.print(String(payloadLength, HEX) + "\r\n");
-    sent = client.write(reinterpret_cast<const uint8_t *>(rtcmData.c_str()), payloadLength);
-    client.print("\r\n");
+    const String header = String(payloadLength, HEX) + "\r\n";
+    if (client.print(header) != header.length())
+      return failWrite();
   }
-  else
-  {
-    sent = client.write(reinterpret_cast<const uint8_t *>(rtcmData.c_str()), payloadLength);
-  }
-  if (sent != payloadLength)
-    return false;
-  endpoint.bytesInWindow += static_cast<uint32_t>(sent);
+  if (client.write(reinterpret_cast<const uint8_t *>(rtcmData.c_str()), payloadLength) != payloadLength)
+    return failWrite();
+  if (endpoint.version == 2 && client.print("\r\n") != 2)
+    return failWrite();
+  endpoint.bytesInWindow += static_cast<uint32_t>(payloadLength);
   return true;
 }
 
@@ -425,7 +435,7 @@ int connectNTRIP()
 /** @brief Implements loopNTRIP. */
 int loopNTRIP(String &rtcmData)
 {
-  if (ntripRoverSessionStarted())
+  if (ntripRoverSessionStarted() || backendAgent.workflowActive())
     return 504;
 
   auto returnCode = NTRIP_MODE;
@@ -447,15 +457,13 @@ int loopNTRIP(String &rtcmData)
     if (!client.connected() || !endpoint.authenticated)
     {
       endpoint.authenticated = false;
-      if (millis() - endpoint.lastReconnectMs >= RECONNECT_INTERVAL_MS)
-      {
-        connectEndpoint(index);
-      }
+      if (millis() - endpoint.lastReconnectMs >= RECONNECT_INTERVAL_MS && connectEndpoint(index))
+        anyConnected = true;
       continue;
     }
 
-    anyConnected = true;
     anySent = sendEndpointRtcm(endpoint, client, rtcmData) || anySent;
+    anyConnected = endpoint.authenticated || anyConnected;
     updateBps(endpoint);
   }
 

@@ -14,6 +14,8 @@ namespace UbloxCommands
 namespace GnssCmdBuilder
 {
 
+    inline constexpr float BASE_ACCURACY_METERS = 5.0f;
+
     using Command = std::vector<uint8_t>;
     using CommandList = std::vector<Command>;
 

@@ -1,7 +1,7 @@
 #include "helper.h"
 #include "functions/backend/Backend_Agent.h"
 #include "functions/ntrip/RTCM_Receiver.h"
-#include "functions/system/cmd_handler.h"
+#include "functions/backend/cmd_handler.h"
 #include "functions/ntrip/ntrip_base.h"
 
 #include <time.h>
@@ -29,14 +29,6 @@ namespace
         bool hasGnssReception = false;
         RtcmMessageCounts messageCounts;
     };
-
-    class DeviceRuntime
-    {
-    public:
-        inline static uint8_t mqttDisconnectCount = 0;
-        inline static uint8_t ntripDisconnectCount = 0;
-        inline static uint8_t gsmDisconnectCount = 0;
-    };
 }
 
 SemaphoreHandle_t rtcmBufferMutex = nullptr;
@@ -44,12 +36,13 @@ SemaphoreHandle_t tcpStreamMutex = nullptr;
 SemaphoreHandle_t gnssSerialMutex = nullptr;
 
 void initPrefs();
-static void serviceMqtt(const bool reconnect);
+static void serviceMqtt();
 static void settleModemBeforeNtrip();
 static bool tryWifiFallback(bool protocolsRunning);
 static void checkSimInternetFallback();
 static void checkSimRecovery();
 static void activateNetwork(ConnectionType type, bool protocolsRunning);
+static void logNetworkStatus(bool force = false);
 static bool wifiFallbackActive = false;
 static uint32_t lastSimProbeMs = 0;
 static uint8_t simRecoverySuccesses = 0;
@@ -170,7 +163,7 @@ void setup()
         else
         {
             Serial.println("[SETUP] Su dung ket noi SIM/GSM");
-            DeviceRuntime::gsmDisconnectCount = 0;
+
             networkConnected = startSIM() && connectGSM(1);
             if (!networkConnected)
                 networkConnected = tryWifiFallback(false);
@@ -179,22 +172,24 @@ void setup()
         {
             Serial.println("[SETUP] Ket noi mang thanh cong!");
             setupNTRIP();
-            DeviceRuntime::ntripDisconnectCount = 0;
+
             if (isGsmConnection())
             {
                 settleModemBeforeNtrip();
             }
             connectNTRIP();
-            DeviceRuntime::mqttDisconnectCount = 0;
+
             setupMQTT();
         }
         else
         {
             Serial.println("[ERROR] Khong the ket noi mang. Vui long kiem tra cau hinh va thu lai.");
+            delay(1000);
         }
     }
 
     Serial.println("[SETUP] Ket noi mang thanh cong!");
+    logNetworkStatus(true);
     configTime(0, 0, "pool.ntp.org", "time.google.com");
 
     Serial.println("[SETUP] Task MQTT: Quan ly ket noi MQTT va callback.");
@@ -223,6 +218,10 @@ __attribute__((noreturn)) void taskNtrip([[maybe_unused]] void *parameter)
     auto *const rtcmState = static_cast<RtcmState *>(parameter);
     Serial.println("[NTRIP TASK] Bat dau task NTRIP...");
     auto loopStatus = 0;
+#if PROGRAM_DEBUG
+    bool ntripStatusLogged = false;
+    bool ntripWasConnected = false;
+#endif
     while (true)
     {
         String rtcmRead;
@@ -253,17 +252,24 @@ __attribute__((noreturn)) void taskNtrip([[maybe_unused]] void *parameter)
                 vTaskDelay(pdMS_TO_TICKS(1000));
                 continue;
             }
-            DeviceRuntime::gsmDisconnectCount = 0;
+
         }
         if (xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)))
         {
             // loopNTRIP owns reconnect attempts and the per-endpoint backoff.
             loopStatus = loopNTRIP(rtcmRead);
             xSemaphoreGive(tcpStreamMutex);
-// A caster rejection is not a hardware failure. loopNTRIP keeps
-// its per-endpoint reconnect backoff while MQTT remains available.
+            // A caster rejection is not a hardware failure. loopNTRIP keeps
+            // its per-endpoint reconnect backoff while MQTT remains available.
 #if PROGRAM_DEBUG
-            Serial.println("[NTRIP TASK] loopNTRIP() tra ve: " + String(loopStatus));
+            const bool connected = loopStatus != 504;
+            if (!ntripStatusLogged || connected != ntripWasConnected)
+            {
+                Serial.printf("[NTRIP TASK] NTRIP=%s; loop_status=%d\n",
+                              connected ? "UP" : "DOWN", loopStatus);
+                ntripStatusLogged = true;
+                ntripWasConnected = connected;
+            }
 #endif
         }
         vTaskDelay(pdMS_TO_TICKS(200));
@@ -315,9 +321,10 @@ __attribute__((noreturn)) void taskMQTT([[maybe_unused]] void *parameter)
         if (tcpStreamMutex && xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)))
         {
             checkSimInternetFallback();
-            serviceMqtt(true);
+            serviceMqtt();
             checkSimInternetFallback();
             backendAgent.loop();
+            logNetworkStatus();
             xSemaphoreGive(tcpStreamMutex);
         }
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -346,26 +353,16 @@ void loop()
 #if RTCM_COMMUNICATION_PROTOCOL == TCP_IP
             stopNtrip();
 #endif
-            if (tryWifiFallback(true))
+            if (!tryWifiFallback(true) && connectGSM(1))
             {
-                DeviceRuntime::gsmDisconnectCount = 0;
-            }
-            else if (connectGSM(1))
-            {
-                DeviceRuntime::gsmDisconnectCount = 0;
 #if RTCM_COMMUNICATION_PROTOCOL == TCP_IP
                 setupNTRIP();
                 connectNTRIP();
 #endif
             }
-            else
-            {
-                ++DeviceRuntime::gsmDisconnectCount;
-            }
         }
         else
         {
-            DeviceRuntime::gsmDisconnectCount = 0;
             digitalWrite(LED_PIN, LOW);
             checkSimInternetFallback();
         }
@@ -378,8 +375,11 @@ void loop()
         if (isWifiConnection() && WiFiClass::status() != WL_CONNECTED)
         {
             digitalWrite(LED_PIN, HIGH);
-            setupWiFi();
-            digitalWrite(LED_PIN, LOW);
+            mqtt.disconnect();
+            stopNtrip();
+            backendAgent.onNetworkChanged();
+            if (setupWiFi())
+                digitalWrite(LED_PIN, LOW);
         }
         xSemaphoreGive(tcpStreamMutex);
     }
@@ -387,16 +387,14 @@ void loop()
 }
 
 // Called with the shared modem mutex held once worker tasks are running.
+
 /** @brief Implements tryWifiFallback. */
 static bool tryWifiFallback(bool protocolsRunning)
 {
     Serial.println("[NETWORK] SIM khong truy cap duoc dich vu; thu Wi-Fi du phong da luu.");
-    if (!setupWiFi())
-        return false;
-    if (const auto reachable = probeMqttTransport(false); !reachable)
+    if (!setupWiFi([] { return probeMqttTransport(false); }))
     {
         Serial.println("[NETWORK] Wi-Fi chua truy cap duoc MQTT broker; giu SIM va se thu lai.");
-        WiFi.disconnect();
         return false;
     }
     activateNetwork(ConnectionType::WIFI, protocolsRunning);
@@ -404,10 +402,12 @@ static bool tryWifiFallback(bool protocolsRunning)
     lastSimProbeMs = millis();
     simRecoverySuccesses = 0;
     Serial.println("[NETWORK] Da chuyen sang Wi-Fi du phong; giu nguyen tuy chon SIM da luu.");
+    logNetworkStatus(true);
     return true;
 }
 
 // Both switching directions close old sockets before selecting new clients.
+
 /** @brief Implements activateNetwork. */
 static void activateNetwork(ConnectionType type, bool protocolsRunning)
 {
@@ -427,6 +427,7 @@ static void activateNetwork(ConnectionType type, bool protocolsRunning)
 }
 
 // Only Wi-Fi entered through SIM fallback is eligible for automatic return.
+
 /** @brief Implements checkSimRecovery. */
 static void checkSimRecovery()
 {
@@ -452,6 +453,24 @@ static void checkSimRecovery()
     wifiFallbackActive = false;
     simRecoverySuccesses = 0;
     WiFi.disconnect();
+    logNetworkStatus(true);
+}
+
+// Caller holds tcpStreamMutex after startup; connected() can access the modem.
+static void logNetworkStatus(bool force)
+{
+    static uint32_t lastLogMs = 0;
+    const uint32_t now = millis();
+    if (!force && now - lastLogMs < 30000UL)
+        return;
+    lastLogMs = now;
+    Serial.printf("[NETWORK][ACTIVE] transport=%s; fallback=%s; MQTT=%s; NTRIP=%s\n",
+                  isWifiConnection() ? "WIFI" : "SIM/4G", wifiFallbackActive ? "YES" : "NO",
+                  mqtt.connected() ? "UP" : "DOWN", isNtripConnected() ? "UP" : "DOWN");
+    if (isWifiConnection())
+        Serial.printf("[NETWORK][WIFI] connected=%s; SSID=%s; IP=%s; RSSI=%d dBm\n",
+                      WiFi.status() == WL_CONNECTED ? "YES" : "NO", WiFi.SSID().c_str(),
+                      WiFi.localIP().toString().c_str(), WiFi.RSSI());
 }
 
 /** @brief Implements checkSimInternetFallback. */
@@ -505,7 +524,7 @@ void initPrefs()
     prefs.putBool("NEED_RESET", false);
     prefs.putInt("RSTRT_COUNT", 0);
     // Hai giá trị hợp lệ: "4G" và "WIFI". Giá trị này được nạp khi khởi động.
-    prefs.putString("CONNECTION_TYPE", "4G");
+    prefs.putString("CONNECTION_TYPE", CONNECTION_PREFERENCE);
     prefs.putString("GNSS_MDL_TYPE", "INVALID");
 
     prefs.putString("APN", APN);
@@ -528,20 +547,14 @@ void initPrefs()
 }
 
 /** @brief Implements serviceMqtt. */
-static void serviceMqtt(const bool reconnect)
+static void serviceMqtt()
 {
     if (mqtt.connected())
     {
-        DeviceRuntime::mqttDisconnectCount = 0;
         mqtt.loop();
         return;
     }
 
     backendAgent.onMqttDisconnected();
-    if (reconnect)
-    {
-        if (DeviceRuntime::mqttDisconnectCount < 255)
-            ++DeviceRuntime::mqttDisconnectCount;
-        connectMQTT();
-    }
+    connectMQTT();
 }

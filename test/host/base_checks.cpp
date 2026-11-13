@@ -11,6 +11,8 @@
 #include "functions/gnss/unicore_commands.h"
 #include "functions/gnss/Ubx_Base_Status.h"
 #include <cassert>
+#include <cstdio>
+#include <cstdlib>
 #include <iostream>
 #include <string>
 
@@ -57,9 +59,78 @@ bool roverSettingEnabled(const CommandList &rover, uint32_t key)
 
 void checkUbloxModes(const CommandList &survey, const CommandList &fixed, const CommandList &rover)
 {
+    GnssOptions options;
+    const auto measured = buildBaseFixedLlaCommand(-84.54808557036529, 105, 650.1759102147155, 5, GnssSensorType::Ublox, options);
+    const auto restored = buildBaseFixedLlaCommand(-84.548085570, 105, 650.1759, 5, GnssSensorType::Ublox, options);
+    assert(measured[0] == restored[0]);
+    for (const auto &position : {std::array<double, 3>{21.084989583712345, 105.78665644691234, -7.93456},
+                                 {-84.54808557036529, -179.999999999, 650.1759102147155},
+                                 {90, 180, 100000}, {-90, -180, -12000}, {0, 0, 0}})
+    {
+        const auto original = buildBaseFixedLlaCommand(position[0], position[1], position[2], 5, GnssSensorType::Ublox, options);
+        UbxBaseStatus readback;
+        assert(readback.tmode(original[0].data() + 6, 40));
+        char lat[32], lon[32], alt[32];
+        std::snprintf(lat, sizeof(lat), "%.9f", readback.latitude);
+        std::snprintf(lon, sizeof(lon), "%.9f", readback.longitude);
+        std::snprintf(alt, sizeof(alt), "%.4f", readback.height);
+        const auto replay = buildBaseFixedLlaCommand(std::strtod(lat, nullptr), std::strtod(lon, nullptr),
+                                                      std::strtod(alt, nullptr), 5, GnssSensorType::Ublox, options);
+        assert(original[0] == replay[0]);
+    }
     const auto all = buildBaseAllRtcmOutputCommand("UART1", true, GnssSensorType::Ublox);
     assert(all.size() == 2);
+    assert(roverSettingEnabled(all, 0x20910369U)); // RTCM 1094 on UART1.
+    assert(roverSettingEnabled(all, 0x20910319U)); // RTCM 1097 on UART1.
+    assert(roverSettingEnabled(all, 0x209102D7U)); // RTCM 1127 on UART1.
     assert(survey[0][8] == 1 && fixed[0][8] == 2 && fixed[0][9] == 1);
+    const auto readAccuracy = [](const Command &packet, size_t offset)
+    {
+        return uint32_t(packet[offset]) | uint32_t(packet[offset + 1]) << 8 |
+               uint32_t(packet[offset + 2]) << 16 | uint32_t(packet[offset + 3]) << 24;
+    };
+    assert(readAccuracy(survey[0], 34) == 50000 && readAccuracy(fixed[0], 26) == 50000);
+    for (const auto &item : {std::pair<Command, size_t>{survey[0], 34}, {fixed[0], 26}})
+    {
+        auto incoming = item.first;
+        incoming[item.second] = 0x30; incoming[item.second + 1] = 0x75; // 3 m
+        incoming[item.second + 2] = incoming[item.second + 3] = 0;
+        routeUbloxOutput(incoming.data(), incoming.size());
+        assert(readAccuracy(incoming, item.second) == 50000);
+        checkPackets(incoming);
+    }
+    // Modern VALSET carries mixed-width keys, including both accuracy fields.
+    Command valset = {0xB5, 0x62, 0x06, 0x8A, 0x19, 0x00, 0, 7, 0, 0,
+                      0x01, 0x00, 0x03, 0x20, 0x01,
+                      0x0F, 0x00, 0x03, 0x40, 0x64, 0, 0, 0,
+                      0x11, 0x00, 0x03, 0x40, 0x30, 0x75, 0, 0, 0, 0};
+    const Command extra = {0x12, 0x34, 0x56, 0x30, 0xAA, 0xBB,
+                           0x34, 0x56, 0x78, 0x50, 1, 2, 3, 4, 5, 6, 7, 8};
+    valset.insert(valset.end() - 2, extra.begin(), extra.end());
+    valset[4] += extra.size();
+    routeUbloxOutput(valset.data(), valset.size());
+    assert(readAccuracy(valset, 19) == 50000 && readAccuracy(valset, 27) == 50000);
+    assert(std::equal(extra.begin(), extra.end(), valset.begin() + 31));
+    checkPackets(valset);
+    auto roverValset = valset;
+    roverValset[14] = 0; // MODE=Rover: leave the unused accuracy values alone.
+    roverValset[19] = 0x30; roverValset[20] = 0x75;
+    roverValset[21] = roverValset[22] = 0;
+    routeUbloxOutput(roverValset.data(), roverValset.size());
+    assert(readAccuracy(roverValset, 19) == 30000);
+    checkPackets(roverValset);
+    // Complete frame with a truncated last VALSET value: no partial mutation.
+    Command malformed = {0xB5, 0x62, 0x06, 0x8A, 13, 0, 0, 7, 0, 0,
+                         0x01, 0x00, 0x03, 0x20, 1,
+                         0x11, 0x00, 0x03, 0x40, 0, 0};
+    const auto before = malformed;
+    routeUbloxOutput(malformed.data(), malformed.size());
+    assert(malformed == before);
+    auto roverMode = rover[1];
+    auto roverBefore = roverMode;
+    routeUbloxOutput(roverMode.data(), roverMode.size());
+    assert(roverMode == roverBefore);
+
     assert(survey[0][30] == 44 && survey[0][31] == 1);
     assert(rover[1][8] == 0);
     for (const size_t packet : {8U, 9U})
@@ -103,6 +174,15 @@ void checkUbloxModes(const CommandList &survey, const CommandList &fixed, const 
 
 void checkUnicoreModes(const CommandList &survey, const CommandList &fixed)
 {
+    GnssOptions options;
+    const auto precise = commandListToBytes(buildBaseFixedLlaCommand(
+        21.12345678919, -105.98765432196, 12.5, 0.01f, GnssSensorType::Unicore, options));
+    const std::string preciseOutput(precise.begin(), precise.end());
+    assert(preciseOutput.find("mode base 21.1234567891 -105.9876543219 12.5000\r\n") != std::string::npos);
+    const auto exact = commandListToBytes(buildBaseFixedLlaCommand(
+        21.084987612, 105.786714188, 12.5, 0.01f, GnssSensorType::Unicore, options));
+    const std::string exactOutput(exact.begin(), exact.end());
+    assert(exactOutput.find("mode base 21.0849876120 105.7867141880 12.5000\r\n") != std::string::npos);
     const auto text = commandListToBytes(fixed);
     const std::string output(text.begin(), text.end());
     assert(output.find("mode base 10.7500000000 106.5000000000 12.5000\r\n") != std::string::npos);
@@ -228,6 +308,11 @@ void checkUnicoreReplies()
         assert(feedUm(rejected, "$command,mode rover,response: " + response + "\r\n") == 1);
         assert(rejected.state == UnicoreReply::State::Error);
     }
+    um = umReply();
+    assert(feedUm(um, "$command,mo,response: OK\r\n") == 0);
+    assert(um.state == UnicoreReply::State::Pending);
+    assert(feedUm(um, "$command,mode rover,response: O\r\n") == 1);
+    assert(um.state == UnicoreReply::State::Error);
     um = umReply();
     assert(feedUm(um, "$command,mode rover,response: \r\n") == 0);
     assert(feedUm(um, "$command,mode rover,response: OK*00\r\n") == 0);
@@ -366,6 +451,38 @@ void checkReceiverCommands()
     assert(diagnosticOutput.find("config undulation 0.0\r\n") < diagnosticOutput.find("mode base time "));
     assert(diagnosticOutput.find("gpgga 1\r\n") != std::string::npos);
     assert(diagnosticOutput.find("rtcm1074 1\r\n") != std::string::npos);
+
+    GnssOptions allPorts;
+    allPorts.ports = {"UART1", "UART2", "USB"};
+    allPorts.outputMode = OutputMode::RtcmOnly;
+    allPorts.msmLevel = MsmLevel::Both;
+    allPorts.gal = true;
+    allPorts.bds = false;
+    const auto multiPortOutput = buildUbloxOutputConfigCommand(allPorts);
+    checkPackets(multiPortOutput);
+    size_t valsets = 0, outputKeys = 0;
+    bool galileoMsm4 = false, galileoMsm7 = false, beidouMsm7Disabled = false;
+    for (size_t offset = 0; offset < multiPortOutput.size();)
+    {
+        const uint8_t *packet = multiPortOutput.data() + offset;
+        const size_t length = packet[4] | (size_t(packet[5]) << 8);
+        if (packet[2] == 6 && packet[3] == 0x8A)
+        {
+            ++valsets;
+            assert((length - 4) / 5 <= 64);
+            outputKeys += (length - 4) / 5;
+            for (size_t i = 10; i < length + 6; i += 5)
+            {
+                const uint32_t key = UbxBaseStatus::u32(packet + i);
+                if (key == 0x20910369) galileoMsm4 = packet[i + 4] == 1;
+                if (key == 0x20910319) galileoMsm7 = packet[i + 4] == 1;
+                if (key == 0x209102D7) beidouMsm7Disabled = packet[i + 4] == 0;
+            }
+        }
+        offset += length + 8;
+    }
+    assert(valsets == 2 && outputKeys == 93);
+    assert(galileoMsm4 && galileoMsm7 && beidouMsm7Disabled);
 
     for (const auto mode : {OutputMode::DiagnosticsRtcm, OutputMode::RtcmOnly})
     {

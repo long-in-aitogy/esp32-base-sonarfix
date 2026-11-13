@@ -1,0 +1,137 @@
+name: SonarQube Analysis
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Build firmware and compilation database
+        run: |
+          python3 -m venv /tmp/platformio
+          /tmp/platformio/bin/pip install platformio
+          /tmp/platformio/bin/pio run -e tdm240x_dev_general
+          /tmp/platformio/bin/pio run -e tdm240x_dev_general -t compiledb
+
+      - name: Run Auto Base checks
+        run: |
+          xargs -r -n 1 -P 2 python3 <<'CHECKS'
+          test/host/check_auto_base_status.py
+          test/host/check_auto_base_location.py
+          test/host/check_auto_base_report.py
+          test/host/check_boot_progress_restore.py
+          test/host/check_auto_base_transform.py
+          test/host/check_projection_native.py
+          test/host/check_auto_nearest_workflow.py
+          test/host/check_autobase_sampling.py
+          test/host/check_autobase_config.py
+          test/host/check_autobase_command.py
+          test/host/check_workflow_restore.py
+          test/host/check_workflow_connection_config.py
+          CHECKS
+      - name: Run backend and connection checks
+        run: |
+          c++ -std=c++17 -fsanitize=address,undefined -g -Itest/host -Iinclude test/host/base_checks.cpp src/functions/gnss/Unicore_Log.cpp src/functions/gnss/gnss_cmd_builder.cpp src/functions/gnss/ublox_commands.cpp src/functions/gnss/unicore_commands.cpp -o /tmp/esp32-base-checks
+          /tmp/esp32-base-checks
+          for check in protocol_checks mqtt_write_checks wifi_profiles_checks; do
+            c++ -std=c++17 -fsanitize=address,undefined -Itest/host -Iinclude test/host/$check.cpp -o /tmp/esp32-$check
+            /tmp/esp32-$check
+          done
+          xargs -r -n 1 -P 2 python3 <<'CHECKS'
+          test/host/check_base_accuracy.py
+          test/host/check_province_command.py
+          test/host/check_raw_config_preflight.py
+          test/host/check_raw_batch.py
+          test/host/check_service_config.py
+          test/host/check_service_startup_capacity.py
+          test/host/check_stream_persistence.py
+          test/host/check_stream_targeting.py
+          test/host/check_control_failover_workflow.py
+          test/host/check_sim_recovery_workflow.py
+          test/host/check_backend_migration.py
+          test/host/check_backend_load.py
+          test/host/check_backend_save_state.py
+          test/host/check_license_reference_commands.py
+          test/host/check_nvs_cleanup.py
+          test/host/check_nvs_inventory.py
+          test/host/check_survey_result_retry.py
+          test/host/check_status_config_capacity.py
+          test/host/check_status_matrix.py
+          test/host/check_status_publish_failure.py
+          test/host/check_optional_backend_allocations.py
+          test/host/check_backend_queues.py
+          test/host/check_config_publish_capacity.py
+          test/host/check_connection_preference.py
+          test/host/check_network_status.py
+          test/host/check_network_lifecycle.py
+          test/host/check_ublox_rover_gga.py
+          test/host/check_wifi_migration.py
+          test/host/check_wifi_recovery.py
+          test/host/check_wifi_commands.py
+          test/host/check_command_dispatch.py
+          test/host/check_sim_apn.py
+          test/host/check_mqtt_dispatch.py
+          test/host/check_backend_restart_transport.py
+          test/host/check_websocket_upgrade.py
+          test/host/check_websocket_frames.py
+          test/host/check_websocket_control_write.py
+          test/host/check_status_websocket_payload.py
+          CHECKS
+      - name: Run receiver and NTRIP checks
+        run: |
+          xargs -r -n 1 -P 2 python3 <<'CHECKS'
+          test/host/check_detection_lifecycle.py
+          test/host/check_ublox_retry_probe.py
+          test/host/check_unicore_quality.py
+          test/host/check_unicore_log_list.py
+          test/host/check_unicore_survey_ack.py
+          test/host/check_unicore_fixed_readback.py
+          test/host/check_unicore_verify_command.py
+          test/host/check_ublox_verify_command.py
+          test/host/check_ublox_version.py
+          test/host/check_ublox_tmode_readback.py
+          test/host/check_ublox_output_readback.py
+          test/host/check_ublox_reply_capacity.py
+          test/host/check_ublox_satellites.py
+          test/host/check_ublox_navigation.py
+          test/host/check_ntrip_handshake.py
+          test/host/check_ntrip_source_connect.py
+          test/host/check_ntrip_config_capacity.py
+          test/host/check_ntrip_port.py
+          test/host/check_ntrip_reconnect.py
+          test/host/check_ntrip_chunk_write.py
+          test/host/check_rover_status.py
+          test/host/check_rover_gga.py
+          test/host/check_ntrip_restore_lock.py
+          CHECKS
+      - name: Measure native firmware coverage
+        env:
+          CXX: clang++-18
+          LLVM_PROFDATA: llvm-profdata-18
+          LLVM_COV: llvm-cov-18
+        run: python3 test/host/run_coverage.py
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.host.url=https://sonarcloud.io
+            -Dsonar.organization=tundzai001
+            -Dsonar.projectKey=tundzai001_esp32-base
+            -Dsonar.qualitygate.wait=true

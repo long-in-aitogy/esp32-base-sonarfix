@@ -59,6 +59,14 @@ trong `Backend_Agent_Commands.cpp`, payload trạng thái trong `Backend_Agent_S
 workflow Auto Base/đối chiếu trong `Backend_Agent_Workflows.cpp`, phép chiếu tọa độ
 trong `Backend_Agent_Projection.cpp`. Các phần này dùng chung lớp `BackendAgent`.
 
+## Accuracy cấu hình Base
+
+Firmware cố định accuracy cấu hình Survey-In và Fixed LLA ở 5 m, kể cả khi
+cấu hình từ backend chứa giá trị khác. Với u-blox, firmware đặt giá trị này
+trong CFG-TMODE3 hoặc CFG-VALSET; accuracy đo thực tế vẫn được báo từ receiver.
+Lệnh ASCII Survey-In/Fixed LLA của Unicore hiện không truyền tham số accuracy,
+nên không thể xác nhận ngưỡng 5 m được cài trên receiver Unicore qua lệnh đó.
+
 ## Kết nối phần cứng
 
 - ESP32 TDM240x: RX GNSS GPIO18, TX GNSS GPIO19; UART GNSS 115200 baud.
@@ -118,6 +126,10 @@ tăng, dùng `ATG GNSS BASE ALL CURRENT ON` để bật toàn bộ danh sách RT
 5. Cấu hình dịch vụ caster/mountpoint đích từ CORS. Thiết bị hỗ trợ hai máy
    chủ NTRIP. Theo dõi trạng thái GNSS, tọa độ, RTK FIX, vệ tinh, tốc độ RTCM,
    kết nối từng máy chủ và `last_command_result` trên hệ thống hiện có.
+
+Khi Auto Base hoặc đối chiếu tọa độ đang chạy, firmware từ chối thay đổi cấu hình
+dịch vụ hoặc trạng thái stream để không ngắt phiên Rover. Gửi lại lệnh sau khi
+workflow hoàn tất hoặc dừng; cấu hình dịch vụ không đổi vẫn được chấp nhận.
 
 Không cần tạo dashboard hoặc API riêng cho ESP32. Các topic sử dụng:
 
@@ -179,11 +191,13 @@ ACK xác nhận receiver nhận lệnh; chưa thay thế readback cấu hình sa
 Các lệnh ATG qua terminal và cấu hình khởi động cũ vẫn dùng cơ chế gửi UART.
 
 Với u-blox, bước chuyển Rover trong auto base kiểm tra ACK và đọc lại
-CFG-TMODE3; các batch cấu hình base còn lại vẫn chỉ xác nhận gửi UART.
-ESP32 chuyển tiếp RTCM nguyên byte, không giải
-mã datum RTCM 1021/1023/1025 như Python agent. Phần chuyển VN2000 hiện có của
-ESP32 dùng tham số tích hợp/tỉnh; cần kiểm chứng hệ tọa độ thực tế trước khi
-dùng kết quả auto base cho đo đạc.
+CFG-TMODE3. Khi áp dụng hoặc khôi phục cấu hình Base trong workflow, firmware
+cũng đọc lại receiver để xác nhận chế độ và tọa độ.
+
+ESP32 chuyển tiếp RTCM nguyên byte và đọc các bản tin datum 1021/1023/1025
+để sử dụng trong chuyển đổi VN2000 khi phù hợp. Nếu thiếu tham số cần thiết,
+workflow báo lỗi thay vì áp dụng tọa độ chưa chuyển đổi. Cần kiểm chứng hệ tọa
+độ trên thiết bị và thực địa trước khi dùng kết quả auto base cho đo đạc.
 
 ## Tách giao thức GNSS
 

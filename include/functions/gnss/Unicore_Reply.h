@@ -58,7 +58,7 @@ struct UnicoreReply
 /** @brief Implements equal. */
     static bool equal(const char *text, size_t length, const char *expected)
     {
-        if (length != strnlen(expected, length))
+        if (length >= 384 || strnlen(expected, length + 1) != length)
             return false;
         for (size_t i = 0; i < length; ++i)
             if (std::tolower(static_cast<unsigned char>(text[i])) !=

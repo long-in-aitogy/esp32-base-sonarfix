@@ -1,10 +1,15 @@
 #include "functions/backend/Backend_Agent.h"
 #include "functions/backend/Backend_Agent_Internal.h"
+#include "functions/backend/Storage_Status.h"
+#include "helper.h"
 #include "Prog_Config.h"
 #include "functions/ntrip/ntrip_base.h"
+#include "functions/ntrip/ntrip_rover.h"
 #include "functions/ntrip/RTCM_Receiver.h"
 #include <array>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include "functions/mqtt/MQTT_Manager.h"
@@ -44,12 +49,12 @@ namespace
                               const String &mountpoint)
     {
         const auto prefix = String("server") + String(id);
-        const auto onDemand = jsonBool(
-            service, prefix + "_stream_on_demand",
-            jsonBool(service, "stream_on_demand", false));
-        if (!active && !onDemand)
+        if (const auto onDemand = jsonBool(
+                service, prefix + "_stream_on_demand",
+                jsonBool(service, "stream_on_demand", false)); !active && !onDemand)
             return;
-        service[(prefix + "_stream_active").c_str()] = active;
+        const String activeKey = prefix + "_stream_active";
+        service[activeKey] = active;
         if (active && !mountpoint.isEmpty())
         {
             service["active_mountpoint"] = mountpoint;
@@ -146,27 +151,27 @@ void BackendAgent::recordCommandResult(const String &command, const String &sour
     doc["timestamp"] = epochString().toInt();
     lastCommandResult_.clear();
     serializeJson(doc, lastCommandResult_);
-    const auto saved = saveStatePreferences();
+    const bool readOnly = command == "VERIFY_GNSS_CONFIG";
+    const bool saved = readOnly || saveStatePreferences();
+    const char *saveResult = saved ? "OK" : "LOI";
+    if (readOnly) saveResult = "SKIPPED (read-only)";
     Serial.printf("[BACKEND][CMD] %s id=%s source=%s status=%s; NVS=%s\n",
-                  command.c_str(), commandId.c_str(), source.c_str(), status.c_str(),
-                  saved ? "OK" : "LOI");
+                  command.c_str(), commandId.c_str(), source.c_str(), status.c_str(), saveResult);
 }
 
 void BackendAgent::publishConfigState(const char *kind)
 {
     if (!mqttConnected())
         return;
-    DynamicJsonDocument doc(CONFIG_DOCUMENT_SIZE);
+    DynamicJsonDocument doc(CONFIG_DOCUMENT_SIZE + 1024);
     doc["serial"] = serialNumber_;
     doc["timestamp"] = epochString().toInt();
     doc["type"] = kind;
-    if (strcmp(kind, "base_config_state") == 0)
+    const String &config = strcmp(kind, "base_config_state") == 0 ? baseConfig_ : serviceConfig_;
+    if (!copyJsonObject(doc, "config", config) || doc.overflowed())
     {
-        copyJsonObject(doc, "config", baseConfig_);
-    }
-    else
-    {
-        copyJsonObject(doc, "config", serviceConfig_);
+        Serial.printf("[BACKEND][ERROR] Cannot publish %s: invalid configuration or insufficient memory\n", kind);
+        return;
     }
     String output;
     serializeJson(doc, output);
@@ -174,10 +179,16 @@ void BackendAgent::publishConfigState(const char *kind)
     mqtt.publish(topic.c_str(), output.c_str(), true);
 }
 
-void BackendAgent::applyServiceStreamCommand(JsonObject payload)
+bool BackendAgent::applyServiceStreamCommand(JsonObject payload, String &error)
 {
     DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
-    if (deserializeJson(serviceDoc, serviceConfig_) != DeserializationError::Ok || !serviceDoc.is<JsonObject>())
+    const auto parseError = deserializeJson(serviceDoc, serviceConfig_);
+    if (parseError == DeserializationError::NoMemory)
+    {
+        error = "service configuration exceeds memory capacity";
+        return false;
+    }
+    if (parseError != DeserializationError::Ok || !serviceDoc.is<JsonObject>())
     {
         serviceDoc.to<JsonObject>();
     }
@@ -197,9 +208,21 @@ void BackendAgent::applyServiceStreamCommand(JsonObject payload)
     if (!applyTargetedStreamState(service, serverId, active, address, mountpoint))
         applyGlobalStreamState(service, active, mountpoint);
     service["stream_active"] = BackendAgent::effectiveStreamActive(service, 1, false) || BackendAgent::effectiveStreamActive(service, 2, false);
+    if (serviceDoc.overflowed())
+    {
+        error = "service configuration exceeds memory capacity";
+        return false;
+    }
+    const String previousServiceConfig = serviceConfig_;
     serviceConfig_.clear();
     serializeJson(serviceDoc, serviceConfig_);
-    saveStatePreferences();
+    if (!saveStatePreferences())
+    {
+        serviceConfig_ = previousServiceConfig;
+        error = "cannot save service configuration";
+        return false;
+    }
+    return true;
 }
 
 bool BackendAgent::applyLockCommand(JsonObjectConst payload, String &error)
@@ -244,7 +267,7 @@ bool BackendAgent::applyLockCommand(JsonObjectConst payload, String &error)
     return true;
 }
 
-bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const String &sensorType)
+static bool validateRawCommands(JsonArray commands, String &error)
 {
     if (commands.isNull() || commands.size() == 0)
     {
@@ -265,12 +288,22 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
             error = "invalid raw command item";
             return false;
         }
-        auto length = decodeBase64(encoded, decoded.data(), decoded.size());
-        if (length == 0)
+        if (decodeBase64(encoded, decoded.data(), decoded.size()) == 0)
         {
             error = "raw command is not valid base64";
             return false;
         }
+    }
+    return true;
+}
+
+bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const String &sensorType)
+{
+    std::array<uint8_t, 3072> decoded{};
+    for (JsonVariant item : commands)
+    {
+        const auto encoded = item.as<String>();
+        auto length = decodeBase64(encoded, decoded.data(), decoded.size());
         uint32_t delayMs = 0;
         if (delayMarker(decoded.data(), length, delayMs))
         {
@@ -279,7 +312,7 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
         }
         if (sensorType == "Unicorecomm")
             length = routeUnicoreOutput(decoded.data(), length, GNSS_UNICORE_PORT);
-        else if (sensorType == "Ublox")
+        else if (sensorType == "Ublox" || (sensorType.isEmpty() && sensorType_ == "Ublox"))
             GnssCmdBuilder::routeUbloxOutput(decoded.data(), length);
         const auto unicore = sensorType == "Unicorecomm" || (sensorType.isEmpty() && sensorType_ == "Unicorecomm");
         if (unicore)
@@ -290,9 +323,14 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
         }
         if (rtcmBufferMutex && xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE)
         {
-            Serial1.write(decoded.data(), length);
+            const auto written = Serial1.write(decoded.data(), length);
             Serial1.flush();
             xSemaphoreGive(rtcmBufferMutex);
+            if (written != length)
+            {
+                error = "GNSS serial write incomplete";
+                return false;
+            }
         }
         else
         {
@@ -332,7 +370,7 @@ void BackendAgent::handleCommand(const String &source, const String &message)
         return;
     }
 
-    const auto allowed = command == "LOCK_DEVICE" || command == "UNLOCK_DEVICE" || command == "PROVISION_DEVICE" || command == "DEPLOY_LICENSE" || command == "TRIGGER_AUTO_BASE" || command == "TRIGGER_BASE_REFERENCE_CHECK" || command == "STOP_AUTO_BASE" || command == "APPLY_VN2000_PROVINCE" || command == "EXECUTE_RAW_COMMANDS" || command == "DEPLOY_SERVICE_CONFIG" || command == "SET_RTCM_STREAM_ACTIVE" || command == "DELETE_DEVICE" || command == "CHECK_BASE_STATUS" || command == "REBOOT_DEVICE";
+    const auto allowed = command == "LOCK_DEVICE" || command == "UNLOCK_DEVICE" || command == "PROVISION_DEVICE" || command == "DEPLOY_LICENSE" || command == "TRIGGER_AUTO_BASE" || command == "TRIGGER_BASE_REFERENCE_CHECK" || command == "STOP_AUTO_BASE" || command == "APPLY_VN2000_PROVINCE" || command == "EXECUTE_RAW_COMMANDS" || command == "DEPLOY_SERVICE_CONFIG" || command == "SET_RTCM_STREAM_ACTIVE" || command == "DELETE_DEVICE" || command == "CHECK_BASE_STATUS" || command == "VERIFY_GNSS_CONFIG" || command == "CHECK_STORAGE_STATUS" || command == "CLEAR_NVS_DATA" || command == "REBOOT_DEVICE";
     if (!allowed)
     {
         recordCommandResult(command, source, "rejected", "unsupported command", commandId);
@@ -403,7 +441,13 @@ bool BackendAgent::executeServiceConfigCommand(JsonObject payload, String &error
         return false;
     }
     DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
-    if (deserializeJson(serviceDoc, serviceConfig_) != DeserializationError::Ok || !serviceDoc.is<JsonObject>())
+    const auto parseError = deserializeJson(serviceDoc, serviceConfig_);
+    if (parseError == DeserializationError::NoMemory)
+    {
+        error = "service configuration exceeds memory capacity";
+        return false;
+    }
+    if (parseError != DeserializationError::Ok || !serviceDoc.is<JsonObject>())
     {
         serviceDoc.clear();
         serviceDoc.to<JsonObject>();
@@ -437,17 +481,42 @@ bool BackendAgent::executeServiceConfigCommand(JsonObject payload, String &error
         const auto onDemandKey = prefix + "_stream_on_demand";
         const auto activeKey = prefix + "_stream_active";
         const auto serverOnDemand = jsonBool(service, onDemandKey, onDemand);
-        service[onDemandKey.c_str()] = serverOnDemand;
+        service[onDemandKey] = serverOnDemand;
         if (!serverOnDemand)
-            service[activeKey.c_str()] = true;
-        else if (service[activeKey.c_str()].isNull())
-            service[activeKey.c_str()] = globalActive;
+            service[activeKey] = true;
+        else if (service[activeKey].isNull())
+            service[activeKey] = globalActive;
     }
-    serviceConfig_.clear();
-    serializeJson(serviceDoc, serviceConfig_);
-    detail = "service config deployed";
-    setupNTRIP();
-    connectNTRIP();
+    if (serviceDoc.overflowed())
+    {
+        error = "service configuration exceeds memory capacity";
+        return false;
+    }
+    String updatedServiceConfig;
+    serializeJson(serviceDoc, updatedServiceConfig);
+    if (updatedServiceConfig != serviceConfig_)
+    {
+        if (workflowActive())
+        {
+            error = "cannot change service config during an active base workflow";
+            return false;
+        }
+        const String previousServiceConfig = serviceConfig_;
+        serviceConfig_ = updatedServiceConfig;
+        if (!saveStatePreferences())
+        {
+            serviceConfig_ = previousServiceConfig;
+            error = "cannot save service configuration";
+            return false;
+        }
+        detail = "service config deployed";
+        setupNTRIP();
+        connectNTRIP();
+    }
+    else
+    {
+        detail = "service config unchanged; connections preserved";
+    }
     publishConfigState("service_config_state");
     return true;
 }
@@ -459,6 +528,48 @@ bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload,
     const JsonObject originalConfig = doc["original_config"].as<JsonObject>();
     const auto configuringBase = String(originalConfig["mode"] | "") == "BASE";
     const auto sensorType = originalConfig["sensor_type"] | sensorType_;
+    const auto chip = GnssCmdBuilder::sensorTypeFromString(sensorType);
+    const bool fixedBase = configuringBase && originalConfig["params"]["base_setup_method"] == "FIXED_LLA";
+    StartupPosition expected;
+    String updatedConfig;
+    if (!originalConfig.isNull() && !originalConfig["params"].isUnbound())
+    {
+        if (!originalConfig["params"].is<JsonObject>())
+        {
+            error = "Base configuration must be an object";
+            detail = error;
+            return false;
+        }
+        DynamicJsonDocument baseDoc(CONFIG_DOCUMENT_SIZE);
+        baseDoc.set(originalConfig["params"]);
+        JsonObject base = baseDoc.as<JsonObject>();
+        if (!originalConfig["mode"].isUnbound())
+            base["mode"] = originalConfig["mode"];
+        enforceBaseAccuracy(base);
+        if (baseDoc.overflowed())
+        {
+            error = "Base configuration exceeds memory capacity";
+            detail = error;
+            return false;
+        }
+        if (fixedBase)
+        {
+            GnssCmdBuilder::CommandList unused;
+            if (chip == GnssCmdBuilder::GnssSensorType::Invalid ||
+                !buildStartupCommands(baseDoc.as<JsonObjectConst>(), chip, true, unused, expected, error))
+            {
+                if (error.isEmpty()) error = "unsupported GNSS sensor_type";
+                detail = error;
+                return false;
+            }
+        }
+        serializeJson(baseDoc, updatedConfig);
+    }
+    if (!validateRawCommands(commands, error))
+    {
+        detail = error;
+        return false;
+    }
     if (workflowActive())
     {
         requestWorkflowStop();
@@ -487,6 +598,15 @@ bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload,
     if (configuringBase)
     {
         sensorType_ = sensorType;
+        if (fixedBase && (!refreshReceiverReadback(error) || !verifyStartupReadback(chip, true, expected, error)))
+        {
+            baseStartupState_ = "error";
+            baseStartupError_ = error;
+            baseStartupAttempted_ = true;
+            markStatusDirty();
+            detail = error;
+            return false;
+        }
         baseStartupState_ = "configured";
         baseStartupError_ = "";
         baseStartupAttempted_ = true;
@@ -494,15 +614,23 @@ bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload,
         lastReceiverPollMs_ = 0;
         setAgentState(normalAgentState());
     }
-    if (!originalConfig.isNull() && !originalConfig["params"].isUnbound())
+    if (!updatedConfig.isEmpty())
     {
-        DynamicJsonDocument baseDoc(CONFIG_DOCUMENT_SIZE);
-        baseDoc.set(originalConfig["params"]);
-        JsonObject base = baseDoc.as<JsonObject>();
-        if (!originalConfig["mode"].isUnbound())
-            base["mode"] = originalConfig["mode"];
-        baseConfig_.clear();
-        serializeJson(baseDoc, baseConfig_);
+        const String previousConfig = baseConfig_;
+        baseConfig_ = updatedConfig;
+        if (!saveStatePreferences())
+        {
+            baseConfig_ = previousConfig;
+            error = "receiver configured, but Base configuration could not be saved";
+            detail = error;
+            if (configuringBase)
+            {
+                baseStartupState_ = "error";
+                baseStartupError_ = error;
+                markStatusDirty();
+            }
+            return false;
+        }
         publishConfigState("base_config_state");
     }
     return true;
@@ -512,6 +640,14 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
                                           String &detail)
 {
     const auto sensorType = payload["sensor_type"] | sensorType_;
+    if (payload["source_mode"] == "nearest" && payload["startup_auto"] == true)
+    {
+        payload["ip"] = AUTO_BASE_CASTER_HOST;
+        payload["port"] = AUTO_BASE_CASTER_PORT;
+        payload["user"] = AUTO_BASE_CASTER_USER;
+        payload["password"] = AUTO_BASE_CASTER_PASSWORD;
+        payload["mountpoint"] = AUTO_BASE_CASTER_MOUNTPOINT;
+    }
     const auto requestedPort = payload["port"] | 0;
     const auto hasConnection = !String(payload["ip"] | String()).isEmpty() && !String(payload["user"] | String()).isEmpty() && !String(payload["password"] | String()).isEmpty() && !String(payload["mountpoint"] | String()).isEmpty() && requestedPort >= 1 && requestedPort <= 65535;
     if (workflowActive())
@@ -524,28 +660,142 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
         error = "select Ublox or Unicorecomm in CORS before starting auto base";
         return false;
     }
+    const String sourceMode = payload["source_mode"] | String("manual");
+    if (sourceMode != "manual" && sourceMode != "nearest")
+    {
+        error = "unsupported CORS source mode";
+        return false;
+    }
+    if ((payload["auto_apply"] | false) && sourceMode != "nearest")
+    {
+        error = "automatic apply is only supported for nearest CORS mode";
+        return false;
+    }
+    if (!hasConnection && sourceMode == "nearest" && (payload["auto_apply"] | false))
+    {
+        sensorType_ = sensorType;
+        DynamicJsonDocument saved(CONFIG_DOCUMENT_SIZE);
+        if (deserializeJson(saved, baseConfig_) != DeserializationError::Ok || !saved.is<JsonObject>())
+            saved.to<JsonObject>();
+        JsonObject base = saved.as<JsonObject>();
+        const JsonObjectConst requested = payload["auto_base_config"].as<JsonObjectConst>();
+        for (JsonPairConst item : requested)
+            base[item.key()] = item.value();
+        base["base_setup_method"] = "AUTO_CORS";
+        base["auto_cors_source_mode"] = "nearest";
+        base["mode"] = "BASE";
+        base.remove("auto_base_started_boot_id");
+        base.remove("auto_base_started_request_id");
+        base.remove("auto_base_previous_config");
+        enforceBaseAccuracy(base);
+        if (saved.overflowed())
+        {
+            error = "nearest CORS configuration exceeds memory capacity";
+            return false;
+        }
+        baseConfig_.clear();
+        serializeJson(saved, baseConfig_);
+        if (!saveStatePreferences())
+        {
+            error = "cannot save nearest CORS request";
+            return false;
+        }
+        // Command callbacks already hold tcpStreamMutex in the MQTT task.
+        stopNtrip();
+        stopNtripRover();
+        if (!applyRoverMode())
+        {
+            error = "cannot switch GNSS receiver to Rover mode";
+            restartConfiguredNtrip(true);
+            return false;
+        }
+        publishConfigState("base_config_state");
+        baseStartupState_ = "awaiting_auto_base";
+        baseStartupError_.clear();
+        setAgentState("auto_setup_rover");
+        setWorkflowProgress("awaiting_source", 0, 4);
+        markStatusDirty();
+        detail = "Rover mode active; local AutoNearest is pending";
+        return true;
+    }
     if (!hasConnection)
     {
         error = "missing or invalid CORS connection fields";
         return false;
     }
     sensorType_ = sensorType;
+    if (sourceMode == "nearest")
+    {
+        DynamicJsonDocument saved(CONFIG_DOCUMENT_SIZE);
+        if (deserializeJson(saved, baseConfig_) != DeserializationError::Ok || !saved.is<JsonObject>())
+            saved.to<JsonObject>();
+        JsonObject base = saved.as<JsonObject>();
+        const JsonObjectConst requested = payload["auto_base_config"].as<JsonObjectConst>();
+        for (JsonPairConst item : requested)
+            base[item.key()] = item.value();
+        base["base_setup_method"] = "AUTO_CORS";
+        base["auto_cors_source_mode"] = "nearest";
+        base["mode"] = "BASE";
+        base.remove("auto_base_previous_config");
+        if (payload["startup_auto"] == true && !String(payload["startup_boot_id"] | "").isEmpty())
+        {
+            base["auto_base_started_boot_id"] = payload["startup_boot_id"];
+            base["auto_base_started_request_id"] = payload["startup_request_id"] | String();
+        }
+        enforceBaseAccuracy(base);
+        if (saved.overflowed())
+        {
+            error = "nearest CORS configuration exceeds memory capacity";
+            return false;
+        }
+        baseConfig_.clear();
+        serializeJson(saved, baseConfig_);
+        if (!saveStatePreferences())
+        {
+            error = "cannot save nearest CORS startup mode";
+            return false;
+        }
+        publishConfigState("base_config_state");
+    }
     String workflowPayload;
     serializeJson(payload, workflowPayload);
-    if (!startWorkflow("auto_base", workflowPayload))
-    {
-        error = "cannot start auto base workflow";
-        return false;
-    }
     DynamicJsonDocument progress(CONFIG_DOCUMENT_SIZE);
     progress["ntrip_host"] = payload["ip"];
     progress["ntrip_port"] = payload["port"];
     progress["mountpoint"] = payload["mountpoint"];
-    progress["note"] = "ESP32 forwards opaque RTCM and uses GNSS RTK/GGA; no RTCM decoder is running on the ESP32.";
+    if (!String(payload["source_name"] | "").isEmpty())
+        progress["source_name"] = payload["source_name"];
+    if (!String(payload["source_serial"] | "").isEmpty())
+        progress["source_serial"] = payload["source_serial"];
+    if (!payload["source_distance_m"].isNull())
+        progress["source_distance_m"] = payload["source_distance_m"];
+    progress["note"] = (payload["auto_apply"] | false)
+        ? "Collect RTK Fixed LLH and apply Base coordinates after quality checks."
+        : "Collect RTK Fixed LLH; results wait for review.";
     String progressJson;
     serializeJson(progress, progressJson);
+    const String previousState = agentState_;
+    const String previousProgress = autoBaseProgress_;
+    const String previousStartupState = baseStartupState_;
+    const String previousStartupError = baseStartupError_;
     setAgentState("auto_setup_queued");
     setWorkflowProgress("queued", 0, 4, progressJson);
+    if (sourceMode == "nearest")
+    {
+        baseStartupState_ = "auto_base_running";
+        baseStartupError_.clear();
+        markStatusDirty();
+    }
+    if (!startWorkflow("auto_base", workflowPayload))
+    {
+        setAgentState(previousState);
+        autoBaseProgress_ = previousProgress;
+        baseStartupState_ = previousStartupState;
+        baseStartupError_ = previousStartupError;
+        markStatusDirty();
+        error = "cannot start auto base workflow";
+        return false;
+    }
     detail = "auto base workflow queued";
     return true;
 }
@@ -569,79 +819,27 @@ bool BackendAgent::executeReferenceCheckCommand(JsonObject payload, String &erro
     }
     String workflowPayload;
     serializeJson(payload, workflowPayload);
+    const String previousState = agentState_;
+    const String previousProgress = autoBaseProgress_;
+    setAgentState("reference_check_queued");
+    setWorkflowProgress("reference_check_queued", 0, 4);
     if (!startWorkflow("reference_check", workflowPayload))
     {
+        setAgentState(previousState);
+        autoBaseProgress_ = previousProgress;
+        markStatusDirty();
         error = "cannot start reference check workflow";
         return false;
     }
-    setAgentState("reference_check_queued");
-    setWorkflowProgress("reference_check_queued", 0, 4);
     detail = "base reference check queued";
     return true;
 }
 
-bool BackendAgent::executeProvinceCommand(JsonObject payload, String &error,
-                                          String &detail)
+bool BackendAgent::executeProvinceCommand([[maybe_unused]] JsonObject payload, String &error,
+                                          [[maybe_unused]] String &detail)
 {
-    auto province = payload["province_code"] | String();
-    province.toUpperCase();
-    double centralMeridianDeg = 0.0;
-    double scale = 0.0;
-    String provinceName;
-    DynamicJsonDocument baseDoc(CONFIG_DOCUMENT_SIZE);
-    const auto baseParsed = deserializeJson(baseDoc, baseConfig_) == DeserializationError::Ok && baseDoc.is<JsonObject>();
-    JsonObject base = baseDoc.as<JsonObject>();
-    JsonObject rawCoordinates = base["auto_base_raw_itrf_llh"].as<JsonObject>();
-    if (rawCoordinates.isNull())
-        rawCoordinates = base["coords"].as<JsonObject>();
-    if (rawCoordinates.isNull())
-        rawCoordinates = base;
-    const auto rawLatitude = rawCoordinates["lat"] | NAN;
-    const auto rawLongitude = rawCoordinates["lon"] | NAN;
-    const auto rawAltitude = rawCoordinates["alt"] | NAN;
-    ProjectedPosition result{rawLatitude, rawLongitude, rawAltitude};
-    if (province.isEmpty())
-    {
-        error = "missing payload.province_code";
-        return false;
-    }
-    if (!getProvinceProjection(province, centralMeridianDeg, scale, provinceName))
-    {
-        error = "invalid province_code";
-        return false;
-    }
-    if (const auto validCoordinates = baseParsed && std::isfinite(rawLatitude) && std::isfinite(rawLongitude) && std::isfinite(rawAltitude) && transformToVn2000(rawLatitude, rawLongitude, rawAltitude, centralMeridianDeg, scale, result);
-        !validCoordinates)
-    {
-        error = "base coordinates are missing or cannot be transformed";
-        return false;
-    }
-    if (!applyBaseCoordinates(result.latitude, result.longitude, result.altitude))
-    {
-        error = "cannot apply transformed coordinates to GNSS";
-        return false;
-    }
-    JsonObject coordinates = base["coords"].as<JsonObject>();
-    if (coordinates.isNull())
-        coordinates = base["coords"].to<JsonObject>();
-    coordinates["lat"] = result.latitude;
-    coordinates["lon"] = result.longitude;
-    coordinates["alt"] = result.altitude;
-    base["itrf_vn2000_transform_applied"] = true;
-    base["central_meridian_deg"] = centralMeridianDeg;
-    base["k0"] = scale;
-    base["province_code"] = province;
-    base["province_name"] = provinceName;
-    base["projection_source"] = "manual_province_override";
-    base["vn2000_northing"] = result.northing;
-    base["vn2000_easting"] = result.easting;
-    baseConfig_.clear();
-    serializeJson(baseDoc, baseConfig_);
-    saveStatePreferences();
-    publishConfigState("base_config_state");
-    setWorkflowProgress("reprojected", 4, 4);
-    detail = "VN2000 province transform applied";
-    return true;
+    error = "Review Auto Base results and apply Fixed LLA; province overrides no longer write the receiver";
+    return false;
 }
 
 bool BackendAgent::executeBasicCommand(const String &command, JsonObject payload,
@@ -674,8 +872,11 @@ bool BackendAgent::executeBasicCommand(const String &command, JsonObject payload
     }
     deviceName_ = name;
     provisioned_ = true;
-    setupNTRIP();
-    connectNTRIP();
+    if (!workflowActive())
+    {
+        setupNTRIP();
+        connectNTRIP();
+    }
     detail = "device provisioned";
     return true;
 }
@@ -688,7 +889,13 @@ bool BackendAgent::executeStreamCommand(JsonObject payload, String &error,
         error = "missing payload.active";
         return false;
     }
-    applyServiceStreamCommand(payload);
+    if (workflowActive())
+    {
+        error = "cannot change streams during an active base workflow";
+        return false;
+    }
+    if (!applyServiceStreamCommand(payload, error))
+        return false;
     setupNTRIP();
     connectNTRIP();
     detail = (payload["active"] | false) ? "stream activated" : "stream set to standby";
@@ -708,7 +915,7 @@ bool BackendAgent::executeBaseStatusCommand(String &error, String &detail)
     return true;
 }
 
-bool BackendAgent::executeStopWorkflowCommand(String &detail)
+bool BackendAgent::executeStopWorkflowCommand(String &error, String &detail)
 {
     if (workflowActive())
     {
@@ -716,6 +923,50 @@ bool BackendAgent::executeStopWorkflowCommand(String &detail)
         setWorkflowProgress("stopping", 0, 4);
         detail = "base workflow stop requested";
         return true;
+    }
+    if (baseStartupState_ == "awaiting_auto_base")
+    {
+        DynamicJsonDocument saved(CONFIG_DOCUMENT_SIZE);
+        if (deserializeJson(saved, baseConfig_) != DeserializationError::Ok || !saved.is<JsonObject>())
+        {
+            error = "cannot read previous Base configuration";
+            return false;
+        }
+        JsonObjectConst base = saved.as<JsonObjectConst>();
+        const JsonObjectConst previous = base["auto_base_previous_config"].as<JsonObjectConst>();
+        if (!previous.isNull())
+            base = previous;
+        JsonObjectConst coords = base["coords"].as<JsonObjectConst>();
+        if (coords.isNull())
+            coords = base;
+        if (const bool hasSavedBase = base["base_setup_method"] == "SURVEY_IN"
+                || (!coords["lat"].isNull() && !coords["lon"].isNull() && !coords["alt"].isNull()); hasSavedBase)
+        {
+            if (!restoreWorkflowBase(base) || !restartConfiguredNtrip(true))
+            {
+                error = "could not restore saved Base after stopping nearest-source wait";
+                return false;
+            }
+        }
+        else
+        {
+            baseStartupState_ = "awaiting_configuration";
+            baseStartupError_.clear();
+            markStatusDirty();
+        }
+        if (!previous.isNull())
+        {
+            const String pendingConfig = baseConfig_;
+            baseConfig_.clear();
+            serializeJson(previous, baseConfig_);
+            if (!saveStatePreferences())
+            {
+                baseConfig_ = pendingConfig;
+                error = "cannot save previous Base configuration after stopping AutoNearest";
+                return false;
+            }
+            publishConfigState("base_config_state");
+        }
     }
     setWorkflowProgress("stopped", 0, 4);
     setAgentState(normalAgentState());
@@ -728,21 +979,23 @@ void BackendAgent::finishCommand(const String &source, const String &command,
                                  const String &error, const String &detail,
                                  bool restartAfterCommand)
 {
-    const auto workflowState = command == "TRIGGER_AUTO_BASE" || command == "TRIGGER_BASE_REFERENCE_CHECK" || (command == "STOP_AUTO_BASE" && workflowActive());
-    if (success && command != "REBOOT_DEVICE" && command != "DELETE_DEVICE" && command != "DEPLOY_LICENSE" && !workflowState)
+    const bool workflowState = command == "TRIGGER_AUTO_BASE" || command == "TRIGGER_BASE_REFERENCE_CHECK"
+        || (command == "STOP_AUTO_BASE" && workflowActive());
+    const bool normalCompletion = command != "REBOOT_DEVICE" && command != "DELETE_DEVICE"
+        && command != "DEPLOY_LICENSE" && !workflowState;
+    if (!workflowActive() && (!success || normalCompletion))
     {
         setAgentState(normalAgentState());
     }
-    if (!success)
-        setAgentState(normalAgentState());
     recordCommandResult(command, source, success ? "success" : "error",
                         success ? detail : error, commandId);
-    saveStatePreferences();
+    if (command != "VERIFY_GNSS_CONFIG")
+        saveStatePreferences();
     publishStatus(true);
     if (success && restartAfterCommand)
     {
         delay(500);
-        mqtt.disconnect();
+        shutdownTcpTransportBeforeRestart();
         ESP.restart();
     }
 }
@@ -751,7 +1004,8 @@ void BackendAgent::executeCommand(const String &source, const String &command,
                                   const String &commandId, JsonDocument &doc,
                                   JsonObject payload)
 {
-    setAgentState("configuring");
+    if (!workflowActive())
+        setAgentState("configuring");
     String error;
     auto success = true;
     String detail;
@@ -777,6 +1031,22 @@ void BackendAgent::executeCommand(const String &source, const String &command,
     {
         success = executeRawCommand(doc, payload, error, detail);
     }
+    else if (command == "VERIFY_GNSS_CONFIG")
+    {
+        nvsInventory_.clear();
+        if (workflowActive() || (sensorType_ != "Unicorecomm" && sensorType_ != "Ublox"))
+        {
+            success = false;
+            error = "Verification requires an idle supported GNSS receiver";
+        }
+        else
+        {
+            success = sensorType_ == "Ublox" ? verifyGnssConfig(payload, commandId, error)
+                                               : verifyUnicoreConfig(payload, commandId, error);
+            if (success)
+                detail = "GNSS readback completed; inspect verification result";
+        }
+    }
     else if (command == "CHECK_BASE_STATUS")
     {
         success = executeBaseStatusCommand(error, detail);
@@ -791,11 +1061,66 @@ void BackendAgent::executeCommand(const String &source, const String &command,
     }
     else if (command == "STOP_AUTO_BASE")
     {
-        success = executeStopWorkflowCommand(detail);
+        success = executeStopWorkflowCommand(error, detail);
     }
     else if (command == "APPLY_VN2000_PROVINCE")
     {
         success = executeProvinceCommand(payload, error, detail);
+    }
+    else if (command == "CHECK_STORAGE_STATUS")
+    {
+        if (payload["inspect"] == true)
+        {
+            if (!payload["offset"].is<uint32_t>() || payload["offset"].as<uint32_t>() > 8192)
+            {
+                success = false;
+                error = "NVS offset must be an integer from 0 to 8192";
+            }
+            else
+            {
+                gnssVerification_.clear();
+                nvsInventory_.clear();
+                success = readNvsInventory(payload["offset"].as<uint32_t>(), commandId, nvsInventory_, error);
+                nvsInventoryMs_ = millis();
+            }
+        }
+        detail = "storage status refreshed";
+    }
+    else if (command == "CLEAR_NVS_DATA")
+    {
+        nvsInventory_.clear();
+        const String group = payload["group"] | "";
+        const String confirmation = payload["confirm"] | "";
+        if (workflowActive() || (surveyInMonitoring_ && !surveyInReadbackReady_))
+        {
+            success = false;
+            error = "Cannot clean storage during an active GNSS workflow or survey";
+        }
+        else if (confirmation != group || (group != "unused_wifi" && group != "auto_base_history"))
+        {
+            success = false;
+            error = "Select and confirm a supported cleanup group";
+        }
+        else if (group == "unused_wifi")
+        {
+            success = clearUnusedWifi(error);
+            detail = "obsolete Wi-Fi portal data cleared; active network preserved";
+        }
+        else
+        {
+            success = beginBackendPreferences(false);
+            if (success)
+            {
+                Preferences &store = backendPreferences();
+                success = !store.isKey("PROGRESS_JSON") || store.remove("PROGRESS_JSON");
+                store.end();
+            }
+            if (success)
+                autoBaseProgress_ = "{}";
+            else
+                error = "Cannot clear Auto Base history";
+            detail = "saved Auto Base history cleared; base configuration and Survey-In result preserved";
+        }
     }
     else if (command == "REBOOT_DEVICE")
     {
@@ -805,7 +1130,7 @@ void BackendAgent::executeCommand(const String &source, const String &command,
         saveStatePreferences();
         publishStatus(true);
         delay(500);
-        mqtt.disconnect();
+        shutdownTcpTransportBeforeRestart();
         ESP.restart();
     }
     else if (command == "DELETE_DEVICE")
@@ -824,7 +1149,7 @@ void BackendAgent::executeCommand(const String &source, const String &command,
             backendPreferences().clear();
             backendPreferences().end();
         }
-        mqtt.disconnect();
+        shutdownTcpTransportBeforeRestart();
         ESP.restart();
     }
 

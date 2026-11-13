@@ -22,6 +22,14 @@ public:
         assign(buffer);
     }
     bool isEmpty() const { return empty(); }
+    bool equalsIgnoreCase(const String &other) const
+    {
+        auto left = *this;
+        auto right = other;
+        left.toUpperCase();
+        right.toUpperCase();
+        return left == right;
+    }
     int indexOf(char value) const
     {
         const auto pos = find(value);

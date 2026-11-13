@@ -3,8 +3,11 @@
 #include "HardwareSerial.h"
 #include "Prog_Config.h"
 #include "functions/backend/Backend_Agent.h"
+#include "functions/backend/Base_Sample.h"
 #include <array>
+#include <cmath>
 #include <cstdio>
+#include <cstdlib>
 
 namespace
 {
@@ -59,15 +62,26 @@ namespace
     }
 
 /** @brief Implements nmeaCoordinate. */
-    double nmeaCoordinate(const char *raw, const char *hemisphere)
+    double nmeaCoordinate(const char *raw, const char *hemisphere, bool latitude)
     {
-        if (!raw || !*raw)
-            return 0.0;
-        const auto value = atof(raw);
+        if (!raw || !*raw || !hemisphere || !hemisphere[0] || hemisphere[1] != '\0')
+            return NAN;
+        const char direction = hemisphere[0];
+        if (latitude ? (direction != 'N' && direction != 'S') : (direction != 'E' && direction != 'W'))
+            return NAN;
+        for (const char *p = raw; *p; ++p)
+            if ((*p < '0' || *p > '9') && *p != '.')
+                return NAN;
+        char *end = nullptr;
+        const double value = std::strtod(raw, &end);
+        if (end == raw || *end != '\0' || !std::isfinite(value) || value < 0 || value > (latitude ? 9000.0 : 18000.0))
+            return NAN;
         const auto degrees = static_cast<int>(value / 100.0);
         const auto minutes = value - degrees * 100.0;
+        if (minutes < 0 || minutes >= 60)
+            return NAN;
         auto coordinate = degrees + minutes / 60.0;
-        if (hemisphere && (hemisphere[0] == 'S' || hemisphere[0] == 'W'))
+        if (direction == 'S' || direction == 'W')
         {
             coordinate = -coordinate;
         }
@@ -121,17 +135,25 @@ namespace
     GgaReading parseGgaFields(char *const *fields, size_t fieldCount)
     {
         GgaReading reading;
-        reading.hasFixQuality = fieldCount > 6;
-        if (reading.hasFixQuality)
-            reading.fixQuality = atoi(fields[6]);
+        reading.hasFixQuality = true;
+        if (fieldCount > 6)
+        {
+            char *end = nullptr;
+            const long quality = std::strtol(fields[6], &end, 10);
+            if (end != fields[6] && *end == '\0' && quality >= 0 && quality <= 8)
+                reading.fixQuality = static_cast<int>(quality);
+        }
         if (fieldCount <= 9 || !fields[2][0] || !fields[3][0] || !fields[4][0] || !fields[5][0])
             return reading;
 
-        reading.latitude = nmeaCoordinate(fields[2], fields[3]);
-        reading.longitude = nmeaCoordinate(fields[4], fields[5]);
+        reading.latitude = nmeaCoordinate(fields[2], fields[3], true);
+        reading.longitude = nmeaCoordinate(fields[4], fields[5], false);
+        if (!std::isfinite(reading.latitude) || !std::isfinite(reading.longitude))
+            return reading;
         reading.satellites = static_cast<uint8_t>(constrain(atoi(fields[7]), 0, 255));
         reading.hdop = static_cast<float>(atof(fields[8]));
-        reading.altitude = atof(fields[9]);
+        reading.altitude = fieldCount > 12
+            ? ggaEllipsoidalHeight(fields[9], fields[10], fields[11], fields[12]) : NAN;
         reading.hasPosition = true;
         return reading;
     }
@@ -174,6 +196,28 @@ namespace
         sentence.trim();
         if (sentence.length() < 7 || sentence[0] != '$')
             return;
+        const int star = sentence.indexOf('*');
+        if (star >= 0)
+        {
+            const auto hex = [](char value)
+            {
+                if (value >= '0' && value <= '9') return value - '0';
+                if (value >= 'A' && value <= 'F') return value - 'A' + 10;
+                if (value >= 'a' && value <= 'f') return value - 'a' + 10;
+                return -1;
+            };
+            if (star != static_cast<int>(sentence.length()) - 3)
+                return;
+            const int high = hex(sentence[star + 1]);
+            const int low = hex(sentence[star + 2]);
+            if (high < 0 || low < 0)
+                return;
+            uint8_t checksum = 0;
+            for (int i = 1; i < star; ++i)
+                checksum ^= static_cast<uint8_t>(sentence[i]);
+            if (checksum != static_cast<uint8_t>((high << 4) | low))
+                return;
+        }
         if (sentence.startsWith("$PUBX"))
         {
             backendAgent.setDetectedChipIfUnknown("Ublox");
@@ -199,7 +243,7 @@ namespace
         if (fieldCount == 0)
             return;
 
-        const auto typeLength = strnlen(fields[0], sizeof(fields[0]));
+        const auto typeLength = strnlen(fields[0], copyLength);
         if (typeLength < 3)
             return;
         const char *type = fields[0] + typeLength - 3;
@@ -248,6 +292,12 @@ namespace
             snprintf(telemetry.lastGga.data(), telemetry.lastGga.size(), "%s", sentence.c_str());
             telemetry.lastGga[telemetry.lastGga.size() - 1] = '\0';
             telemetry.lastGgaMs = millis();
+            if (!gga.hasPosition)
+            {
+                telemetry.latitude = NAN;
+                telemetry.longitude = NAN;
+                telemetry.altitude = NAN;
+            }
         }
         if (gga.hasPosition)
         {

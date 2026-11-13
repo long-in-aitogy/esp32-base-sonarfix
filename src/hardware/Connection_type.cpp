@@ -6,7 +6,7 @@ ConnectionType connectionType = ConnectionType::GSM;
 /** @brief Implements loadConnectionTypeFromPrefs. */
 void loadConnectionTypeFromPrefs()
 {
-    const auto configuredType = prefs.getString("CONNECTION_TYPE", "4G");
+    const auto configuredType = prefs.getString("CONNECTION_TYPE", CONNECTION_PREFERENCE);
 
     if (configuredType.equalsIgnoreCase("WIFI"))
     {

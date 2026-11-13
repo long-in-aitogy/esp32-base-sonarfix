@@ -4,6 +4,8 @@
 #include <array>
 #include <algorithm>
 #include <cstring>
+#include <cmath>
+#include <limits>
 
 namespace UnicoreCommands
 {
@@ -138,6 +140,15 @@ namespace UnicoreCommands
         return commands;
     }
 
+    static void appendBaseOutputAndSave(CommandList &commands, const GnssOptions &options)
+    {
+        commands.push_back(delayCommand(2000));
+        const auto port = configuredOutputPort();
+        Serial.printf("Configuring Unicore output messages on %s\n", port.isEmpty() ? "current command port" : port.c_str());
+        appendUnicoreOutputCommands(commands, port, options);
+        commands.push_back(asciiCommand("saveconfig\r\n"));
+    }
+
 /** @brief Implements buildBaseSurveyInCommand. */
     CommandList buildBaseSurveyInCommand(uint32_t duration, [[maybe_unused]] float accuracy, const GnssOptions &options)
     {
@@ -148,13 +159,18 @@ namespace UnicoreCommands
         const auto cmd = "mode base time " + String(duration) + " 0\r\n";
         Serial.printf("Survey-In command: %s", cmd.c_str());
         commands.push_back(asciiCommand(cmd));
-        commands.push_back(delayCommand(2000));
-        const auto port = configuredOutputPort();
-        Serial.printf("Configuring Unicore output messages on %s\n", port.isEmpty() ? "current command port" : port.c_str());
-        appendUnicoreOutputCommands(commands, port, options);
-        commands.push_back(asciiCommand("saveconfig\r\n"));
+        appendBaseOutputAndSave(commands, options);
 
         return commands;
+    }
+
+    static String coordinateText(double value)
+    {
+        double scaled = value * 1e10;
+        // Preserve exact grid points affected by floating-point representation.
+        if (const double integer = std::round(scaled); std::abs(scaled - integer) <= 4 * std::numeric_limits<double>::epsilon() * std::fmax(1.0, std::abs(scaled)))
+            scaled = integer;
+        return String(std::trunc(scaled) / 1e10, 10);
     }
 
 /** @brief Implements buildBaseFixedLlaCommand. */
@@ -163,14 +179,10 @@ namespace UnicoreCommands
         CommandList commands;
         commands.push_back(asciiCommand("unlogall\r\n"));
         commands.push_back(delayCommand(1000));
-        const auto cmd = "mode base " + String(lat, 10) + " " + String(lon, 10) + " " + String(alt, 4) + "\r\n";
+        const auto cmd = "mode base " + coordinateText(lat) + " " + coordinateText(lon) + " " + String(alt, 4) + "\r\n";
         Serial.printf("Fixed position command: %s", cmd.c_str());
         commands.push_back(asciiCommand(cmd));
-        commands.push_back(delayCommand(2000));
-        const auto port = configuredOutputPort();
-        Serial.printf("Configuring Unicore output messages on %s\n", port.isEmpty() ? "current command port" : port.c_str());
-        appendUnicoreOutputCommands(commands, port, options);
-        commands.push_back(asciiCommand("saveconfig\r\n"));
+        appendBaseOutputAndSave(commands, options);
 
         return commands;
     }

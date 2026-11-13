@@ -8,14 +8,13 @@
 #include "functions/ntrip/RTCM_Receiver.h"
 #include "functions/backend/Device_Token.h"
 #include "functions/gnss/Unicore_Identification.h"
+#include "functions/gnss/Ubx_Reply.h"
 #include "hardware/Connection_type.h"
 #include "hardware/Sim_handler.h"
 #include "hardware/Wifi_handler.h"
 
 #include <ArduinoJson.h>
 #include <Preferences.h>
-#include <nvs.h>
-#include <esp_err.h>
 #include <time.h>
 #include <array>
 #include <cstddef>
@@ -29,7 +28,6 @@
 #if !defined(NATIVE_BUILD)
 #include <esp_random.h>
 #include <esp_system.h>
-#include <mbedtls/sha256.h>
 
 using namespace BackendAgentInternal;
 #endif
@@ -41,11 +39,6 @@ extern SemaphoreHandle_t rtcmBufferMutex;
 
 namespace BackendAgentInternal
 {
-
-    constexpr char BACKEND_PREFS_NAMESPACE[] = "backend";
-    constexpr char BACKEND_PREFS_PARTITION[] = "agent_state";
-    Preferences backendPrefs;
-    bool useDedicatedBackendPrefs = false;
 
     constexpr size_t MAX_NMEA_PACKET = 512;
     constexpr size_t MAX_RTCM_PACKET = 1030;
@@ -63,83 +56,6 @@ namespace BackendAgentInternal
         uint16_t length = 0;
         std::array<uint8_t, MAX_NMEA_PACKET> data = {};
     };
-
-    Preferences &backendPreferences()
-    {
-        return useDedicatedBackendPrefs ? backendPrefs : prefs;
-    }
-
-    bool beginBackendPreferences(bool readOnly)
-    {
-        return useDedicatedBackendPrefs
-                   ? backendPrefs.begin(BACKEND_PREFS_NAMESPACE, readOnly, BACKEND_PREFS_PARTITION)
-                   : prefs.begin("myPrefs", readOnly);
-    }
-
-    bool migrateBackendPreferences()
-    {
-        if (!backendPrefs.begin(BACKEND_PREFS_NAMESPACE, false, BACKEND_PREFS_PARTITION))
-        {
-            return false;
-        }
-        const auto alreadyMigrated = backendPrefs.isKey("MIGRATED");
-        backendPrefs.end();
-        if (alreadyMigrated)
-            return true;
-
-        if (!prefs.begin("myPrefs", true))
-            return false;
-        if (!backendPrefs.begin(BACKEND_PREFS_NAMESPACE, false, BACKEND_PREFS_PARTITION))
-        {
-            prefs.end();
-            return false;
-        }
-
-        auto copyString = [](const char *key)
-        {
-            if (!prefs.isKey(key))
-                return true;
-            const auto value = prefs.getString(key);
-            return backendPrefs.putString(key, value) == value.length();
-        };
-        auto copyBool = [](const char *key)
-        {
-            if (!prefs.isKey(key))
-                return true;
-            return backendPrefs.putBool(key, prefs.getBool(key)) == 1;
-        };
-
-        auto migrated = true;
-        migrated &= copyString("DEVICE_SERIAL");
-        migrated &= copyString("DEVICE_NAME");
-        migrated &= copyString("SENSOR_TYPE");
-        migrated &= copyBool("PROVISIONED");
-        migrated &= copyBool("REMOTE_LOCK");
-        if (prefs.isKey("LOCK_SERVERS"))
-        {
-            migrated &= backendPrefs.putUChar("LOCK_SERVERS", prefs.getUChar("LOCK_SERVERS")) == 1;
-        }
-        migrated &= copyString("BASE_JSON");
-        migrated &= copyString("SERVICE_JSON");
-        migrated &= copyString("LICENSE_KEY");
-        migrated &= copyString("CMD_RESULT");
-        migrated &= copyString("PROGRESS_JSON");
-        if (migrated)
-            migrated = backendPrefs.putBool("MIGRATED", true) == 1;
-        prefs.end();
-        backendPrefs.end();
-        Serial.printf("[BACKEND][NVS] Migrasi state sang agent_state: %s.\n",
-                      migrated ? "THANH CONG" : "THAT BAI");
-        return migrated;
-    }
-
-    String readPreference(const char *key, const String &fallback)
-    {
-        prefs.begin("myPrefs", true);
-        const auto value = prefs.isKey(key) ? prefs.getString(key) : fallback;
-        prefs.end();
-        return value;
-    }
 
     String epochString()
     {
@@ -188,220 +104,15 @@ namespace BackendAgentInternal
         return value.as<String>();
     }
 
-    void copyJsonObject(JsonDocument &target, const char *key, const String &serialized)
+    bool copyJsonObject(JsonDocument &target, const char *key, const String &serialized)
     {
-        DynamicJsonDocument source(CONFIG_DOCUMENT_SIZE);
+        DynamicJsonDocument source(std::strcmp(key, "auto_base_progress") == 0 ? PROGRESS_DOCUMENT_SIZE : CONFIG_DOCUMENT_SIZE);
         if (deserializeJson(source, serialized) != DeserializationError::Ok || !source.is<JsonObject>())
         {
-            target.createNestedObject(key);
-            return;
+            return false;
         }
         JsonObject destination = target.createNestedObject(key);
-        destination.set(source.as<JsonObjectConst>());
-    }
-
-    String urlEncode(const String &value)
-    {
-        static constexpr char hexDigits[] = "0123456789ABCDEF";
-        String encoded;
-        encoded.reserve(value.length() + 8);
-        for (const char character : value)
-        {
-            const auto c = static_cast<uint8_t>(character);
-            if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~')
-            {
-                encoded += static_cast<char>(c);
-            }
-            else
-            {
-                encoded += '%';
-                const std::byte byte{c};
-                encoded += hexDigits[std::to_integer<unsigned int>(byte >> 4)];
-                encoded += hexDigits[std::to_integer<unsigned int>(byte & std::byte{0x0F})];
-            }
-        }
-        return encoded;
-    }
-
-    String tokenFingerprint(const String &token)
-    {
-        if (token.isEmpty())
-        {
-            return String();
-        }
-
-#if !defined(NATIVE_BUILD)
-        std::array<uint8_t, 32> digest = {};
-        mbedtls_sha256_context context;
-        mbedtls_sha256_init(&context);
-        if (mbedtls_sha256_starts_ret(&context, 0) == 0 && mbedtls_sha256_update_ret(&context, reinterpret_cast<const unsigned char *>(token.c_str()), token.length()) == 0 && mbedtls_sha256_finish_ret(&context, digest.data()) == 0)
-        {
-            mbedtls_sha256_free(&context);
-            std::array<char, 17> result = {};
-            for (size_t i = 0; i < 8; ++i)
-            {
-                snprintf(result.data() + (i * 2), 3, "%02x", digest[i]);
-            }
-            return String(result.data());
-        }
-        mbedtls_sha256_free(&context);
-#endif
-
-        // Fallback fingerprint when SHA-256 support is absent or hashing fails.
-        uint32_t hash = 2166136261UL;
-        for (const char character : token)
-        {
-            hash ^= static_cast<uint8_t>(character);
-            hash *= 16777619UL;
-        }
-        std::array<char, 17> result = {};
-        snprintf(result.data(), result.size(), "%08lx%08lx",
-                 static_cast<unsigned long>(hash),
-                 static_cast<unsigned long>(hash ^ 0xA5A5A5A5UL));
-        return String(result.data());
-    }
-
-    int base64Value(char c)
-    {
-        if (c >= 'A' && c <= 'Z')
-            return c - 'A';
-        if (c >= 'a' && c <= 'z')
-            return c - 'a' + 26;
-        if (c >= '0' && c <= '9')
-            return c - '0' + 52;
-        if (c == '+')
-            return 62;
-        if (c == '/')
-            return 63;
-        return -1;
-    }
-
-    size_t decodeBase64(const String &encoded, uint8_t *output, size_t outputCapacity)
-    {
-        uint32_t value = 0;
-        int bits = -8;
-        size_t outputLength = 0;
-        for (const char character : encoded)
-        {
-            const auto c = character;
-            if (c == '=')
-            {
-                break;
-            }
-            const auto decoded = base64Value(c);
-            if (decoded < 0)
-            {
-                if (c == '\r' || c == '\n' || c == ' ' || c == '\t')
-                {
-                    continue;
-                }
-                return 0;
-            }
-            value = (value << 6) | static_cast<uint32_t>(decoded);
-            bits += 6;
-            if (bits >= 0)
-            {
-                if (outputLength >= outputCapacity)
-                {
-                    return 0;
-                }
-                output[outputLength++] = static_cast<uint8_t>((value >> bits) & 0xFF);
-                bits -= 8;
-            }
-        }
-        return outputLength;
-    }
-
-    bool delayMarker(const uint8_t *data, size_t length, uint32_t &delayMs)
-    {
-        if (length < 9 || memcmp(data, "$DELAY_", 7) != 0 || data[length - 1] != '$')
-        {
-            return false;
-        }
-        uint32_t value = 0;
-        for (size_t i = 7; i + 1 < length; ++i)
-        {
-            if (data[i] < '0' || data[i] > '9')
-            {
-                return false;
-            }
-            value = value * 10UL + static_cast<uint32_t>(data[i] - '0');
-            if (value > 10000UL)
-            {
-                value = 10000UL;
-            }
-        }
-        delayMs = value;
-        return true;
-    }
-
-    String licenseCodeFromBase(const String &base)
-    {
-        const auto length = static_cast<int>(base.length());
-        if (length < 2 || length > 31)
-            return String();
-
-        std::vector<int> parts(static_cast<size_t>(length), 0);
-        std::vector<double> smoothed(static_cast<size_t>(length) + 1U, 0.0);
-        auto number = atof(base.c_str());
-        if (!std::isfinite(number))
-            return String();
-
-        number *= length;
-        auto remainingDigits = length;
-        parts[0] = static_cast<int>(number * pow(10.0, -static_cast<double>(remainingDigits)));
-        for (int index = 1; index < length; ++index)
-        {
-            number -= static_cast<double>(parts[index - 1]) / pow(10.0, -static_cast<double>(remainingDigits));
-            --remainingDigits;
-            parts[index] = static_cast<int>(number * pow(10.0, -static_cast<double>(remainingDigits)));
-        }
-        // Keep the averaged final part in floating point; truncation changes the license code.
-        const auto finalPart = (parts[length - 2] + parts[length - 1]) / 2.0 + 1.0;
-        smoothed[0] = static_cast<double>(parts[0]);
-
-        String output;
-        output.reserve(static_cast<size_t>(length) * 2U);
-        const auto logarithm = log10(finalPart);
-        for (int index = 0; index < length; ++index)
-        {
-            const auto nextPart = index + 1 == length
-                                      ? finalPart
-                                      : static_cast<double>(parts[index + 1]);
-            smoothed[index + 1] = (smoothed[index] + nextPart) / 2.0;
-            const auto first = smoothed[index + 1] * exp(-0.2);
-            const auto second = logarithm * pow(nextPart, 0.2);
-            // Use round-to-nearest, ties-to-even under the default rounding mode.
-            output += String(static_cast<long>(std::nearbyint(first + second)));
-        }
-        return output;
-    }
-
-    String licenseBaseForSerial(const String &serial)
-    {
-        const auto start = serial.length() > 10
-                               ? static_cast<int>(serial.length() - 10U)
-                               : 0;
-        String base;
-        for (int index = start; index < static_cast<int>(serial.length()); ++index)
-        {
-            auto character = serial[static_cast<unsigned int>(index)];
-            if (character >= 'a' && character <= 'z')
-                character -= 'a' - 'A';
-            base += String(static_cast<int>(static_cast<unsigned char>(character)));
-        }
-        if (base.length() > 12)
-            base = base.substring(0, 12);
-        while (base.length() < 12)
-            base += '0';
-        return base;
-    }
-
-    bool licenseMatchesSerial(const String &serial, const String &token)
-    {
-        if (serial.isEmpty() || token.isEmpty())
-            return false;
-        return isDeviceBearerToken(token.c_str(), token.length()) || token == licenseCodeFromBase(licenseBaseForSerial(serial));
+        return destination.set(source.as<JsonObjectConst>()) && !target.overflowed();
     }
 
 } // namespace BackendAgentInternal
@@ -424,18 +135,24 @@ void BackendAgent::begin()
     loadPreferences();
     ensureDefaultServiceConfig();
 
+    if (!autoBaseLocationQueue_)
+        autoBaseLocationQueue_ = xQueueCreate(1, sizeof(AutoBaseLocationReply));
     if (!nmeaQueue_)
     {
         nmeaQueue_ = xQueueCreate(NMEA_QUEUE_LENGTH, sizeof(NmeaPacket));
     }
+#if BACKEND_PUBLISH_RAW_RTCM
     if (!rtcmQueue_)
     {
         rtcmQueue_ = xQueueCreate(RTCM_QUEUE_LENGTH, sizeof(DataPacket));
     }
+#endif
+#if BACKEND_WEBSOCKET_ENABLED
     if (!websocket_)
     {
         websocket_ = std::make_unique<BackendAgentWebsocket>(this);
     }
+#endif
     // Initialize the WebSocket endpoint with the restored device identity and token.
     setupWebsocket();
     lastStatusMs_ = 0;
@@ -443,157 +160,6 @@ void BackendAgent::begin()
     statusDirty_ = true;
     workflowCancelRequested_ = false;
     workflowTask_ = nullptr;
-}
-
-void BackendAgent::loadPreferences()
-{
-    useDedicatedBackendPrefs = migrateBackendPreferences();
-    if (!beginBackendPreferences(true))
-    {
-        useDedicatedBackendPrefs = false;
-        prefs.begin("myPrefs", true);
-        Serial.println("[BACKEND][NVS] Khong mo duoc agent_state; dung NVS cu.");
-    }
-    Preferences &statePrefs = backendPreferences();
-
-    serialNumber_ = statePrefs.getString("DEVICE_SERIAL", String());
-    auto serialNeedsSave = false;
-    if (serialNumber_.isEmpty())
-    {
-        uint64_t mac = 0;
-#if !defined(NATIVE_BUILD)
-        mac = ESP.getEfuseMac();
-#endif
-        std::array<char, 24> generated = {};
-        snprintf(generated.data(), generated.size(), "esp_%012llX",
-                 static_cast<unsigned long long>(mac & 0xFFFFFFFFFFFFULL));
-        serialNumber_ = String(generated.data());
-        serialNeedsSave = true;
-    }
-    else if (serialNumber_.startsWith("LP_"))
-    {
-        // Replace the legacy LP_ prefix while preserving the device identifier suffix.
-        serialNumber_ = String("esp_") + serialNumber_.substring(3);
-        serialNeedsSave = true;
-    }
-
-    deviceName_ = statePrefs.getString("DEVICE_NAME", "ESP32-GNSS");
-    sensorType_ = statePrefs.getString("SENSOR_TYPE", "UNKNOWN");
-    provisioned_ = statePrefs.getBool("PROVISIONED", false);
-    stationLock_.restore(statePrefs.getBool("REMOTE_LOCK", false),
-                         statePrefs.getUChar("LOCK_SERVERS", 0));
-    baseConfig_ = statePrefs.getString("BASE_JSON", "{}");
-    serviceConfig_ = statePrefs.getString("SERVICE_JSON", "{}");
-    licenseToken_ = statePrefs.getString("LICENSE_KEY", "");
-    lastCommandResult_ = statePrefs.getString("CMD_RESULT", "{}");
-    autoBaseProgress_ = statePrefs.getString("PROGRESS_JSON", "{}");
-    surveyInResult_ = statePrefs.isKey("SURVEY_RESULT") ? statePrefs.getString("SURVEY_RESULT") : "{}";
-    statePrefs.end();
-    prefs.begin("myPrefs", true);
-    const auto bootCounter = static_cast<uint32_t>(prefs.getInt("RSTRT_COUNT", 0));
-    prefs.end();
-    if (serialNeedsSave)
-    {
-        const auto opened = beginBackendPreferences(false);
-        const auto saved = opened && backendPreferences().putString("DEVICE_SERIAL", serialNumber_) == serialNumber_.length();
-        if (opened)
-            backendPreferences().end();
-        Serial.printf("[BACKEND] Serial %s: %s\n", serialNumber_.c_str(), saved ? "da luu NVS" : "LOI luu NVS");
-    }
-    licenseValid_ = licenseMatchesSerial(serialNumber_, licenseToken_);
-    Serial.printf("[BACKEND] Device Serial: %s\n", serialNumber_.c_str());
-    Serial.printf("[BACKEND][LICENSE] NVS: %s; kiem tra: %s\n",
-                  licenseToken_.isEmpty() ? "chua co key" : "da co key",
-                  licenseValid_ ? "HOP LE" : "KHONG HOP LE");
-
-    std::array<char, 40> bootId = {};
-    snprintf(bootId.data(), bootId.size(), "%s-%08lx", serialNumber_.c_str(),
-             static_cast<unsigned long>(bootCounter));
-    statusBootId_ = String(bootId.data());
-    agentState_ = normalAgentState();
-}
-
-void BackendAgent::ensureDefaultServiceConfig()
-{
-    DynamicJsonDocument parsed(CONFIG_DOCUMENT_SIZE);
-    if (deserializeJson(parsed, serviceConfig_) == DeserializationError::Ok && parsed.is<JsonObject>() && parsed.as<JsonObjectConst>().size() > 0)
-    {
-        return;
-    }
-
-    prefs.begin("myPrefs", true);
-    const auto host = prefs.getString("NTRIP_SERVER", String(NTRIP_CASTER_ADDRESS));
-    const uint16_t port = prefs.getUShort("NTRIP_PORT", NTRIP_CASTER_PORT);
-    auto mountpoint = prefs.getString("NTRIP_MPT", String(NTRIP_MOUNTPOINT));
-    const auto password = prefs.getString("NT_AUTH_BS", String(NTRIP_AUTH_BASE_STATION));
-    prefs.end();
-    while (mountpoint.startsWith("/"))
-        mountpoint.remove(0, 1);
-
-    DynamicJsonDocument defaults(CONFIG_DOCUMENT_SIZE);
-    JsonObject service = defaults.to<JsonObject>();
-    service["stream_on_demand"] = false;
-    service["stream_active"] = true;
-    service["server1_enabled"] = !host.isEmpty();
-    service["server1_stream_on_demand"] = false;
-    service["server1_stream_active"] = true;
-    service["ntrip_version1"] = 1;
-    service["serverhost1"] = host;
-    service["port1"] = port;
-    service["username1"] = "source";
-    service["password1"] = password;
-    service["mountpoint1"] = mountpoint;
-    service["server2_enabled"] = false;
-    service["server2_stream_on_demand"] = false;
-    service["server2_stream_active"] = false;
-    serviceConfig_.clear();
-    serializeJson(defaults, serviceConfig_);
-    Serial.printf("[BACKEND][NVS] Default SERVICE_JSON (%u bytes): %s.\n",
-                  static_cast<unsigned>(serviceConfig_.length()),
-                  saveStatePreferences() ? "da luu" : "LOI luu");
-}
-
-bool BackendAgent::saveStatePreferences()
-{
-    if (serialNumber_.isEmpty())
-    {
-        Serial.println("[BACKEND][NVS] Refusing to save state before agent identity is loaded.");
-        return false;
-    }
-    // Persist the state snapshot with native NVS calls and one commit.
-    nvs_handle_t handle;
-    const esp_err_t opened = useDedicatedBackendPrefs
-                                 ? nvs_open_from_partition(BACKEND_PREFS_PARTITION, BACKEND_PREFS_NAMESPACE, NVS_READWRITE, &handle)
-                                 : nvs_open("myPrefs", NVS_READWRITE, &handle);
-    if (opened != ESP_OK)
-    {
-        Serial.printf("[BACKEND][NVS] Open failed: %s (0x%x)\n", esp_err_to_name(opened), opened);
-        return false;
-    }
-    auto saved = true;
-    const auto check = [&](const char *key, esp_err_t error)
-    {
-        if (error != ESP_OK)
-        {
-            Serial.printf("[BACKEND][NVS] Write %s failed: %s (0x%x)\n", key, esp_err_to_name(error), error);
-            saved = false;
-        }
-    };
-    check("DEVICE_SERIAL", nvs_set_str(handle, "DEVICE_SERIAL", serialNumber_.c_str()));
-    check("DEVICE_NAME", nvs_set_str(handle, "DEVICE_NAME", deviceName_.c_str()));
-    check("SENSOR_TYPE", nvs_set_str(handle, "SENSOR_TYPE", sensorType_.c_str()));
-    check("PROVISIONED", nvs_set_u8(handle, "PROVISIONED", provisioned_));
-    check("REMOTE_LOCK", nvs_set_u8(handle, "REMOTE_LOCK", stationLock_.all));
-    check("LOCK_SERVERS", nvs_set_u8(handle, "LOCK_SERVERS", stationLock_.servers));
-    check("BASE_JSON", nvs_set_str(handle, "BASE_JSON", baseConfig_.c_str()));
-    check("SERVICE_JSON", nvs_set_str(handle, "SERVICE_JSON", serviceConfig_.c_str()));
-    check("LICENSE_KEY", nvs_set_str(handle, "LICENSE_KEY", licenseToken_.c_str()));
-    check("CMD_RESULT", nvs_set_str(handle, "CMD_RESULT", lastCommandResult_.c_str()));
-    check("PROGRESS_JSON", nvs_set_str(handle, "PROGRESS_JSON", autoBaseProgress_.c_str()));
-    check("SURVEY_RESULT", nvs_set_str(handle, "SURVEY_RESULT", surveyInResult_.c_str()));
-    check("commit", nvs_commit(handle));
-    nvs_close(handle);
-    return saved;
 }
 
 void BackendAgent::setDetectedChipIfUnknown(const String &chipType)
@@ -642,25 +208,16 @@ bool BackendAgent::probeUblox(Stream &stream)
     stream.write(ubxMonVer.data(), ubxMonVer.size());
 
     const uint32_t startMs = millis();
-    uint8_t ubxMatch = 0;
-    while (millis() - startMs < 400)
+    UbxReplyBuffer<512> reply;
+    while (millis() - startMs < 1000)
     {
         while (stream.available())
         {
-            const auto b = static_cast<uint8_t>(stream.read());
-            if (ubxMatch == 0 && b == 0xB5)
-                ubxMatch = 1;
-            else if (ubxMatch == 1 && b == 0x62)
-                ubxMatch = 2;
-            else if (ubxMatch == 2 && b == 0x0A)
-                ubxMatch = 3;
-            else if (ubxMatch == 3 && b == 0x04)
+            if (reply.feed(static_cast<uint8_t>(stream.read())) && reply.length >= 48
+                && reply.frame[2] == 0x0A && reply.frame[3] == 0x04)
                 return true;
-            else
-                ubxMatch = (b == 0xB5) ? 1 : 0;
         }
-        // Stop early after 150 ms if no partial UBX header or unread data remains.
-        if (millis() - startMs > 150 && ubxMatch == 0 && !stream.available())
+        if (millis() - startMs > 150 && reply.used == 0 && !stream.available())
             return false;
         delay(10);
     }
@@ -741,8 +298,6 @@ String BackendAgent::normalAgentState() const
 }
 
 String BackendAgent::serviceConfigJson() const { return serviceConfig_; }
-String BackendAgent::baseConfigJson() const { return baseConfig_; }
-String BackendAgent::licenseToken() const { return licenseToken_; }
 
 String BackendAgent::statusTopic() const
 {
@@ -771,8 +326,7 @@ bool BackendAgent::effectiveStreamActive(const JsonObjectConst &service,
     if (serverId < 1 || serverId > 2)
         return false;
     const auto prefix = String("server") + String(serverId);
-    const auto enabled = jsonBool(service, prefix + "_enabled", false);
-    if (!enabled)
+    if (const auto enabled = jsonBool(service, prefix + "_enabled", false); !enabled)
         return false;
     const auto globalOnDemand = jsonBool(service, "stream_on_demand", false);
     const auto onDemand = jsonBool(service, prefix + "_stream_on_demand", globalOnDemand);
@@ -807,6 +361,11 @@ void BackendAgent::publishStatus(bool force)
     lastStatusMs_ = millis();
     ++statusSequence_;
     const auto payload = buildStatusPayload();
+    if (payload.isEmpty())
+    {
+        Serial.println("[BACKEND][ERROR] Cannot build complete status payload");
+        return;
+    }
     if (mqttConnected())
     {
         const auto sent = mqtt.publish(statusTopic().c_str(), payload.c_str(), true);
@@ -820,16 +379,12 @@ void BackendAgent::publishStatus(bool force)
     }
     if (websocketConnected())
     {
-        DynamicJsonDocument message(STATUS_DOCUMENT_SIZE + 512);
+        DynamicJsonDocument message(256);
         message["type"] = "status_update";
-        DynamicJsonDocument status(STATUS_DOCUMENT_SIZE);
-        if (deserializeJson(status, payload) == DeserializationError::Ok)
-        {
-            message["payload"].set(status.as<JsonObjectConst>());
-            String websocketPayload;
-            serializeJson(message, websocketPayload);
-            websocket_->sendText(websocketPayload);
-        }
+        message["payload"] = serialized(payload.c_str());
+        String websocketPayload;
+        serializeJson(message, websocketPayload);
+        websocket_->sendText(websocketPayload);
     }
 }
 
@@ -984,7 +539,7 @@ void BackendAgent::evaluateControlPlaneFailover()
         recoveryStartedMs_ = 0;
         return;
     }
-    if (statusSequence_ <= 0)
+    if (statusSequence_ <= 0 || workflowActive())
         return;
 
     const uint32_t now = millis();
@@ -1042,6 +597,7 @@ void BackendAgent::loop()
     if (!baseStartupAttempted_ && sensorType_ != "UNKNOWN" && !sensorType_.isEmpty())
         initializeBaseAtBoot(GnssCmdBuilder::sensorTypeFromString(sensorType_));
 
+    startBootAutoBaseWhenReady();
     pollGnssStatus();
     publishStatus(false);
 }
@@ -1077,16 +633,27 @@ void BackendAgent::handleControlAck(const String &source, const String &message,
 {
     if (retained)
         return;
-    DynamicJsonDocument doc(1024);
+    DynamicJsonDocument doc(4096);
     if (deserializeJson(doc, message) != DeserializationError::Ok)
         return;
     if (doc["type"] != "control_plane_ack")
         return;
     if (doc["status_boot_id"].as<String>() != statusBootId_)
         return;
+    if (doc["serial"].as<String>() != serialNumber_)
+        return;
     const int32_t sequence = doc["status_sequence"] | -1;
     if (sequence < 0)
         return;
+    const JsonObjectConst location = doc["auto_base_location"].as<JsonObjectConst>();
+    if (autoBaseLocationQueue_
+        && workflowActive() && !location.isNull()
+        && measureJson(location) < AutoBaseLocationReply::capacity)
+    {
+        AutoBaseLocationReply reply{};
+        serializeJson(location, reply.json.data(), reply.json.size());
+        xQueueOverwrite(autoBaseLocationQueue_, &reply);
+    }
     if (source == "mqtt")
     {
         if (sequence > lastMqttAckSequence_)
@@ -1128,7 +695,7 @@ void BackendAgent::onMqttMessage(const char *topic, const uint8_t *payload, size
 
 void BackendAgent::handleWebsocketText(const String &message)
 {
-    DynamicJsonDocument envelope(1024);
+    DynamicJsonDocument envelope(4096);
     if (deserializeJson(envelope, message) != DeserializationError::Ok)
         return;
     if (envelope["type"] == "control_plane_ack")
@@ -1139,11 +706,6 @@ void BackendAgent::handleWebsocketText(const String &message)
     handleCommand("websocket", message);
 }
 
-void BackendAgent::publishTextFallback(const String &message)
-{
-    if (websocketConnected())
-        websocket_->sendText(message);
-}
 
 bool backendDeviceLocked(uint8_t serverId) { return serverId == 0 ? backendAgent.isLocked() : backendAgent.isServerLocked(serverId); }
 bool backendControlPlaneFailOpen() { return backendAgent.controlPlaneFailOpen(); }
