@@ -159,7 +159,7 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
     }
 
     String responseLine;
-    if (!waitForNtripResponse(client, &responseLine, selectedMountpoint))
+    const auto setResponseError = [&responseLine]()
     {
         for (const char *reason : {"ERROR - NO STATION WITHIN 20 KM",
                                    "ERROR - FIXED STATION IN RANGE UNAVAILABLE",
@@ -172,6 +172,10 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
                 break;
             }
         }
+    };
+    if (!waitForNtripResponse(client, &responseLine, selectedMountpoint))
+    {
+        setResponseError();
         client.stop();
         roverSession().active = false;
         return false;
