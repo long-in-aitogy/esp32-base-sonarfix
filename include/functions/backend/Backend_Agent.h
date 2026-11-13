@@ -18,6 +18,7 @@
 
 class BackendAgentWebsocket;
 struct GnssTelemetrySnapshot;
+struct Vn2000Datum;
 
 // Device agent for backend commands, status, provisioning and base workflows.
 // Receiver coordinates come from NMEA or Unicore readback; RTCM is forwarded.
@@ -194,6 +195,7 @@ private:
                                double centralMeridianDeg, double scale, JsonObjectConst report);
     bool resolveAutoBaseLocation(double latitude, double longitude, double altitude,
                                  JsonDocument &location, String &failureReason);
+    bool restoreAutoBaseAfterReview(JsonDocument &previousBase);
     bool prepareAutoBaseSnapshot(JsonDocument &previousBase);
     bool waitForAutoNearestPosition(uint32_t timeoutSeconds);
     bool startSurveyInFallback(JsonObject payload, JsonDocument &previousBase,
@@ -253,6 +255,9 @@ private:
         double easting = 0.0;
         double projectedHeight = 0.0;
     };
+    bool transformAutoBasePosition(JsonObject payload, Vn2000Datum &datum, JsonDocument &location,
+                                   ProjectedPosition &result, double &projectedHeight,
+                                   const char *&projectionSource, String &failureReason);
     void markStatusDirty() { statusDirty_ = true; }
 
     String buildStatusPayload();

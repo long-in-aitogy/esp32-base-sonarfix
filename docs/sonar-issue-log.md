@@ -13,6 +13,7 @@ Project [`tundzai001_esp32-base-sonarfix`](https://sonarcloud.io/project/overvie
 | [AaHT6_zbDfen3veeSkJW](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_zbDfen3veeSkJW) | `cpp:S5205` | `src/hardware/Wifi_handler.cpp:26` | Accepted |
 | [AaHT6_zbDfen3veeSkJX](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_zbDfen3veeSkJX) | `cpp:S5205` | `src/hardware/Wifi_handler.cpp:55` | Accepted |
 | [AaHT6_zbDfen3veeSkJT](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_zbDfen3veeSkJT) | `cpp:S1874` | `src/hardware/Wifi_handler.cpp:39` | Accepted |
+| [AaHUew9RgDujWSaFCSNq](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHUew9RgDujWSaFCSNq) | `cpp:S1874` | `src/functions/backend/Backend_Agent_Workflows.cpp:1377` | Accepted |
 
 ## 2026-11-09 · Chấp nhận 10 ngoại lệ
 

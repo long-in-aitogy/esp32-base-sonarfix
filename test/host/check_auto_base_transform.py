@@ -108,6 +108,7 @@ struct BackendAgent {
     bool stopNtripRoverLocked() { return stopOk; }
     void setWorkflowProgress(const char *value, int, int, const String &details = String()) { phase = value; phaseDetails = details; }
     struct ProjectedPosition { double latitude, longitude, altitude; double northing = 0, easting = 0; };
+    bool transformAutoBasePosition(JsonObject, Vn2000Datum &, JsonDocument &, ProjectedPosition &, double &, const char *&, String &);
     bool reachedWrite = false, failFinalResult = false;
     bool receiverOk = true, saveOk = true, restartOk = true;
     String sensorType_ = "Ublox";
@@ -150,6 +151,7 @@ struct BackendAgent {
     bool completeAutoBaseSetupFull(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &, String &, const String &);
     bool waitForAutoBaseFix(uint32_t, uint8_t, bool &, String &, const String &);
     bool collectAutoBaseSamples(int, std::vector<double> &, std::vector<double> &, std::vector<double> &, bool &, String &, const String &);
+    bool restoreAutoBaseAfterReview(JsonDocument &);
     bool prepareAutoBaseSnapshot(JsonDocument &);
     bool waitForAutoNearestPosition(uint32_t);
     bool startSurveyInFallback(JsonObject, JsonDocument &, const String &, const String &, String &);

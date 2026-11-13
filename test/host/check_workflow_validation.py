@@ -40,6 +40,7 @@ struct BackendAgent {
     void setWorkflowProgress(const String &s, int, int, const String &) { stage = s; }
     bool saveStatePreferences() { ++saved; return true; }
     void publishConfigState(const char *) {}
+    bool restoreAutoBaseAfterReview(JsonDocument &);
     bool prepareAutoBaseSnapshot(JsonDocument &);
     bool waitForAutoNearestPosition(uint32_t);
     bool startSurveyInFallback(JsonObject, JsonDocument &, const String &, const String &, String &);

@@ -841,50 +841,14 @@ bool BackendAgent::completeAutoBaseSetup(
     }
     if (requestedTransform)
     {
-        if (!datum.has1021)
-        {
-            failureReason = "missing RTCM 1021 from this CORS session";
+        if (!transformAutoBasePosition(payload, datum, location, result, projectedHeight,
+                                       projectionSource, failureReason))
             return false;
-        }
-        if (datum.has1025)
-            projectionSource = "rtcm1025";
-        else if (!payload["l0_deg"].isNull() && !payload["k0"].isNull())
+        if (std::strcmp(projectionSource, "server_catalog") == 0)
         {
-            datum.centralMeridianDeg = coordinateNumber(payload["l0_deg"]);
-            datum.scale = coordinateNumber(payload["k0"]);
-            projectionSource = "manual";
-        }
-        else
-        {
-            if (!resolveAutoBaseLocation(rawLatitude, rawLongitude, rawAltitude, location, failureReason))
-                return false;
-            datum.centralMeridianDeg = coordinateNumber(location["l0_deg"]);
-            datum.scale = coordinateNumber(location["k0"]);
-            if (!std::isfinite(datum.centralMeridianDeg) || !std::isfinite(datum.scale))
-            {
-                failureReason = "province projection unresolved; RTCM 1025 or a unique server region is required";
-                return false;
-            }
             provinceCode = location["province_code"] | String();
             provinceName = location["province_name"] | String();
-            projectionSource = "server_catalog";
         }
-        datum.resN = payload["resN"].isNull() ? 0 : coordinateNumber(payload["resN"]);
-        datum.resE = payload["resE"].isNull() ? 0 : coordinateNumber(payload["resE"]);
-        datum.resHS = payload["resHS"].isNull() ? 0 : coordinateNumber(payload["resHS"]);
-        if (!std::isfinite(datum.resN) || !std::isfinite(datum.resE) || !std::isfinite(datum.resHS))
-        {
-            failureReason = "invalid CORS shift";
-            return false;
-        }
-        Vn2000Result converted;
-        if (!transformVn2000(rawLatitude, rawLongitude, rawAltitude, datum, converted))
-        {
-            failureReason = "VN2000 conversion failed; no candidate coordinates were installed";
-            return false;
-        }
-        result = {converted.latitude, converted.longitude, converted.altitude, converted.north, converted.east};
-        projectedHeight = converted.h;
         centralMeridianDeg = datum.centralMeridianDeg;
         scale = datum.scale;
         transformed = true;
@@ -1114,6 +1078,56 @@ bool BackendAgent::completeAutoBaseSetup(
     return true;
 }
 
+bool BackendAgent::transformAutoBasePosition(JsonObject payload, Vn2000Datum &datum,
+                                              JsonDocument &location, ProjectedPosition &result,
+                                              double &projectedHeight, const char *&projectionSource,
+                                              String &failureReason)
+{
+    if (!datum.has1021)
+    {
+        failureReason = "missing RTCM 1021 from this CORS session";
+        return false;
+    }
+    if (datum.has1025)
+        projectionSource = "rtcm1025";
+    else if (!payload["l0_deg"].isNull() && !payload["k0"].isNull())
+    {
+        datum.centralMeridianDeg = coordinateNumber(payload["l0_deg"]);
+        datum.scale = coordinateNumber(payload["k0"]);
+        projectionSource = "manual";
+    }
+    else
+    {
+        if (!resolveAutoBaseLocation(result.latitude, result.longitude, result.altitude, location, failureReason))
+            return false;
+        datum.centralMeridianDeg = coordinateNumber(location["l0_deg"]);
+        datum.scale = coordinateNumber(location["k0"]);
+        if (!std::isfinite(datum.centralMeridianDeg) || !std::isfinite(datum.scale))
+        {
+            failureReason = "province projection unresolved; RTCM 1025 or a unique server region is required";
+            return false;
+        }
+        projectionSource = "server_catalog";
+    }
+    datum.resN = payload["resN"].isNull() ? 0 : coordinateNumber(payload["resN"]);
+    datum.resE = payload["resE"].isNull() ? 0 : coordinateNumber(payload["resE"]);
+    datum.resHS = payload["resHS"].isNull() ? 0 : coordinateNumber(payload["resHS"]);
+    if (!std::isfinite(datum.resN) || !std::isfinite(datum.resE) || !std::isfinite(datum.resHS))
+    {
+        failureReason = "invalid CORS shift";
+        return false;
+    }
+    Vn2000Result converted;
+    if (!transformVn2000(result.latitude, result.longitude, result.altitude, datum, converted))
+    {
+        failureReason = "VN2000 conversion failed; no candidate coordinates were installed";
+        return false;
+    }
+    result = {converted.latitude, converted.longitude, converted.altitude, converted.north, converted.east};
+    projectedHeight = converted.h;
+    return true;
+}
+
 namespace
 {
     bool missingAutoNearestPosition(JsonObjectConst base)
@@ -1261,6 +1275,15 @@ bool BackendAgent::prepareAutoBaseSnapshot(JsonDocument &previousBase)
     return hasSavedPrevious;
 }
 
+bool BackendAgent::restoreAutoBaseAfterReview(JsonDocument &previousBase)
+{
+    const bool stopped = stopNtripRoverLocked();
+    if (!stopped || !restoreWorkflowBase(previousBase.as<JsonObjectConst>()) || !restartConfiguredNtrip())
+        return false;
+    setAgentState(normalAgentState());
+    return true;
+}
+
 bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
 {
     String host;
@@ -1363,16 +1386,10 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         return false;
     }
     const bool autoApply = payload["auto_apply"] | false;
-    if (!autoApply)
+    if (!autoApply && !restoreAutoBaseAfterReview(previousBase))
     {
-        const bool stopped = stopNtripRoverLocked();
-        if (const bool restored = stopped && restoreWorkflowBase(previousBase.as<JsonObjectConst>());
-            !restored || !restartConfiguredNtrip())
-        {
-            finish(false, false, "cannot restore previous Base/NTRIP state after sampling");
-            return false;
-        }
-        setAgentState(normalAgentState());
+        finish(false, false, "cannot restore previous Base/NTRIP state after sampling");
+        return false;
     }
     if (DynamicJsonDocument result(AUTO_BASE_RESULT_SIZE);
         deserializeJson(result, resultJson) == DeserializationError::Ok)

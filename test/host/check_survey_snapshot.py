@@ -6,7 +6,7 @@ import tempfile
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_text()
 blocks = []
-snapshot = source[source.index('bool BackendAgent::prepareAutoBaseSnapshot('):source.index('bool BackendAgent::runAutoBaseWorkflow(')]
+snapshot = source[source.index('bool BackendAgent::prepareAutoBaseSnapshot('):source.index('bool BackendAgent::restoreAutoBaseAfterReview(')]
 snapshot = snapshot.replace('bool BackendAgent::prepareAutoBaseSnapshot(JsonDocument &previousBase)',
                             'auto prepareAutoBaseSnapshot = [&](JsonDocument &previousBase)') + ';'
 
