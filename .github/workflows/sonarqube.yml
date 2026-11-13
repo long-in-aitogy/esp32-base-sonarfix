@@ -2,9 +2,9 @@ name: SonarQube Analysis
 
 on:
   push:
-    branches: [develop, sync-functions]
+    branches: [main, develop]
   pull_request:
-    branches: [develop, sync-functions]
+    branches: [main, develop]
   workflow_dispatch:
 
 permissions:
