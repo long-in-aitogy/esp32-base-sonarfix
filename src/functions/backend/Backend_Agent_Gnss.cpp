@@ -60,6 +60,15 @@ bool containsExpectedLog(JsonArrayConst expectedLogs, const char *name) {
         if (std::strcmp(item.as<const char *>(), name) == 0) return true;
     return false;
 }
+void appendObservedUnicoreLogs(JsonArray observedLogs, const std::vector<UnicoreConfigVerification::Log> &logs) {
+    for (const auto &log : logs) {
+        JsonObject observed = observedLogs.createNestedObject();
+        observed["port"] = String("COM") + String(log.port);
+        observed["name"] = log.name.data();
+        if (log.period > 0) observed["period"] = log.period;
+        else observed["period"] = nullptr;
+    }
+}
 void compareUnicoreLogs(JsonObject groups, JsonArrayConst expectedLogs,
                         const std::vector<UnicoreConfigVerification::Log> &logs, uint8_t comparePort) {
     for (JsonVariantConst item : expectedLogs) {
@@ -149,13 +158,7 @@ bool BackendAgent::verifyUnicoreConfig(JsonObjectConst payload, const String &co
         outputError = "Unicore UNILOGLIST response is malformed";
     details["logs_state"] = logsRead ? "ok" : "unread";
     JsonArray observedLogs = details.createNestedArray("logs");
-    if (logsRead) for (const auto &log : logs) {
-        JsonObject observed = observedLogs.createNestedObject();
-        observed["port"] = String("COM") + String(log.port);
-        observed["name"] = log.name.data();
-        if (log.period > 0) observed["period"] = log.period;
-        else observed["period"] = nullptr;
-    }
+    if (logsRead) appendObservedUnicoreLogs(observedLogs, logs);
     const uint8_t configuredPort = selectedPort ? selectedPort : GNSS_UNICORE_PORT;
     const uint8_t comparePort = logsRead ? UnicoreConfigVerification::comparisonPort(configuredPort, logs) : 0;
     if (comparePort) {
