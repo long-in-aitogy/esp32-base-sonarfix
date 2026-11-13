@@ -635,3 +635,17 @@ Hai issue dưới đây đã chuyển sang **Accepted** trên nhánh `main` củ
 | [AaHT6_yxDfen3veeSkI5](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yxDfen3veeSkI5) |
 | [AaHT6_yxDfen3veeSkI6](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yxDfen3veeSkI6) |
 | [AaHT6_yxDfen3veeSkI7](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yxDfen3veeSkI7) |
+
+## 2026-11-13 · Tương thích bộ nhớ và compiler backend
+
+| Issue | Quy tắc | Lý do Accepted |
+| --- | --- | --- |
+| [AaHT6_y1Dfen3veeSkJF](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_y1Dfen3veeSkJF) | `cpp:S5421` | `Preferences` lưu trạng thái và cần thay đổi trong lúc chạy. |
+| [AaHT6_xzDfen3veeSkHa](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHa) | `cpp:S5566` | Iterator ArduinoJson 6 không tương thích `std::any_of` với toolchain ESP32 GCC 8; vòng lặp giữ cách biên dịch hiện tại. |
+
+## 2026-11-13 · Cấu trúc và parser datum
+
+| Issue | Quy tắc | Lý do Accepted |
+| --- | --- | --- |
+| [AaHT6_vfDfen3veeSkGj](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_vfDfen3veeSkGj) | `cpp:S1820` | Các trường thuộc cùng trạng thái datum và thông tin khung RTCM; tách chỉ để giảm số trường làm khó đối chiếu. |
+| [AaHT6_yxDfen3veeSkI9](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yxDfen3veeSkI9) | `cpp:S924` | Hai điểm dừng chờ lần lượt đủ header và đủ payload; giữ riêng để parser dễ đọc. |

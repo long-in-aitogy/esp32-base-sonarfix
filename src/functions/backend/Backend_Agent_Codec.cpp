@@ -88,7 +88,7 @@ namespace BackendAgentInternal
         std::array<char, 17> result = {};
         snprintf(result.data(), result.size(), "%08lx%08lx",
                  static_cast<unsigned long>(hash),
-                 static_cast<unsigned long>(hash ^ 0xA5A5A5A5UL));
+                 hash ^ 0xA5A5A5A5UL);
         return String(result.data());
     }
 

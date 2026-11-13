@@ -232,6 +232,13 @@ int appendUbxPortValues(JsonObject port, int portIndex, const uint8_t *records,
     }
     return enabled;
 }
+void appendUbxPortBaud(JsonObject port, int portIndex) {
+    if (portIndex != 1 && portIndex != 2) return;
+    uint32_t baud = 0;
+    String error;
+    if (UbloxReadback::readBaud(portIndex, baud, error)) port["baud"] = baud;
+    else port["baud"] = nullptr;
+}
 bool matchUbxOutputValues(const uint8_t *expected, size_t expectedLength,
                           const uint8_t *actual, size_t actualLength,
                           const uint8_t *observed, uint8_t *values) {
@@ -329,18 +336,12 @@ bool BackendAgent::verifyGnssConfig(JsonObjectConst payload, const String &comma
                 interfaceRead = true;
                 interfaceEnabled = static_cast<uint8_t>(enabled);
             }
-            if (portIndex == 1 || portIndex == 2) {
-                uint32_t baud = 0;
-                String baudError;
-                if (UbloxReadback::readBaud(portIndex, baud, baudError)) port["baud"] = baud;
-                else port["baud"] = nullptr;
-            }
-            if (name == "UART1") {
-                // Match by key, never by the ordering of a catalogue supplied over the wire.
-                outputRead = read && matchUbxOutputValues(
-                    expectedOutput.data(), outputLength, records.data(), length, observed.data(), values.data());
-                if (!outputRead) outputError = readError.length() ? readError : "Missing UART1 readback keys";
-            }
+            appendUbxPortBaud(port, portIndex);
+            if (name != "UART1") continue;
+            // Match by key, never by the ordering of a catalogue supplied over the wire.
+            outputRead = read && matchUbxOutputValues(
+                expectedOutput.data(), outputLength, records.data(), length, observed.data(), values.data());
+            if (!outputRead) outputError = readError.length() ? readError : "Missing UART1 readback keys";
         }
     }
     JsonObject groups = result.createNestedObject("groups");
