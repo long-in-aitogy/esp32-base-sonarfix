@@ -1544,9 +1544,7 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload)
     {
         if (!stopNtripRoverLocked())
             return false;
-        const bool baseRestored = restoreWorkflowBase(storedBase.as<JsonObjectConst>());
-        const bool transportRestored = baseRestored && restartConfiguredNtrip();
-        return baseRestored && transportRestored;
+        return restoreWorkflowBase(storedBase.as<JsonObjectConst>()) && restartConfiguredNtrip();
     };
     auto finish = [&](const bool success, const bool cancelled, const String &reason)
     {

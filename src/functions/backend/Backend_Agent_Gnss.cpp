@@ -221,7 +221,7 @@ int ubxPortIndex(const String &name) {
 }
 int appendUbxPortValues(JsonObject port, int portIndex, const uint8_t *records,
                         const uint8_t *observed, size_t count) {
-    JsonArray values = port.createNestedArray("values");
+    JsonArray values = port["values"].to<JsonArray>();
     int enabled = -1;
     for (size_t i = 0; i < count; ++i) {
         values.add(observed[i]);
@@ -323,13 +323,12 @@ bool BackendAgent::verifyGnssConfig(JsonObjectConst payload, const String &comma
             JsonObject port = observedPorts.createNestedObject();
             port["name"] = name;
             port["state"] = read ? "ok" : "unread";
-            if (read) {
-                const int enabled = appendUbxPortValues(port, portIndex, records.data(), observed.data(), fields.size());
-                if (portIndex == 1 && enabled >= 0) {
-                    interfaceRead = true;
-                    interfaceEnabled = static_cast<uint8_t>(enabled);
-                }
-            } else port["error"] = readError;
+            const int enabled = read ? appendUbxPortValues(port, portIndex, records.data(), observed.data(), fields.size()) : -1;
+            if (!read) port["error"] = readError;
+            if (portIndex == 1 && enabled >= 0) {
+                interfaceRead = true;
+                interfaceEnabled = static_cast<uint8_t>(enabled);
+            }
             if (portIndex == 1 || portIndex == 2) {
                 uint32_t baud = 0;
                 String baudError;
