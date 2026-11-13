@@ -5,7 +5,7 @@ import tempfile
 from host_coverage import compile_cpp, mapped, run_cpp
 root = Path(__file__).resolve().parents[2]
 rover = (root / 'src/functions/ntrip/ntrip_rover.cpp').read_text()
-start = rover[rover.index('bool startNtripRover('):rover.index('/** @brief Implements loopNtripRover.')]
+start = rover[rover.index('String buildNtripRoverRequest('):rover.index('/** @brief Implements loopNtripRover.')]
 common = (root / 'src/functions/ntrip/ntrip_common.cpp').read_text()
 wait = common[common.index('    bool waitForNtripResponse('):common.index('\n} // namespace ntrip_common')]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')

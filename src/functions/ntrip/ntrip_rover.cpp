@@ -69,6 +69,100 @@ void sendRoverGgaIfAvailable(Client &client, const bool force = false)
     roverSession().lastGgaMs = millis();
 }
 
+String buildNtripRoverRequest(const String &host, const uint16_t port, const String &user,
+                              const String &password, const String &mountpoint,
+                              const uint8_t version, const String &receiverId,
+                              const bool reportSelected)
+{
+    const auto auth = base64Encode(user + ":" + password);
+    String agent = "NTRIP ESP32-Agent/" + String(AGENT_VERSION);
+    if (!receiverId.isEmpty())
+        agent += "/" + receiverId;
+
+    String request;
+    if (version == 2)
+    {
+        request = "GET /" + mountpoint + " HTTP/1.1\r\n"
+                                         "Host: " +
+                  host + ":" + String(port) + "\r\n"
+                                              "Ntrip-Version: Ntrip/2.0\r\n"
+                                              "User-Agent: " +
+                  agent + "\r\n"
+                          "Authorization: Basic " +
+                  auth + "\r\n"
+                         "Accept: */*\r\n"
+                         "Connection: Keep-Alive\r\n\r\n";
+    }
+    else
+    {
+        request = "GET /" + mountpoint + " HTTP/1.0\r\n"
+                                         "User-Agent: " +
+                  agent + "\r\n"
+                          "Authorization: Basic " +
+                  auth + "\r\n"
+                         "Accept: */*\r\n"
+                         "Connection: close\r\n\r\n";
+    }
+
+    const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
+    if (snapshot.lastGga[0] != '\0' && snapshot.lastGgaMs != 0
+        && millis() - snapshot.lastGgaMs <= 3000UL)
+    {
+        String gga = snapshot.lastGga.data();
+        gga.trim();
+        if (!gga.isEmpty() && gga.indexOf('\r') < 0 && gga.indexOf('\n') < 0)
+        {
+            request.remove(request.length() - 2);
+            request += "Ntrip-GGA: " + gga + "\r\n\r\n";
+        }
+    }
+    if (reportSelected)
+    {
+        request.remove(request.length() - 2);
+        request += "X-NTRIP-Report-Selected: 1\r\n\r\n";
+    }
+    return request;
+}
+
+bool sendNtripRoverRequest(Client &client, const String &request,
+                           String *selectedMountpoint)
+{
+    if (client.print(request) != request.length())
+    {
+        client.stop();
+        roverSession().active = false;
+        roverSession().lastError = "incomplete NTRIP request write";
+        return false;
+    }
+
+    String responseLine;
+    if (!waitForNtripResponse(client, &responseLine, selectedMountpoint))
+    {
+        for (const char *reason : {"ERROR - NO STATION WITHIN 20 KM",
+                                   "ERROR - FIXED STATION IN RANGE UNAVAILABLE",
+                                   "ERROR - FIXED STATION CATALOG UNAVAILABLE",
+                                   "ERROR - AUTONEAREST NOT ENABLED"})
+        {
+            if (responseLine == reason)
+            {
+                roverSession().lastError = reason;
+                break;
+            }
+        }
+        client.stop();
+        roverSession().active = false;
+        return false;
+    }
+    if (selectedMountpoint && (selectedMountpoint->isEmpty() || !safeNtripField(*selectedMountpoint)))
+    {
+        roverSession().lastError = "Caster did not confirm the selected mountpoint";
+        client.stop();
+        roverSession().active = false;
+        return false;
+    }
+    return true;
+}
+
 /** @brief Implements startNtripRover. */
 bool startNtripRover(const String &host, const uint16_t port, const String &username,
                      const String &password, String mountpoint, const uint8_t version,
@@ -104,93 +198,10 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
     }
 
     const auto user = username.isEmpty() ? String("source") : username;
-    const auto auth = base64Encode(user + ":" + password);
-    String agent = "NTRIP ESP32-Agent/" + String(AGENT_VERSION);
-    if (!receiverId.isEmpty())
-        agent += "/" + receiverId;
-    String request;
-    if (version == 2)
-    {
-        request = "GET /" + mountpoint + " HTTP/1.1\r\n"
-                                         "Host: " +
-                  host + ":" + String(port) + "\r\n"
-                                              "Ntrip-Version: Ntrip/2.0\r\n"
-                                              "User-Agent: " +
-                  agent + "\r\n"
-                                          "Authorization: Basic " +
-                  auth + "\r\n"
-                         "Accept: */*\r\n"
-                         "Connection: Keep-Alive\r\n\r\n";
-    }
-    else
-    {
-        request = "GET /" + mountpoint + " HTTP/1.0\r\n"
-                                         "User-Agent: " +
-                  agent + "\r\n"
-                                          "Authorization: Basic " +
-                  auth + "\r\n"
-                         "Accept: */*\r\n"
-                         "Connection: close\r\n\r\n";
-    }
-    const auto appendOptionalRequestHeaders = [&request, &selectedMountpoint]()
-    {
-        // The caster can use a fresh position before it accepts the Rover stream.
-        const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-        if (snapshot.lastGga[0] != '\0' && snapshot.lastGgaMs != 0
-            && millis() - snapshot.lastGgaMs <= 3000UL)
-        {
-            String gga = snapshot.lastGga.data();
-            gga.trim();
-            if (!gga.isEmpty() && gga.indexOf('\r') < 0 && gga.indexOf('\n') < 0)
-            {
-                request.remove(request.length() - 2);
-                request += "Ntrip-GGA: " + gga + "\r\n\r\n";
-            }
-        }
-        if (selectedMountpoint)
-        {
-            request.remove(request.length() - 2);
-            request += "X-NTRIP-Report-Selected: 1\r\n\r\n";
-        }
-    };
-    appendOptionalRequestHeaders();
-    if (client.print(request) != request.length())
-    {
-        client.stop();
-        roverSession().active = false;
-        roverSession().lastError = "incomplete NTRIP request write";
+    const auto request = buildNtripRoverRequest(host, port, user, password, mountpoint,
+                                                version, receiverId, selectedMountpoint != nullptr);
+    if (!sendNtripRoverRequest(client, request, selectedMountpoint))
         return false;
-    }
-
-    String responseLine;
-    const auto setResponseError = [&responseLine]()
-    {
-        for (const char *reason : {"ERROR - NO STATION WITHIN 20 KM",
-                                   "ERROR - FIXED STATION IN RANGE UNAVAILABLE",
-                                   "ERROR - FIXED STATION CATALOG UNAVAILABLE",
-                                   "ERROR - AUTONEAREST NOT ENABLED"})
-        {
-            if (responseLine == reason)
-            {
-                roverSession().lastError = reason;
-                break;
-            }
-        }
-    };
-    if (!waitForNtripResponse(client, &responseLine, selectedMountpoint))
-    {
-        setResponseError();
-        client.stop();
-        roverSession().active = false;
-        return false;
-    }
-    if (selectedMountpoint && (selectedMountpoint->isEmpty() || !safeNtripField(*selectedMountpoint)))
-    {
-        roverSession().lastError = "Caster did not confirm the selected mountpoint";
-        client.stop();
-        roverSession().active = false;
-        return false;
-    }
     roverSession().authenticated = true;
     roverSession().lastError = "CORS rover connection lost";
     sendRoverGgaIfAvailable(client, true);
