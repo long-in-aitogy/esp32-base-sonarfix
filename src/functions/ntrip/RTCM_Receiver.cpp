@@ -190,49 +190,43 @@ namespace
         updateGst = gstHacc > 0.0F;
     }
 
-/** @brief Implements parseNmeaSentence. */
-    void parseNmeaSentence(const String &rawSentence)
+    int nmeaHexValue(char value)
     {
-        auto sentence = rawSentence;
-        sentence.trim();
-        if (sentence.length() < 7 || sentence[0] != '$')
-            return;
-        const int star = sentence.indexOf('*');
-        if (star >= 0)
-        {
-            const auto hex = [](char value)
-            {
-                if (value >= '0' && value <= '9') return value - '0';
-                if (value >= 'A' && value <= 'F') return value - 'A' + 10;
-                if (value >= 'a' && value <= 'f') return value - 'a' + 10;
-                return -1;
-            };
-            if (star != static_cast<int>(sentence.length()) - 3)
-                return;
-            const int high = hex(sentence[star + 1]);
-            const int low = hex(sentence[star + 2]);
-            if (high < 0 || low < 0)
-                return;
-            std::byte checksum = std::byte{0};
-            for (int i = 1; i < star; ++i)
-                checksum ^= static_cast<std::byte>(static_cast<unsigned char>(sentence[i]));
-            if (checksum != static_cast<std::byte>((high << 4) | low))
-                return;
-        }
-        if (sentence.startsWith("$PUBX"))
-        {
-            backendAgent.setDetectedChipIfUnknown("Ublox");
-        }
+        if (value >= '0' && value <= '9') return value - '0';
+        if (value >= 'A' && value <= 'F') return value - 'A' + 10;
+        if (value >= 'a' && value <= 'f') return value - 'a' + 10;
+        return -1;
+    }
 
-        std::array<char, MAX_NMEA_LENGTH> line = {};
+    bool hasValidNmeaChecksum(const String &sentence)
+    {
+        const int star = sentence.indexOf('*');
+        if (star < 0)
+            return true;
+        if (star != static_cast<int>(sentence.length()) - 3)
+            return false;
+
+        const int high = nmeaHexValue(sentence[star + 1]);
+        const int low = nmeaHexValue(sentence[star + 2]);
+        if (high < 0 || low < 0)
+            return false;
+
+        auto checksum = std::byte{0};
+        for (int i = 1; i < star; ++i)
+            checksum ^= static_cast<std::byte>(static_cast<unsigned char>(sentence[i]));
+        return checksum == static_cast<std::byte>((high << 4) | low);
+    }
+
+    bool splitNmeaSentence(const String &sentence, std::array<char, MAX_NMEA_LENGTH> &line,
+                           std::array<char *, 32> &fields, size_t &fieldCount,
+                           const char *&type)
+    {
         const auto copyLength = min(sentence.length(), line.size() - 1);
         memcpy(line.data(), sentence.c_str(), copyLength);
         line[copyLength] = '\0';
 
-        std::array<char *, 32> fields = {};
-        auto fieldCount = 0;
         char *cursor = line.data() + 1;
-        while (fieldCount < (std::size(fields)))
+        while (fieldCount < fields.size())
         {
             fields[fieldCount++] = cursor;
             char *comma = strchr(cursor, ',');
@@ -242,40 +236,51 @@ namespace
             cursor = comma + 1;
         }
         if (fieldCount == 0)
-            return;
+            return false;
 
         const auto typeLength = strnlen(fields[0], copyLength);
         if (typeLength < 3)
-            return;
-        const char *type = fields[0] + typeLength - 3;
+            return false;
+        type = fields[0] + typeLength - 3;
+        return true;
+    }
 
+    struct NmeaMeasurements
+    {
         GgaReading gga;
-        auto updateSnr = false;
-        auto snrSum = 0.0F;
+        bool updateSnr = false;
+        float snrSum = 0.0F;
         uint32_t snrCount = 0;
-        auto updateGst = false;
-        auto gstSemiMajor = 0.0F;
-        auto gstSemiMinor = 0.0F;
-        auto gstHacc = 0.0F;
+        bool updateGst = false;
+        float gstSemiMajor = 0.0F;
+        float gstSemiMinor = 0.0F;
+        float gstHacc = 0.0F;
+    };
 
+    NmeaMeasurements parseNmeaMeasurements(const char *type, char *const *fields,
+                                           size_t fieldCount)
+    {
+        NmeaMeasurements measurements;
         if (strcmp(type, "GGA") == 0)
         {
-            gga = parseGgaFields(fields.data(), fieldCount);
+            measurements.gga = parseGgaFields(fields, fieldCount);
         }
-        // GSA reports solution dimension. Only GGA sets RTK fix quality.
         else if (strcmp(type, "GSV") == 0)
         {
-            parseGsvFields(fields.data(), fieldCount, updateSnr, snrSum, snrCount);
+            parseGsvFields(fields, fieldCount, measurements.updateSnr,
+                           measurements.snrSum, measurements.snrCount);
         }
         else if (strcmp(type, "GST") == 0)
         {
-            parseGstFields(fields.data(), fieldCount, updateGst, gstSemiMajor,
-                           gstSemiMinor, gstHacc);
+            parseGstFields(fields, fieldCount, measurements.updateGst,
+                           measurements.gstSemiMajor, measurements.gstSemiMinor,
+                           measurements.gstHacc);
         }
+        return measurements;
+    }
 
-        portENTER_CRITICAL(&telemetryMux);
-        telemetry.hasData = true;
-        telemetry.lastDataMs = millis();
+    void updateNmeaCounters(const char *type)
+    {
         ++telemetry.traffic.nmeaSentences;
         if (strcmp(type, "GGA") == 0)
             ++telemetry.traffic.ggaCount;
@@ -285,21 +290,30 @@ namespace
             ++telemetry.traffic.gsvCount;
         else if (strcmp(type, "GST") == 0)
             ++telemetry.traffic.gstCount;
+    }
 
+    void updateGgaTelemetry(const String &sentence, const char *type,
+                            const GgaReading &gga)
+    {
         if (gga.hasFixQuality)
             setFixStatus(telemetry.fixStatus, gga.fixQuality);
-        if (strcmp(type, "GGA") == 0)
+        if (strcmp(type, "GGA") != 0)
+            return;
+
+        snprintf(telemetry.lastGga.data(), telemetry.lastGga.size(), "%s", sentence.c_str());
+        telemetry.lastGga[telemetry.lastGga.size() - 1] = '\0';
+        telemetry.lastGgaMs = millis();
+        if (!gga.hasPosition)
         {
-            snprintf(telemetry.lastGga.data(), telemetry.lastGga.size(), "%s", sentence.c_str());
-            telemetry.lastGga[telemetry.lastGga.size() - 1] = '\0';
-            telemetry.lastGgaMs = millis();
-            if (!gga.hasPosition)
-            {
-                telemetry.latitude = NAN;
-                telemetry.longitude = NAN;
-                telemetry.altitude = NAN;
-            }
+            telemetry.latitude = NAN;
+            telemetry.longitude = NAN;
+            telemetry.altitude = NAN;
         }
+    }
+
+    void updateNmeaMeasurements(const NmeaMeasurements &measurements)
+    {
+        const auto &gga = measurements.gga;
         if (gga.hasPosition)
         {
             telemetry.latitude = gga.latitude;
@@ -308,35 +322,75 @@ namespace
             telemetry.hdop = gga.hdop;
             telemetry.satellites = gga.satellites;
         }
-        if (updateSnr)
+        if (measurements.updateSnr)
         {
             const uint32_t oldSamples = telemetry.snrSamples;
-            telemetry.snrSamples += snrCount;
-            telemetry.latestGsvSamples = snrCount;
+            telemetry.snrSamples += measurements.snrCount;
+            telemetry.latestGsvSamples = measurements.snrCount;
             telemetry.lastGsvMs = millis();
-            telemetry.latestAverageSnr = static_cast<float>(snrSum) / static_cast<float>(snrCount);
+            telemetry.latestAverageSnr = measurements.snrSum /
+                                         static_cast<float>(measurements.snrCount);
             telemetry.averageSnr = oldSamples == 0
-                                       ? static_cast<float>(snrSum) / static_cast<float>(snrCount)
-                                       : ((telemetry.averageSnr * static_cast<float>(oldSamples)) + static_cast<float>(snrSum)) / static_cast<float>(telemetry.snrSamples);
+                                       ? measurements.snrSum / static_cast<float>(measurements.snrCount)
+                                       : ((telemetry.averageSnr * static_cast<float>(oldSamples)) + measurements.snrSum) /
+                                             static_cast<float>(telemetry.snrSamples);
         }
-        if (updateGst)
+        if (measurements.updateGst)
         {
-            telemetry.gstSemiMajor = gstSemiMajor;
-            telemetry.gstSemiMinor = gstSemiMinor;
-            telemetry.gstHacc = gstHacc;
+            telemetry.gstSemiMajor = measurements.gstSemiMajor;
+            telemetry.gstSemiMinor = measurements.gstSemiMinor;
+            telemetry.gstHacc = measurements.gstHacc;
             telemetry.lastGstMs = millis();
         }
-        portEXIT_CRITICAL(&telemetryMux);
+    }
 
-        // Publish only GGA/GSA/GSV/GST receiver health sentences to the backend.
-        const auto backendSentence = strcmp(type, "GGA") == 0 || strcmp(type, "GSA") == 0 || strcmp(type, "GSV") == 0 || strcmp(type, "GST") == 0;
-        if (backendSentence)
-        {
-            auto outbound = rawSentence;
-            outbound.trim();
-            outbound += "\r\n";
-            backendAgent.enqueueNmea(reinterpret_cast<const uint8_t *>(outbound.c_str()), outbound.length());
-        }
+    void updateNmeaTelemetry(const String &sentence, const char *type,
+                             const NmeaMeasurements &measurements)
+    {
+        portENTER_CRITICAL(&telemetryMux);
+        telemetry.hasData = true;
+        telemetry.lastDataMs = millis();
+        updateNmeaCounters(type);
+        updateGgaTelemetry(sentence, type, measurements.gga);
+        updateNmeaMeasurements(measurements);
+        portEXIT_CRITICAL(&telemetryMux);
+    }
+
+    void publishNmeaHealthSentence(const String &rawSentence, const char *type)
+    {
+        const auto backendSentence = strcmp(type, "GGA") == 0 || strcmp(type, "GSA") == 0 ||
+                                     strcmp(type, "GSV") == 0 || strcmp(type, "GST") == 0;
+        if (!backendSentence)
+            return;
+
+        auto outbound = rawSentence;
+        outbound.trim();
+        outbound += "\r\n";
+        backendAgent.enqueueNmea(reinterpret_cast<const uint8_t *>(outbound.c_str()),
+                                 outbound.length());
+    }
+
+/** @brief Implements parseNmeaSentence. */
+    void parseNmeaSentence(const String &rawSentence)
+    {
+        auto sentence = rawSentence;
+        sentence.trim();
+        if (sentence.length() < 7 || sentence[0] != '$')
+            return;
+        if (!hasValidNmeaChecksum(sentence))
+            return;
+        if (sentence.startsWith("$PUBX"))
+            backendAgent.setDetectedChipIfUnknown("Ublox");
+
+        std::array<char, MAX_NMEA_LENGTH> line = {};
+        std::array<char *, 32> fields = {};
+        size_t fieldCount = 0;
+        const char *type = nullptr;
+        if (!splitNmeaSentence(sentence, line, fields, fieldCount, type))
+            return;
+        const auto measurements = parseNmeaMeasurements(type, fields.data(), fieldCount);
+        updateNmeaTelemetry(sentence, type, measurements);
+        publishNmeaHealthSentence(rawSentence, type);
     }
 
 /** @brief Implements resetRtcmParser. */
