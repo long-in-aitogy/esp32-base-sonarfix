@@ -6,7 +6,7 @@ from host_coverage import compile_cpp, mapped, run_cpp
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/ntrip/ntrip_common.cpp').read_text()
-function = source[source.index('    bool waitForNtripResponse('):source.index('\n} // namespace ntrip_common')]
+function = source[source.index('    void readNtripResponse('):source.index('\n} // namespace ntrip_common')]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
 shim = shim.replace('    void trim()', '''    int indexOf(const char *s) const { auto p = find(s); return p == npos ? -1 : int(p); }
     int indexOf(char c, unsigned start) const { auto p = find(c, start); return p == npos ? -1 : int(p); }

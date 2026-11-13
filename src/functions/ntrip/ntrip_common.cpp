@@ -269,22 +269,19 @@ namespace ntrip_common
     }
 
 /** @brief Implements waitForNtripResponse. */
-    bool waitForNtripResponse(Client &client, String *statusLine, String *selectedMountpoint)
+    void readNtripResponse(Client &client, String &response,
+                           bool &headerComplete, bool &readFailed)
     {
-        String response;
         response.reserve(512);
         const uint32_t started = millis();
-        bool headerComplete = false;
-        bool readFailed = false;
-        while ((client.connected() || client.available() > 0) && millis() - started < 10000UL && response.length() < 4096 && !headerComplete && !readFailed)
+        while ((client.connected() || client.available() > 0) && millis() - started < 10000UL &&
+               response.length() < 4096 && !headerComplete && !readFailed)
         {
             while (client.available() > 0 && response.length() < 4096 && !headerComplete && !readFailed)
             {
                 const auto value = client.read();
                 if (value < 0)
-                {
                     readFailed = true;
-                }
                 else
                 {
                     response += static_cast<char>(value);
@@ -294,23 +291,28 @@ namespace ntrip_common
             if (!headerComplete && !readFailed)
                 delay(1);
         }
-        if (statusLine)
-        {
-            const auto end = response.indexOf('\n');
-            *statusLine = response.substring(0, end >= 0 ? end : 240);
-            statusLine->trim();
-            if (statusLine->isEmpty())
-                *statusLine = "No response from caster (timeout or closed connection)";
-        }
-        const bool accepted = headerComplete && !readFailed
-            && (response == "ICY 200 OK\r\n"
-                || response.indexOf("HTTP/1.1 200 ") == 0 || response.indexOf("HTTP/1.1 200\r\n") == 0
-                || response.indexOf("HTTP/1.0 200 ") == 0 || response.indexOf("HTTP/1.0 200\r\n") == 0);
-        if (!selectedMountpoint) 
-            return accepted;
-        selectedMountpoint->clear();
-        if (!accepted || !response.endsWith("\r\n\r\n"))
-            return accepted;
+    }
+
+    void setNtripStatusLine(const String &response, String *statusLine)
+    {
+        if (!statusLine)
+            return;
+        const auto end = response.indexOf('\n');
+        *statusLine = response.substring(0, end >= 0 ? end : 240);
+        statusLine->trim();
+        if (statusLine->isEmpty())
+            *statusLine = "No response from caster (timeout or closed connection)";
+    }
+
+    bool ntripResponseAccepted(const String &response)
+    {
+        return response == "ICY 200 OK\r\n"
+            || response.indexOf("HTTP/1.1 200 ") == 0 || response.indexOf("HTTP/1.1 200\r\n") == 0
+            || response.indexOf("HTTP/1.0 200 ") == 0 || response.indexOf("HTTP/1.0 200\r\n") == 0;
+    }
+
+    bool extractSelectedMountpoint(const String &response, String &selectedMountpoint)
+    {
         bool found = false;
         int start = response.indexOf('\n') + 1;
         while (start > 0)
@@ -324,16 +326,32 @@ namespace ntrip_common
             {
                 if (found)
                 {
-                    selectedMountpoint->clear();
+                    selectedMountpoint.clear();
                     return false;
                 }
-                *selectedMountpoint = response.substring(colon + 1, end);
-                selectedMountpoint->trim();
+                selectedMountpoint = response.substring(colon + 1, end);
+                selectedMountpoint.trim();
                 found = true;
             }
             start = end + 2;
         }
-        return accepted;
+        return true;
+    }
+
+    bool waitForNtripResponse(Client &client, String *statusLine, String *selectedMountpoint)
+    {
+        String response;
+        bool headerComplete = false;
+        bool readFailed = false;
+        readNtripResponse(client, response, headerComplete, readFailed);
+        setNtripStatusLine(response, statusLine);
+        const bool accepted = headerComplete && !readFailed && ntripResponseAccepted(response);
+        if (!selectedMountpoint)
+            return accepted;
+        selectedMountpoint->clear();
+        if (!accepted || !response.endsWith("\r\n\r\n"))
+            return accepted;
+        return extractSelectedMountpoint(response, *selectedMountpoint);
     }
 
 } // namespace ntrip_common
