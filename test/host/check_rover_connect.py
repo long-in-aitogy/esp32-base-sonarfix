@@ -7,7 +7,7 @@ root = Path(__file__).resolve().parents[2]
 rover = (root / 'src/functions/ntrip/ntrip_rover.cpp').read_text()
 start = rover[rover.index('bool startNtripRover('):rover.index('/** @brief Implements loopNtripRover.')]
 common = (root / 'src/functions/ntrip/ntrip_common.cpp').read_text()
-wait = common[common.index('    bool waitForNtripResponse('):common.index('\n} // namespace ntrip_common')]
+wait = common[common.index('    void readNtripResponse('):common.index('\n} // namespace ntrip_common')]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
 shim = shim.replace('    void trim()', '''    bool startsWith(const String &value) const { return compare(0, value.size(), value) == 0; }
     void remove(unsigned start, unsigned count) { erase(start, count); }

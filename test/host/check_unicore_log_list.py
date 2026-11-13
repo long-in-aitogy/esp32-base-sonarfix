@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/gnss/Unicore_Readback.cpp').read_text()
-parser = source[source.index('        bool appendUnicoreCandidate('):source.index('/** @brief Implements processUnicoreQueryByte.')]
+parser = source[source.index('        bool finishUnicoreCandidate('):source.index('/** @brief Implements processUnicoreQueryByte.')]
 collector = source[source.index('        bool processUnicoreQueryByte('):source.index('/** @brief Implements queryUnicoreLine.')]
 reader = source[source.index('    bool readLogList('):source.index('/** @brief Implements readMode.')]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')

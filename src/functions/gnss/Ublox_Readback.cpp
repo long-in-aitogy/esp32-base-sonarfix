@@ -17,16 +17,8 @@ extern SemaphoreHandle_t gnssSerialMutex;
 namespace
 {
 
-/** @brief Implements query. */
-    template <size_t Capacity>
-    bool query(uint8_t cls, uint8_t id, UbxReplyBuffer<Capacity> &reply, String &error,
-               const uint8_t *payload = nullptr, size_t length = 0)
+    bool acquireQueryLocks(String &error)
     {
-        if (length > 4 + UbxConfigVerification::MAX_KEYS * 4 || (length && !payload))
-        {
-            error = "u-blox query exceeds readback limit";
-            return false;
-        }
         if (!rtcmBufferMutex || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
         {
             error = "GNSS command port is busy";
@@ -38,8 +30,17 @@ namespace
             error = "GNSS reader is busy";
             return false;
         }
-        while (Serial1.available())
-            bufferGnssQueryByte(static_cast<uint8_t>(Serial1.read()));
+        return true;
+    }
+
+    void releaseQueryLocks()
+    {
+        xSemaphoreGive(gnssSerialMutex);
+        xSemaphoreGive(rtcmBufferMutex);
+    }
+
+    bool sendQuery(uint8_t cls, uint8_t id, const uint8_t *payload, size_t length)
+    {
         std::array<uint8_t, 12 + UbxConfigVerification::MAX_KEYS * 4> poll = {
             0xB5, 0x62, cls, id, static_cast<uint8_t>(length), 0};
         if (length)
@@ -57,9 +58,15 @@ namespace
                       static_cast<unsigned long>(Serial1.baudRate()));
         const auto written = Serial1.write(poll.data(), length + 8) == length + 8;
         Serial1.flush();
-        const uint32_t started = millis();
+        return written;
+    }
+
+    template <size_t Capacity>
+    bool receiveQuery(uint8_t cls, uint8_t id, UbxReplyBuffer<Capacity> &reply,
+                      bool written, uint32_t &receivedBytes, uint32_t &started)
+    {
+        started = millis();
         auto matched = false;
-        uint32_t receivedBytes = 0;
         while (written && millis() - started < 3000UL && !matched)
         {
             while (Serial1.available())
@@ -76,8 +83,28 @@ namespace
             if (!matched)
                 vTaskDelay(pdMS_TO_TICKS(5));
         }
-        xSemaphoreGive(gnssSerialMutex);
-        xSemaphoreGive(rtcmBufferMutex);
+        return matched;
+    }
+
+    /** @brief Implements query. */
+    template <size_t Capacity>
+    bool query(uint8_t cls, uint8_t id, UbxReplyBuffer<Capacity> &reply, String &error,
+               const uint8_t *payload = nullptr, size_t length = 0)
+    {
+        if (length > 4 + UbxConfigVerification::MAX_KEYS * 4 || (length && !payload))
+        {
+            error = "u-blox query exceeds readback limit";
+            return false;
+        }
+        if (!acquireQueryLocks(error))
+            return false;
+        while (Serial1.available())
+            bufferGnssQueryByte(static_cast<uint8_t>(Serial1.read()));
+        const auto written = sendQuery(cls, id, payload, length);
+        uint32_t receivedBytes = 0;
+        uint32_t started = 0;
+        const auto matched = receiveQuery(cls, id, reply, written, receivedBytes, started);
+        releaseQueryLocks();
         const char *result;
         if (!written)
             result = "WRITE_FAILED";
