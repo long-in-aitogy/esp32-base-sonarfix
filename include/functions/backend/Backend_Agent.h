@@ -194,6 +194,7 @@ private:
                                double centralMeridianDeg, double scale, JsonObjectConst report);
     bool resolveAutoBaseLocation(double latitude, double longitude, double altitude,
                                  JsonDocument &location, String &failureReason);
+    bool prepareAutoBaseSnapshot(JsonDocument &previousBase);
     bool waitForAutoNearestPosition(uint32_t timeoutSeconds);
     bool startSurveyInFallback(JsonObject payload, JsonDocument &previousBase,
                                const String &startedBootId, const String &startedRequestId, String &failureReason);

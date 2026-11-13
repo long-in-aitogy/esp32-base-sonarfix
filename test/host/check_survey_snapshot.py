@@ -6,6 +6,10 @@ import tempfile
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_text()
 blocks = []
+snapshot = source[source.index('bool BackendAgent::prepareAutoBaseSnapshot('):source.index('bool BackendAgent::runAutoBaseWorkflow(')]
+snapshot = snapshot.replace('bool BackendAgent::prepareAutoBaseSnapshot(JsonDocument &previousBase)',
+                            'auto prepareAutoBaseSnapshot = [&](JsonDocument &previousBase)') + ';'
+
 for method, name, end in (
     ('runAutoBaseWorkflow', 'previousBase', '    auto finish'),
     ('runReferenceCheckWorkflow', 'storedBase', '    auto cleanup'),
@@ -13,6 +17,8 @@ for method, name, end in (
     body = source[source.index('bool BackendAgent::' + method):]
     start = body.index('    DynamicJsonDocument ' + name + '(CONFIG_DOCUMENT_SIZE);')
     block = body[start:body.index(end, start)]
+    if method == 'runAutoBaseWorkflow':
+        block = snapshot + '\n' + block
     blocks.append('''{
         String baseConfig_ = R"({"base_setup_method":"SURVEY_IN","survey_in_duration":1800})";
         for (uint32_t surveyInTargetSeconds_ : {0U, 120U, 300U}) {

@@ -276,6 +276,10 @@ struct UbxPortReadback {
     String outputError;
 };
 
+bool validUbxPortRecords(const uint8_t *records, size_t length, size_t fieldCount) {
+    return length == fieldCount * 5 && UbxConfigVerification::validExpected(records, length);
+}
+
 bool inspectUbxPorts(JsonObjectConst inspection, JsonObject details, const uint8_t *expectedOutput,
                      size_t outputLength, uint8_t *values, UbxPortReadback &readback, String &error) {
     const JsonArrayConst fields = inspection["fields"].as<JsonArrayConst>();
@@ -296,7 +300,7 @@ bool inspectUbxPorts(JsonObjectConst inspection, JsonObject details, const uint8
         std::array<uint8_t, UbxConfigVerification::MAX_KEYS * 5> records{};
         std::array<uint8_t, UbxConfigVerification::MAX_KEYS> observed{};
         const size_t length = decodeBase64(request["output_b64"] | "", records.data(), records.size());
-        if (length != fields.size() * 5 || !UbxConfigVerification::validExpected(records.data(), length)) {
+        if (!validUbxPortRecords(records.data(), length, fields.size())) {
             error = "Invalid GNSS readback keys"; return false;
         }
         String readError;

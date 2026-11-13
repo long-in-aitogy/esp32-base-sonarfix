@@ -38,6 +38,57 @@ namespace
         }
         return value.is<double>() ? value.as<double>() : NAN;
     }
+    void appendAutoBaseDatumReport(JsonDocument &report, const Vn2000Datum &datum,
+                                   double northing, double easting, double projectedHeight,
+                                   bool vngeonet, bool transformed)
+    {
+        const auto numberText = [](double number)
+        {
+            std::array<char, 32> text{};
+            snprintf(text.data(), text.size(), "%.17g", number);
+            return String(text.data());
+        };
+        if (transformed && std::abs(datum.scale - 0.9999) < 1e-9)
+            report["zone_width_deg"] = 3;
+        else if (transformed && std::abs(datum.scale - 0.9996) < 1e-9)
+            report["zone_width_deg"] = 6;
+        report["rtcm1025_used"] = transformed && datum.has1025;
+        if (datum.has1025)
+        {
+            JsonObject projection = report.createNestedObject("rtcm1025");
+            projection["raw_l0"] = String(static_cast<long long>(datum.projectionLongitudeRaw));
+            projection["raw_k0"] = datum.projectionScaleRaw;
+            projection["projection_type"] = datum.projectionType;
+            projection["l0_deg"] = numberText(datum.centralMeridianDeg);
+            projection["k0"] = numberText(datum.scale);
+            projection["false_easting"] = numberText(datum.falseEasting);
+            projection["false_northing"] = numberText(datum.falseNorthing);
+            projection["frame_hex"] = datum.projectionFrameHex.data();
+            projection["frame_bytes"] = datum.projectionFrameBytes;
+            projection["frame_truncated"] = datum.projectionFrameBytes > 32;
+        }
+        if (datum.count1021) report["received_messages"]["1021"] = datum.count1021;
+        if (datum.count1023) report["received_messages"]["1023"] = datum.count1023;
+        if (datum.count1025) report["received_messages"]["1025"] = datum.count1025;
+        if (vngeonet && transformed)
+        {
+            report["zone_width_source"] = "inferred_from_k0";
+            report["parameter_source"] = "rtcm1021";
+            report["residual_source"] = datum.has1023 ? "rtcm1023" : "none";
+            report["projected_coord"]["north"] = numberText(northing);
+            report["projected_coord"]["east"] = numberText(easting);
+            report["projected_coord"]["h"] = numberText(projectedHeight);
+            JsonObject parameters = report.createNestedObject("parameters");
+            parameters["dX"] = numberText(datum.dX); parameters["dY"] = numberText(datum.dY); parameters["dZ"] = numberText(datum.dZ);
+            parameters["rX"] = numberText(datum.rX); parameters["rY"] = numberText(datum.rY); parameters["rZ"] = numberText(datum.rZ);
+            parameters["kT"] = numberText(datum.kT);
+            parameters["resB"] = numberText(datum.resB); parameters["resL"] = numberText(datum.resL); parameters["resH"] = numberText(datum.resH);
+            parameters["resN"] = numberText(datum.resN); parameters["resE"] = numberText(datum.resE); parameters["resHS"] = numberText(datum.resHS);
+        }
+        else
+            report["parameter_source"] = "not_used";
+    }
+
     bool acceptAutoBaseLocationReply(JsonObjectConst response, const String &requestId,
                                      double latitude, double longitude, double altitude,
                                      JsonDocument &location)
@@ -901,45 +952,8 @@ bool BackendAgent::completeAutoBaseSetup(
     report["projection_source"] = projectionSource;
     report["central_meridian_deg"] = numberText(centralMeridianDeg);
     report["k0"] = numberText(scale);
-    if (transformed && std::abs(scale - 0.9999) < 1e-9)
-        report["zone_width_deg"] = 3;
-    else if (transformed && std::abs(scale - 0.9996) < 1e-9)
-        report["zone_width_deg"] = 6;
-    report["rtcm1025_used"] = transformed && datum.has1025;
-    if (datum.has1025)
-    {
-        JsonObject projection = report.createNestedObject("rtcm1025");
-        projection["raw_l0"] = String(static_cast<long long>(datum.projectionLongitudeRaw));
-        projection["raw_k0"] = datum.projectionScaleRaw;
-        projection["projection_type"] = datum.projectionType;
-        projection["l0_deg"] = numberText(datum.centralMeridianDeg);
-        projection["k0"] = numberText(datum.scale);
-        projection["false_easting"] = numberText(datum.falseEasting);
-        projection["false_northing"] = numberText(datum.falseNorthing);
-        projection["frame_hex"] = datum.projectionFrameHex.data();
-        projection["frame_bytes"] = datum.projectionFrameBytes;
-        projection["frame_truncated"] = datum.projectionFrameBytes > 32;
-    }
-    if (datum.count1021) report["received_messages"]["1021"] = datum.count1021;
-    if (datum.count1023) report["received_messages"]["1023"] = datum.count1023;
-    if (datum.count1025) report["received_messages"]["1025"] = datum.count1025;
-    if (vngeonet && transformed)
-    {
-        report["zone_width_source"] = "inferred_from_k0";
-        report["parameter_source"] = "rtcm1021";
-        report["residual_source"] = datum.has1023 ? "rtcm1023" : "none";
-        report["projected_coord"]["north"] = numberText(result.northing);
-        report["projected_coord"]["east"] = numberText(result.easting);
-        report["projected_coord"]["h"] = numberText(projectedHeight);
-        JsonObject parameters = report.createNestedObject("parameters");
-        parameters["dX"] = numberText(datum.dX); parameters["dY"] = numberText(datum.dY); parameters["dZ"] = numberText(datum.dZ);
-        parameters["rX"] = numberText(datum.rX); parameters["rY"] = numberText(datum.rY); parameters["rZ"] = numberText(datum.rZ);
-        parameters["kT"] = numberText(datum.kT);
-        parameters["resB"] = numberText(datum.resB); parameters["resL"] = numberText(datum.resL); parameters["resH"] = numberText(datum.resH);
-        parameters["resN"] = numberText(datum.resN); parameters["resE"] = numberText(datum.resE); parameters["resHS"] = numberText(datum.resHS);
-    }
-    else
-        report["parameter_source"] = "not_used";
+    appendAutoBaseDatumReport(report, datum, result.northing, result.easting,
+                              projectedHeight, vngeonet, transformed);
     if (report.overflowed())
     {
         failureReason = "Auto Base report exceeds memory capacity";
@@ -1229,34 +1243,8 @@ bool BackendAgent::waitForAutoNearestPosition(uint32_t timeoutSeconds)
     return hasPosition && !workflowCancelRequested_;
 }
 
-bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
+bool BackendAgent::prepareAutoBaseSnapshot(JsonDocument &previousBase)
 {
-    String host;
-    uint16_t port = 0;
-    String username;
-    String password;
-    String mountpoint;
-    uint8_t ntripVersion = 0;
-    uint32_t timeoutSeconds = 0;
-    uint8_t fixedStreakRequired = 0;
-    const auto validConfig = prepareAutoBaseConfig(
-        payload, host, port, username, password, mountpoint, ntripVersion,
-        timeoutSeconds, fixedStreakRequired);
-
-    if (!validConfig)
-    {
-        setAgentState(normalAgentState());
-        setWorkflowProgress("failed", 0, 4, R"({"reason":"missing or invalid CORS connection fields"})");
-        saveStatePreferences();
-        return false;
-    }
-
-    const bool autoNearest = payload["source_mode"] == "nearest";
-    String selectedMountpoint;
-    DynamicJsonDocument previousBase(CONFIG_DOCUMENT_SIZE);
-    deserializeJson(previousBase, baseConfig_);
-    const String startedBootId = previousBase["auto_base_started_boot_id"] | String();
-    const String startedRequestId = previousBase["auto_base_started_request_id"] | String();
     const JsonObjectConst savedPrevious = previousBase["auto_base_previous_config"].as<JsonObjectConst>();
     const bool hasSavedPrevious = !savedPrevious.isNull();
     if (hasSavedPrevious)
@@ -1270,6 +1258,35 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         previousBase["base_setup_method"] = "SURVEY_IN";
     if (previousBase["base_setup_method"] == "SURVEY_IN" && surveyInTargetSeconds_ > 0)
         previousBase["survey_in_duration"] = surveyInTargetSeconds_;
+    return hasSavedPrevious;
+}
+
+bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
+{
+    String host;
+    uint16_t port = 0;
+    String username;
+    String password;
+    String mountpoint;
+    uint8_t ntripVersion = 0;
+    uint32_t timeoutSeconds = 0;
+    uint8_t fixedStreakRequired = 0;
+    if (!prepareAutoBaseConfig(payload, host, port, username, password, mountpoint,
+                               ntripVersion, timeoutSeconds, fixedStreakRequired))
+    {
+        setAgentState(normalAgentState());
+        setWorkflowProgress("failed", 0, 4, R"({"reason":"missing or invalid CORS connection fields"})");
+        saveStatePreferences();
+        return false;
+    }
+
+    const bool autoNearest = payload["source_mode"] == "nearest";
+    String selectedMountpoint;
+    DynamicJsonDocument previousBase(CONFIG_DOCUMENT_SIZE);
+    deserializeJson(previousBase, baseConfig_);
+    const String startedBootId = previousBase["auto_base_started_boot_id"] | String();
+    const String startedRequestId = previousBase["auto_base_started_request_id"] | String();
+    const bool hasSavedPrevious = prepareAutoBaseSnapshot(previousBase);
 
     auto finish = [&](bool success, bool cancelled, const String &reason)
     {
@@ -1349,16 +1366,16 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
     if (!autoApply)
     {
         const bool stopped = stopNtripRoverLocked();
-        const bool restored = stopped && restoreWorkflowBase(previousBase.as<JsonObjectConst>());
-        if (!restored || !restartConfiguredNtrip())
+        if (const bool restored = stopped && restoreWorkflowBase(previousBase.as<JsonObjectConst>());
+            !restored || !restartConfiguredNtrip())
         {
             finish(false, false, "cannot restore previous Base/NTRIP state after sampling");
             return false;
         }
         setAgentState(normalAgentState());
     }
-    DynamicJsonDocument result(AUTO_BASE_RESULT_SIZE);
-    if (deserializeJson(result, resultJson) == DeserializationError::Ok)
+    if (DynamicJsonDocument result(AUTO_BASE_RESULT_SIZE);
+        deserializeJson(result, resultJson) == DeserializationError::Ok)
     {
         result["source_mountpoint"] = sourceMountpoint;
         result["auto_applied"] = autoApply;

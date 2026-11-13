@@ -65,6 +65,7 @@ struct BackendAgent {
     bool waitForAutoBaseFix(uint32_t, uint8_t, bool &, String &, const String &);
     bool collectAutoBaseSamples(int, std::vector<double> &, std::vector<double> &, std::vector<double> &, bool &, String &, const String &);
     bool completeAutoBaseSetup(JsonObject, const std::vector<double> &lat, const std::vector<double> &lon, const std::vector<double> &alt, String &result, String &, const String &) { assert(lat.size() == 60 && lon.size() == 60 && alt.size() == 60); result="{}"; return true; }
+    bool prepareAutoBaseSnapshot(JsonDocument &);
     bool waitForAutoNearestPosition(uint32_t);
     bool startSurveyInFallback(JsonObject, JsonDocument &, const String &, const String &, String &);
     void finishAutoBaseWorkflow(JsonDocument &, bool, const String &, bool, bool, const String &);
