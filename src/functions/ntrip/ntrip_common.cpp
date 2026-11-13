@@ -306,34 +306,32 @@ namespace ntrip_common
             && (response == "ICY 200 OK\r\n"
                 || response.indexOf("HTTP/1.1 200 ") == 0 || response.indexOf("HTTP/1.1 200\r\n") == 0
                 || response.indexOf("HTTP/1.0 200 ") == 0 || response.indexOf("HTTP/1.0 200\r\n") == 0);
-        if (selectedMountpoint)
+        if (!selectedMountpoint) 
+            return accepted;
+        selectedMountpoint->clear();
+        if (!accepted || !response.endsWith("\r\n\r\n"))
+            return accepted;
+        bool found = false;
+        int start = response.indexOf('\n') + 1;
+        while (start > 0)
         {
-            selectedMountpoint->clear();
-            if (accepted && response.endsWith("\r\n\r\n"))
+            const int end = response.indexOf('\r', start);
+            if (end <= start)
+                break;
+            const int colon = response.indexOf(':', start);
+            if (colon > start && colon < end
+                && response.substring(start, colon).equalsIgnoreCase("X-NTRIP-Selected-Mountpoint"))
             {
-                bool found = false;
-                int start = response.indexOf('\n') + 1;
-                while (start > 0)
+                if (found)
                 {
-                    const int end = response.indexOf('\r', start);
-                    if (end <= start)
-                        break;
-                    const int colon = response.indexOf(':', start);
-                    if (colon > start && colon < end
-                        && response.substring(start, colon).equalsIgnoreCase("X-NTRIP-Selected-Mountpoint"))
-                    {
-                        if (found)
-                        {
-                            selectedMountpoint->clear();
-                            return false;
-                        }
-                        *selectedMountpoint = response.substring(colon + 1, end);
-                        selectedMountpoint->trim();
-                        found = true;
-                    }
-                    start = end + 2;
+                    selectedMountpoint->clear();
+                    return false;
                 }
+                *selectedMountpoint = response.substring(colon + 1, end);
+                selectedMountpoint->trim();
+                found = true;
             }
+            start = end + 2;
         }
         return accepted;
     }
