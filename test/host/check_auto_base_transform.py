@@ -109,6 +109,7 @@ struct BackendAgent {
     void setWorkflowProgress(const char *value, int, int, const String &details = String()) { phase = value; phaseDetails = details; }
     struct ProjectedPosition { double latitude, longitude, altitude; double northing = 0, easting = 0; };
     bool transformAutoBasePosition(JsonObject, Vn2000Datum &, JsonDocument &, ProjectedPosition &, double &, const char *&, String &);
+    void appendAutoBaseReport(JsonDocument &, JsonObject, const ProjectedPosition &, double, double, double, const String &);
     bool applyAutoBasePosition(JsonDocument &, const ProjectedPosition &, size_t, const char *, const String &, const String &, String &);
     bool reachedWrite = false, failFinalResult = false;
     bool receiverOk = true, saveOk = true, restartOk = true;

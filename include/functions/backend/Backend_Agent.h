@@ -255,6 +255,9 @@ private:
         double easting = 0.0;
         double projectedHeight = 0.0;
     };
+    void appendAutoBaseReport(JsonDocument &report, JsonObject payload, const ProjectedPosition &result,
+                              double rawLatitude, double rawLongitude, double rawAltitude,
+                              const String &sourceMountpoint);
     bool applyAutoBasePosition(JsonDocument &report, const ProjectedPosition &result, size_t sampleCount,
                                const char *projectionSource, const String &provinceCode,
                                const String &provinceName, String &failureReason);

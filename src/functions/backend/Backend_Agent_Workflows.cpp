@@ -867,39 +867,8 @@ bool BackendAgent::completeAutoBaseSetup(
         snprintf(text.data(), text.size(), "%.17g", number);
         return String(text.data());
     };
-    report["version"] = 1;
-    report["input_coord"]["lat"] = numberText(rawLatitude);
-    report["input_coord"]["lon"] = numberText(rawLongitude);
-    report["input_coord"]["alt"] = numberText(rawAltitude);
-    report["calculated_coord"]["lat"] = numberText(result.latitude);
-    report["calculated_coord"]["lon"] = numberText(result.longitude);
-    report["calculated_coord"]["alt"] = numberText(result.altitude);
-    const auto receiverCoordinate = [&](double value, bool altitude)
-    {
-        if (sensorType_ == "Ublox")
-        {
-            const double coordinateScale = altitude ? 100.0 : 10000000.0;
-            const auto units = UbloxCommands::fixedCoordinateUnits(value, coordinateScale);
-            return String(static_cast<double>(units) / (coordinateScale * 100.0), altitude ? 4 : 9);
-        }
-        if (altitude)
-            return String(value, 4);
-        double scaled = value * 1e10;
-        if (const double integer = std::round(scaled); std::abs(scaled - integer) <= 4 * std::numeric_limits<double>::epsilon() * std::fmax(1.0, std::abs(scaled)))
-            scaled = integer;
-        return String(std::trunc(scaled) / 1e10, 10);
-    };
-    report["output_coord"]["lat"] = receiverCoordinate(result.latitude, false);
-    report["output_coord"]["lon"] = receiverCoordinate(result.longitude, false);
-    report["output_coord"]["alt"] = receiverCoordinate(result.altitude, true);
-    report["source"]["host"] = host;
-    report["source"]["port"] = payload["port"];
-    report["source"]["mountpoint"] = sourceMountpoint;
-    if (!String(payload["source_name"] | "").isEmpty()) report["source"]["station_name"] = payload["source_name"];
-    if (!String(payload["source_serial"] | "").isEmpty()) report["source"]["station_serial"] = payload["source_serial"];
-    if (!payload["source_distance_m"].isNull()) report["source"]["distance_m"] = payload["source_distance_m"];
-    if (payload["source_mode"] == "nearest")
-        report["source"]["requested_mountpoint"] = payload["mountpoint"];
+    appendAutoBaseReport(report, payload, result, rawLatitude, rawLongitude,
+                         rawAltitude, sourceMountpoint);
     report["input_reference"] = "receiver_reported";
     report["output_reference"] = transformed ? "local_llh" : "receiver_reported";
     report["altitude_reference"] = "ELLIPSOID";
@@ -958,6 +927,54 @@ bool BackendAgent::completeAutoBaseSetup(
 
     return applyAutoBasePosition(report, result, latitudes.size(), projectionSource,
                                  provinceCode, provinceName, failureReason);
+}
+
+void BackendAgent::appendAutoBaseReport(JsonDocument &report, JsonObject payload,
+                                        const ProjectedPosition &result, double rawLatitude,
+                                        double rawLongitude, double rawAltitude,
+                                        const String &sourceMountpoint)
+{
+    const auto numberText = [](double number)
+    {
+        std::array<char, 32> text{};
+        snprintf(text.data(), text.size(), "%.17g", number);
+        return String(text.data());
+    };
+    report["version"] = 1;
+    report["input_coord"]["lat"] = numberText(rawLatitude);
+    report["input_coord"]["lon"] = numberText(rawLongitude);
+    report["input_coord"]["alt"] = numberText(rawAltitude);
+    report["calculated_coord"]["lat"] = numberText(result.latitude);
+    report["calculated_coord"]["lon"] = numberText(result.longitude);
+    report["calculated_coord"]["alt"] = numberText(result.altitude);
+    const auto receiverCoordinate = [&](double value, bool altitude)
+    {
+        if (sensorType_ == "Ublox")
+        {
+            const double coordinateScale = altitude ? 100.0 : 10000000.0;
+            const auto units = UbloxCommands::fixedCoordinateUnits(value, coordinateScale);
+            return String(static_cast<double>(units) / (coordinateScale * 100.0), altitude ? 4 : 9);
+        }
+        if (altitude)
+            return String(value, 4);
+        double scaled = value * 1e10;
+        if (const double integer = std::round(scaled); std::abs(scaled - integer) <= 4 * std::numeric_limits<double>::epsilon() * std::fmax(1.0, std::abs(scaled)))
+            scaled = integer;
+        return String(std::trunc(scaled) / 1e10, 10);
+    };
+    report["output_coord"]["lat"] = receiverCoordinate(result.latitude, false);
+    report["output_coord"]["lon"] = receiverCoordinate(result.longitude, false);
+    report["output_coord"]["alt"] = receiverCoordinate(result.altitude, true);
+    String host = payload["ip"] | String();
+    host.trim();
+    report["source"]["host"] = host;
+    report["source"]["port"] = payload["port"];
+    report["source"]["mountpoint"] = sourceMountpoint;
+    if (!String(payload["source_name"] | "").isEmpty()) report["source"]["station_name"] = payload["source_name"];
+    if (!String(payload["source_serial"] | "").isEmpty()) report["source"]["station_serial"] = payload["source_serial"];
+    if (!payload["source_distance_m"].isNull()) report["source"]["distance_m"] = payload["source_distance_m"];
+    if (payload["source_mode"] == "nearest")
+        report["source"]["requested_mountpoint"] = payload["mountpoint"];
 }
 
 bool BackendAgent::applyAutoBasePosition(JsonDocument &report, const ProjectedPosition &result,
