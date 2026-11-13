@@ -682,6 +682,17 @@ bool BackendAgent::saveNearestAutoBaseConfig(JsonObject payload, bool pending, S
     return true;
 }
 
+namespace
+{
+    bool hasAutoBaseConnection(JsonObjectConst payload)
+    {
+        const auto port = payload["port"] | 0;
+        return !String(payload["ip"] | String()).isEmpty() && !String(payload["user"] | String()).isEmpty()
+            && !String(payload["password"] | String()).isEmpty() && !String(payload["mountpoint"] | String()).isEmpty()
+            && port >= 1 && port <= 65535;
+    }
+}
+
 bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
                                           String &detail)
 {
@@ -694,8 +705,7 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
         payload["password"] = AUTO_BASE_CASTER_PASSWORD;
         payload["mountpoint"] = AUTO_BASE_CASTER_MOUNTPOINT;
     }
-    const auto requestedPort = payload["port"] | 0;
-    const auto hasConnection = !String(payload["ip"] | String()).isEmpty() && !String(payload["user"] | String()).isEmpty() && !String(payload["password"] | String()).isEmpty() && !String(payload["mountpoint"] | String()).isEmpty() && requestedPort >= 1 && requestedPort <= 65535;
+    const bool hasConnection = hasAutoBaseConnection(payload);
     if (workflowActive())
     {
         error = "another base workflow is already running";
