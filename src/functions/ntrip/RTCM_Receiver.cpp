@@ -5,6 +5,7 @@
 #include "functions/backend/Backend_Agent.h"
 #include "functions/backend/Base_Sample.h"
 #include <array>
+#include <cstddef>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -212,10 +213,10 @@ namespace
             const int low = hex(sentence[star + 2]);
             if (high < 0 || low < 0)
                 return;
-            uint8_t checksum = 0;
+            std::byte checksum = std::byte{0};
             for (int i = 1; i < star; ++i)
-                checksum ^= static_cast<uint8_t>(sentence[i]);
-            if (checksum != static_cast<uint8_t>((high << 4) | low))
+                checksum ^= static_cast<std::byte>(static_cast<unsigned char>(sentence[i]));
+            if (checksum != static_cast<std::byte>((high << 4) | low))
                 return;
         }
         if (sentence.startsWith("$PUBX"))
