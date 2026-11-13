@@ -2,7 +2,7 @@
 
 Project [`tundzai001_esp32-base-sonarfix`](https://sonarcloud.io/project/overview?id=tundzai001_esp32-base-sonarfix), nhánh `develop`. Trạng thái issue thuộc project SonarQube và được ghi lại ở đây để người dùng Git có thể đối chiếu. Các vị trí là ảnh chụp tại thời điểm ghi nhận.
 
-## 2026-11-13 · Ngoại lệ Wi-Fi trên main
+## 2026-11-13 · Ngoại lệ Wi-Fi và backend trên main
 
 - `cpp:S5205`: callback kiểm tra kết nối không có trạng thái; giữ con trỏ hàm để tương thích giao diện và tránh thêm `std::function` hoặc template không cần thiết trên ESP32.
 - `cpp:S1874`: firmware dùng ArduinoJson 6 và document giới hạn 3072 byte. Đánh giá lại khi nâng ArduinoJson và kiểm tra lại bộ nhớ.

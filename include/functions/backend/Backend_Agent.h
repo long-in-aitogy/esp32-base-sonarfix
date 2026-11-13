@@ -255,6 +255,9 @@ private:
         double easting = 0.0;
         double projectedHeight = 0.0;
     };
+    bool applyAutoBasePosition(JsonDocument &report, const ProjectedPosition &result, size_t sampleCount,
+                               const char *projectionSource, const String &provinceCode,
+                               const String &provinceName, String &failureReason);
     bool transformAutoBasePosition(JsonObject payload, Vn2000Datum &datum, JsonDocument &location,
                                    ProjectedPosition &result, double &projectedHeight,
                                    const char *&projectionSource, String &failureReason);

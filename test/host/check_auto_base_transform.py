@@ -10,7 +10,7 @@ workflow = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_tex
 datum_report = workflow[workflow.index('    void appendAutoBaseDatumReport('):workflow.index('    bool acceptAutoBaseLocationReply(')]
 location_method = workflow[workflow.index('bool BackendAgent::resolveAutoBaseLocation('):workflow.index('bool BackendAgent::waitForAutoBaseFix(')]
 begin = workflow.index('bool BackendAgent::completeAutoBaseSetup(')
-end = workflow.index('    setAgentState("auto_setup_base");', begin)
+end = workflow.index('    return applyAutoBasePosition(', begin)
 method = workflow[begin:end] + '    reachedWrite = true;\n    (void)resultJson;\n    return true;\n}\n'
 full_end = workflow.index('\nnamespace\n{\n    bool missingAutoNearestPosition(', begin)
 full_method = workflow[begin:full_end]
@@ -109,6 +109,7 @@ struct BackendAgent {
     void setWorkflowProgress(const char *value, int, int, const String &details = String()) { phase = value; phaseDetails = details; }
     struct ProjectedPosition { double latitude, longitude, altitude; double northing = 0, easting = 0; };
     bool transformAutoBasePosition(JsonObject, Vn2000Datum &, JsonDocument &, ProjectedPosition &, double &, const char *&, String &);
+    bool applyAutoBasePosition(JsonDocument &, const ProjectedPosition &, size_t, const char *, const String &, const String &, String &);
     bool reachedWrite = false, failFinalResult = false;
     bool receiverOk = true, saveOk = true, restartOk = true;
     String sensorType_ = "Ublox";

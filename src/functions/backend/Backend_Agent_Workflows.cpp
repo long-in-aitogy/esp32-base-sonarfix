@@ -956,12 +956,24 @@ bool BackendAgent::completeAutoBaseSetup(
         return false;
     }
 
+    return applyAutoBasePosition(report, result, latitudes.size(), projectionSource,
+                                 provinceCode, provinceName, failureReason);
+}
+
+bool BackendAgent::applyAutoBasePosition(JsonDocument &report, const ProjectedPosition &result,
+                                         size_t sampleCount, const char *projectionSource,
+                                         const String &provinceCode, const String &provinceName,
+                                         String &failureReason)
+{
+    const bool transformed = report["transform_applied"] | false;
+    const double centralMeridianDeg = coordinateNumber(report["central_meridian_deg"]);
+    const double scale = coordinateNumber(report["k0"]);
     setAgentState("auto_setup_base");
     DynamicJsonDocument baseProgress(2048);
     baseProgress["averaged_coord"]["lat"] = result.latitude;
     baseProgress["averaged_coord"]["lon"] = result.longitude;
     baseProgress["averaged_coord"]["alt"] = result.altitude;
-    baseProgress["sample_count"] = latitudes.size();
+    baseProgress["sample_count"] = sampleCount;
     baseProgress["transform_applied"] = transformed;
     baseProgress["projection_source"] = projectionSource;
     baseProgress["province_code"] = provinceCode;
@@ -1073,7 +1085,7 @@ bool BackendAgent::completeAutoBaseSetup(
     publishConfigState("base_config_state");
     setAgentState(normalAgentState());
     Serial.printf("[AUTO BASE] KET QUA: THANH CONG; samples=%u; lat=%.10f; lon=%.10f; alt=%.4f\n",
-                  static_cast<unsigned>(latitudes.size()), result.latitude, result.longitude,
+                  static_cast<unsigned>(sampleCount), result.latitude, result.longitude,
                   result.altitude);
     return true;
 }
@@ -1277,8 +1289,8 @@ bool BackendAgent::prepareAutoBaseSnapshot(JsonDocument &previousBase)
 
 bool BackendAgent::restoreAutoBaseAfterReview(JsonDocument &previousBase)
 {
-    const bool stopped = stopNtripRoverLocked();
-    if (!stopped || !restoreWorkflowBase(previousBase.as<JsonObjectConst>()) || !restartConfiguredNtrip())
+    if (const bool stopped = stopNtripRoverLocked();
+        !stopped || !restoreWorkflowBase(previousBase.as<JsonObjectConst>()) || !restartConfiguredNtrip())
         return false;
     setAgentState(normalAgentState());
     return true;
