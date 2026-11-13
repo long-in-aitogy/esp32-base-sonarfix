@@ -293,6 +293,8 @@ private:
     bool executeBasicCommand(const String &command, JsonObject payload,
                              String &error, String &detail);
     bool executeStreamCommand(JsonObject payload, String &error, String &detail);
+    bool executeStorageStatus(JsonObject payload, const String &commandId, String &error);
+    bool executeNvsCleanup(JsonObject payload, String &error, String &detail);
     bool executeBaseStatusCommand(String &error, String &detail);
     bool executeStopWorkflowCommand(String &error, String &detail);
     void finishCommand(const String &source, const String &command,

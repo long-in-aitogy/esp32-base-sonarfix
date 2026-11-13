@@ -967,6 +967,58 @@ bool BackendAgent::executeStopWorkflowCommand(String &error, String &detail)
     return true;
 }
 
+bool BackendAgent::executeStorageStatus(JsonObject payload, const String &commandId, String &error)
+{
+    if (payload["inspect"] != true)
+        return true;
+    if (!payload["offset"].is<uint32_t>() || payload["offset"].as<uint32_t>() > 8192)
+    {
+        error = "NVS offset must be an integer from 0 to 8192";
+        return false;
+    }
+    gnssVerification_.clear();
+    nvsInventory_.clear();
+    const bool success = readNvsInventory(payload["offset"].as<uint32_t>(), commandId, nvsInventory_, error);
+    nvsInventoryMs_ = millis();
+    return success;
+}
+
+bool BackendAgent::executeNvsCleanup(JsonObject payload, String &error, String &detail)
+{
+    nvsInventory_.clear();
+    const String group = payload["group"] | "";
+    const String confirmation = payload["confirm"] | "";
+    if (workflowActive() || (surveyInMonitoring_ && !surveyInReadbackReady_))
+    {
+        error = "Cannot clean storage during an active GNSS workflow or survey";
+        return false;
+    }
+    if (confirmation != group || (group != "unused_wifi" && group != "auto_base_history"))
+    {
+        error = "Select and confirm a supported cleanup group";
+        return false;
+    }
+    if (group == "unused_wifi")
+    {
+        const bool success = clearUnusedWifi(error);
+        detail = "obsolete Wi-Fi portal data cleared; active network preserved";
+        return success;
+    }
+    bool success = beginBackendPreferences(false);
+    if (success)
+    {
+        Preferences &store = backendPreferences();
+        success = !store.isKey("PROGRESS_JSON") || store.remove("PROGRESS_JSON");
+        store.end();
+    }
+    if (success)
+        autoBaseProgress_ = "{}";
+    else
+        error = "Cannot clear Auto Base history";
+    detail = "saved Auto Base history cleared; base configuration and Survey-In result preserved";
+    return success;
+}
+
 void BackendAgent::finishCommand(const String &source, const String &command,
                                  const String &commandId, bool success,
                                  const String &error, const String &detail,
@@ -1062,58 +1114,12 @@ void BackendAgent::executeCommand(const String &source, const String &command,
     }
     else if (command == "CHECK_STORAGE_STATUS")
     {
-        if (payload["inspect"] == true)
-        {
-            if (!payload["offset"].is<uint32_t>() || payload["offset"].as<uint32_t>() > 8192)
-            {
-                success = false;
-                error = "NVS offset must be an integer from 0 to 8192";
-            }
-            else
-            {
-                gnssVerification_.clear();
-                nvsInventory_.clear();
-                success = readNvsInventory(payload["offset"].as<uint32_t>(), commandId, nvsInventory_, error);
-                nvsInventoryMs_ = millis();
-            }
-        }
+        success = executeStorageStatus(payload, commandId, error);
         detail = "storage status refreshed";
     }
     else if (command == "CLEAR_NVS_DATA")
     {
-        nvsInventory_.clear();
-        const String group = payload["group"] | "";
-        const String confirmation = payload["confirm"] | "";
-        if (workflowActive() || (surveyInMonitoring_ && !surveyInReadbackReady_))
-        {
-            success = false;
-            error = "Cannot clean storage during an active GNSS workflow or survey";
-        }
-        else if (confirmation != group || (group != "unused_wifi" && group != "auto_base_history"))
-        {
-            success = false;
-            error = "Select and confirm a supported cleanup group";
-        }
-        else if (group == "unused_wifi")
-        {
-            success = clearUnusedWifi(error);
-            detail = "obsolete Wi-Fi portal data cleared; active network preserved";
-        }
-        else
-        {
-            success = beginBackendPreferences(false);
-            if (success)
-            {
-                Preferences &store = backendPreferences();
-                success = !store.isKey("PROGRESS_JSON") || store.remove("PROGRESS_JSON");
-                store.end();
-            }
-            if (success)
-                autoBaseProgress_ = "{}";
-            else
-                error = "Cannot clear Auto Base history";
-            detail = "saved Auto Base history cleared; base configuration and Survey-In result preserved";
-        }
+        success = executeNvsCleanup(payload, error, detail);
     }
     else if (command == "REBOOT_DEVICE")
     {
