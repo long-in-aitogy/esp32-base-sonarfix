@@ -458,3 +458,12 @@ Mười ngoại lệ `cpp:S6022` giữ `uint8_t` cho phép toán bit, checksum v
 | [AaHOZ3lEDKSr4OVoS119](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base&open=AaHOZ3lEDKSr4OVoS119) | `cpp:S6022` | `src/functions/gnss/ublox_commands.cpp:315` | These uint8_t values are used in numeric bit operations, checksums, and Arduino protocol interfaces. std::byte would require conversions without improving correctness. |
 | [AaHOZ3lEDKSr4OVoS11-](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base&open=AaHOZ3lEDKSr4OVoS11-) | `cpp:S6022` | `src/functions/gnss/ublox_commands.cpp:328` | These uint8_t values are used in numeric bit operations, checksums, and Arduino protocol interfaces. std::byte would require conversions without improving correctness. |
 | [AaHQe3AZIAo342csXQHc](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base&open=AaHQe3AZIAo342csXQHc) | `cpp:S6022` | `src/functions/ntrip/RTCM_Receiver.cpp:217` | These uint8_t values are used in numeric bit operations, checksums, and Arduino protocol interfaces. std::byte would require conversions without improving correctness. |
+
+## 2026-11-13 · Accepted trên project Sonarfix sau phân tích CI
+
+Hai issue dưới đây đã chuyển sang **Accepted** trên nhánh `main` của project Sonarfix; quyết định được đối chiếu với project nguồn.
+
+| Issue | Quy tắc | Lý do |
+| --- | --- | --- |
+| [AaHT6_xUDfen3veeSkGp](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xUDfen3veeSkGp) | `cpp:S2068` | Chủ dự án đã chấp nhận mật khẩu caster mặc định hiện có. |
+| [AaHT6_yrDfen3veeSkI0](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkI0) | `cpp:S1313` | Địa chỉ IP chỉ được so sánh để nhận diện alias VNGeoNet khi chọn datum, không được dùng làm đích kết nối. |
