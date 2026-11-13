@@ -803,17 +803,13 @@ bool BackendAgent::completeAutoBaseSetup(
             provinceName = location["province_name"] | String();
             projectionSource = "server_catalog";
         }
-        for (const char *key : {"resN", "resE", "resHS"})
+        datum.resN = payload["resN"].isNull() ? 0 : coordinateNumber(payload["resN"]);
+        datum.resE = payload["resE"].isNull() ? 0 : coordinateNumber(payload["resE"]);
+        datum.resHS = payload["resHS"].isNull() ? 0 : coordinateNumber(payload["resHS"]);
+        if (!std::isfinite(datum.resN) || !std::isfinite(datum.resE) || !std::isfinite(datum.resHS))
         {
-            const double value = payload[key].isNull() ? 0 : coordinateNumber(payload[key]);
-            if (!std::isfinite(value))
-            {
-                failureReason = "invalid CORS shift";
-                return false;
-            }
-            if (!std::strcmp(key, "resN")) datum.resN = value;
-            else if (!std::strcmp(key, "resE")) datum.resE = value;
-            else datum.resHS = value;
+            failureReason = "invalid CORS shift";
+            return false;
         }
         Vn2000Result converted;
         if (!transformVn2000(rawLatitude, rawLongitude, rawAltitude, datum, converted))
