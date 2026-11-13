@@ -40,8 +40,7 @@ bool readUnicoreExpectations(JsonObjectConst payload, std::array<double, 3> &wan
         || expectedLogs.isNull() || !expectedLogs.size() || expectedLogs.size() > 64) {
         error = "Invalid Unicore verification expectation"; return false;
     }
-    const String requestedPort = payload["port"] | "CURRENT";
-    if (requestedPort != "CURRENT") {
+    if (const String requestedPort = payload["port"] | "CURRENT"; requestedPort != "CURRENT") {
         if (requestedPort != "COM1" && requestedPort != "COM2" && requestedPort != "COM3") {
             error = "Invalid Unicore comparison port"; return false;
         }

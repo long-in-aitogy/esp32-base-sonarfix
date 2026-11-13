@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Status.cpp').read_text()
-status = source[source.index('void BackendAgent::appendGnssStatus('):source.index('void BackendAgent::appendNtripStatus(')]
+status = source[source.index('namespace {\nvoid appendNmeaHealth('):source.index('void BackendAgent::appendNtripStatus(')]
 header = (root / 'include/functions/ntrip/RTCM_Receiver.h').read_text()
 snapshot = header[header.index('inline constexpr size_t RTCM_SUPPORTED_MESSAGE_TYPE_COUNT'):header.index('String receiveRtcmFromGnss();')]
 harness = r'''

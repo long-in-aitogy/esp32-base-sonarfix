@@ -223,12 +223,12 @@ void describeNvsEntry(JsonObject row, const char *partition, const nvs_entry_inf
                           : nvs_get_blob(handle, entry.key, nullptr, &length);
             row["type"] = text ? "string" : "blob";
             if (result == ESP_OK) row["bytes"] = text && length ? length - 1 : length;
-            if (text && readable && result == ESP_OK) {
-                if (length <= 97) {
-                    std::array<char, 97> value = {};
-                    result = nvs_get_str(handle, entry.key, value.data(), &length);
-                    if (result == ESP_OK) row["value"] = String(value.data());
-                } else row["value"] = "Giá trị dài hơn 96 byte";
+            if (text && readable && result == ESP_OK && length > 97)
+                row["value"] = "Giá trị dài hơn 96 byte";
+            else if (text && readable && result == ESP_OK) {
+                std::array<char, 97> value = {};
+                result = nvs_get_str(handle, entry.key, value.data(), &length);
+                if (result == ESP_OK) row["value"] = String(value.data());
             }
             break;
         }
@@ -289,14 +289,14 @@ bool readNvsInventory(uint32_t offset, const String &commandId, String &output, 
         for (const char *partition : {"nvs", "agent_state"}) {
             nvs_stats_t stats{};
             const esp_err_t status = nvs_get_stats(partition, &stats);
-            if (status != ESP_OK) {
-                if (!strcmp(partition, "nvs")) { error = "Cannot inspect NVS"; return false; }
-                JsonArray unavailable = doc["unavailable_partitions"].isNull()
-                    ? doc.createNestedArray("unavailable_partitions") : doc["unavailable_partitions"].as<JsonArray>();
-                if (priority == 0) unavailable.add(partition);
+            if (status == ESP_OK) {
+                appendPartitionEntries(entries, offset, total, partition, priority);
                 continue;
             }
-            appendPartitionEntries(entries, offset, total, partition, priority);
+            if (!strcmp(partition, "nvs")) { error = "Cannot inspect NVS"; return false; }
+            JsonArray unavailable = doc["unavailable_partitions"].isNull()
+                ? doc.createNestedArray("unavailable_partitions") : doc["unavailable_partitions"].as<JsonArray>();
+            if (priority == 0) unavailable.add(partition);
         }
     }
     doc["fields_expanded"] = true;
