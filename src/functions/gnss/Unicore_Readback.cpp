@@ -22,18 +22,27 @@ namespace UnicoreReadback
                                     String &candidate, String &response)
         {
             if (value == prefix[0])
-                candidate = String(value);
-            else if (multiline && value == '\r' && !candidate.isEmpty())
-                candidate += value;
-            else if (value == '\r' || value == '\n')
             {
-                if (!multiline || !candidate.startsWith(prefix))
-                {
-                    if (candidate.startsWith(prefix))
-                        response = candidate;
-                    candidate = "";
+            candidate = String(value);
+                return !response.isEmpty();
+            }
+            if (multiline && value == '\r' && !candidate.isEmpty())
+            {
+                    candidate += value;
                     return !response.isEmpty();
-                }
+            }
+
+            if (value != '\r' && value != '\n')
+            {
+                if (!candidate.isEmpty() && candidate.length() < (multiline ? 4095U : 383U))
+                    candidate += value;
+                else if (candidate.length() >= (multiline ? 4095U : 383U))
+                    candidate = "";
+                return !response.isEmpty();
+            }
+
+            if (multiline && candidate.startsWith(prefix))
+            {
                 candidate += value;
                 if (candidate.endsWith("\r\n\r\n") || candidate.endsWith("\n\n"))
                 {
@@ -51,10 +60,11 @@ namespace UnicoreReadback
                 }
                 return false;
             }
-            else if (!candidate.isEmpty() && candidate.length() < (multiline ? 4095U : 383U))
-                candidate += value;
-            else if (candidate.length() >= (multiline ? 4095U : 383U))
-                candidate = "";
+
+            if (candidate.startsWith(prefix))
+                response = candidate;
+            
+            candidate = "";
             return !response.isEmpty();
         }
 
