@@ -280,8 +280,11 @@ private:
     bool executeLicenseCommand(JsonObject payload, String &error, String &detail,
                                bool &restartAfterCommand);
     bool executeServiceConfigCommand(JsonObject payload, String &error, String &detail);
+    bool prepareRawBaseConfig(JsonObject config, GnssCmdBuilder::GnssSensorType chip,
+                              bool fixedBase, StartupPosition &expected, String &updatedConfig, String &error);
     bool executeRawCommand(JsonDocument &doc, JsonObject payload,
                            String &error, String &detail);
+    bool saveNearestAutoBaseConfig(JsonObject payload, bool pending, String &error);
     bool executeAutoBaseCommand(JsonObject payload, String &error, String &detail);
     bool verifyGnssConfig(JsonObjectConst payload, const String &commandId, String &error);
     bool verifyUnicoreConfig(JsonObjectConst payload, const String &commandId, String &error);

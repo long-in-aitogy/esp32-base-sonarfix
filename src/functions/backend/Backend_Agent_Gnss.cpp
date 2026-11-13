@@ -567,43 +567,40 @@ void BackendAgent::pollGnssStatus()
     if ((sensorType_ != "Unicorecomm" && sensorType_ != "Ublox") || workflowActive() || stationLock_.all)
         return;
     const uint32_t now = millis();
-    if ((lastReceiverPollMs_ == 0 && now >= 5000UL) || (lastReceiverPollMs_ != 0 && now - lastReceiverPollMs_ >= 30000UL))
+    if (lastReceiverPollMs_ == 0 ? now < 5000UL : now - lastReceiverPollMs_ < 30000UL)
+        return;
+    String error;
+    refreshReceiverReadback(error);
+    if (sensorType_ != "Ublox") return;
+    UbxNavigation navigation;
+    if (UbloxReadback::readNavigation(navigation, error))
     {
-        String error;
-        refreshReceiverReadback(error);
-        if (sensorType_ == "Ublox")
-        {
-            UbxNavigation navigation;
-            if (UbloxReadback::readNavigation(navigation, error))
-            {
-                navigation_ = navigation;
-                navigationMs_ = millis();
-                markStatusDirty();
-            }
-            if (versionReadback_.isEmpty())
-            {
-                versionReadbackError_.clear();
-                error.clear();
-                if (!UbloxReadback::readVersion(versionReadback_, error))
-                    versionReadbackError_ = error;
-                receiverInfoMs_ = millis();
-                markStatusDirty();
-            }
-            String satellites;
-            if (UbloxReadback::readSatellites(satellites, error))
-            {
-                satelliteReadback_ = satellites;
-                satelliteReadbackMs_ = millis();
-                markStatusDirty();
-            }
-            UbxDop dop;
-            if (UbloxReadback::readDop(dop, error))
-            {
-                dop_ = dop;
-                dopMs_ = millis();
-                markStatusDirty();
-            }
-        }
+        navigation_ = navigation;
+        navigationMs_ = millis();
+        markStatusDirty();
+    }
+    if (versionReadback_.isEmpty())
+    {
+        versionReadbackError_.clear();
+        error.clear();
+        if (!UbloxReadback::readVersion(versionReadback_, error))
+            versionReadbackError_ = error;
+        receiverInfoMs_ = millis();
+        markStatusDirty();
+    }
+    String satellites;
+    if (UbloxReadback::readSatellites(satellites, error))
+    {
+        satelliteReadback_ = satellites;
+        satelliteReadbackMs_ = millis();
+        markStatusDirty();
+    }
+    UbxDop dop;
+    if (UbloxReadback::readDop(dop, error))
+    {
+        dop_ = dop;
+        dopMs_ = millis();
+        markStatusDirty();
     }
 
     // MODE/BESTNAV are read-only receiver logs; do not request NMEA output.

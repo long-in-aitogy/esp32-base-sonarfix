@@ -649,3 +649,12 @@ Hai issue dưới đây đã chuyển sang **Accepted** trên nhánh `main` củ
 | --- | --- | --- |
 | [AaHT6_vfDfen3veeSkGj](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_vfDfen3veeSkGj) | `cpp:S1820` | Các trường thuộc cùng trạng thái datum và thông tin khung RTCM; tách chỉ để giảm số trường làm khó đối chiếu. |
 | [AaHT6_yxDfen3veeSkI9](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yxDfen3veeSkI9) | `cpp:S924` | Hai điểm dừng chờ lần lượt đủ header và đủ payload; giữ riêng để parser dễ đọc. |
+
+## 2026-11-13 · Kiểm tra cấu hình và tham số backend
+
+| Issue | Quy tắc | Lý do Accepted |
+| --- | --- | --- |
+| [AaHT6_wwDfen3veeSkGk](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_wwDfen3veeSkGk) | `cpp:S3776` | Kiểm tra WebSocket giữ liền các header, trạng thái trùng lặp và giá trị xác thực; điểm 27 so với ngưỡng 25, tách thêm sẽ làm khó theo dõi. |
+| [AaHT6_xsDfen3veeSkGs](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xsDfen3veeSkGs) | `cpp:S3776` | Hàm khởi động giữ kiểm tra Survey-In và Fixed LLA rõ ràng; điểm 26 so với ngưỡng 25. |
+| [AaHT6_yrDfen3veeSkIx](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIx) | `cpp:S107` | Các tham số kết nối caster, lựa chọn mountpoint và lỗi là đầu vào/đầu ra tường minh. |
+| [AaHT6_yZDfen3veeSkIM](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yZDfen3veeSkIM) | `cpp:S107` | Hàm đệ quy mở rộng trường NVS truyền rõ trạng thái phân trang, khóa, partition và đường dẫn; không thêm cấu trúc chỉ để giảm số tham số. |

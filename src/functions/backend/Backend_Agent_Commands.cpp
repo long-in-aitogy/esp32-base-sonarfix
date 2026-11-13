@@ -532,38 +532,10 @@ bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload,
     const bool fixedBase = configuringBase && originalConfig["params"]["base_setup_method"] == "FIXED_LLA";
     StartupPosition expected;
     String updatedConfig;
-    if (!originalConfig.isNull() && !originalConfig["params"].isUnbound())
+    if (!prepareRawBaseConfig(originalConfig, chip, fixedBase, expected, updatedConfig, error))
     {
-        if (!originalConfig["params"].is<JsonObject>())
-        {
-            error = "Base configuration must be an object";
-            detail = error;
-            return false;
-        }
-        DynamicJsonDocument baseDoc(CONFIG_DOCUMENT_SIZE);
-        baseDoc.set(originalConfig["params"]);
-        JsonObject base = baseDoc.as<JsonObject>();
-        if (!originalConfig["mode"].isUnbound())
-            base["mode"] = originalConfig["mode"];
-        enforceBaseAccuracy(base);
-        if (baseDoc.overflowed())
-        {
-            error = "Base configuration exceeds memory capacity";
-            detail = error;
-            return false;
-        }
-        if (fixedBase)
-        {
-            GnssCmdBuilder::CommandList unused;
-            if (chip == GnssCmdBuilder::GnssSensorType::Invalid ||
-                !buildStartupCommands(baseDoc.as<JsonObjectConst>(), chip, true, unused, expected, error))
-            {
-                if (error.isEmpty()) error = "unsupported GNSS sensor_type";
-                detail = error;
-                return false;
-            }
-        }
-        serializeJson(baseDoc, updatedConfig);
+        detail = error;
+        return false;
     }
     if (!validateRawCommands(commands, error))
     {
@@ -636,6 +608,80 @@ bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload,
     return true;
 }
 
+bool BackendAgent::prepareRawBaseConfig(JsonObject originalConfig, GnssCmdBuilder::GnssSensorType chip,
+                                        bool fixedBase, StartupPosition &expected,
+                                        String &updatedConfig, String &error)
+{
+    if (originalConfig.isNull() || originalConfig["params"].isUnbound())
+        return true;
+    if (!originalConfig["params"].is<JsonObject>())
+    {
+        error = "Base configuration must be an object";
+        return false;
+    }
+    DynamicJsonDocument baseDoc(CONFIG_DOCUMENT_SIZE);
+    baseDoc.set(originalConfig["params"]);
+    JsonObject base = baseDoc.as<JsonObject>();
+    if (!originalConfig["mode"].isUnbound())
+        base["mode"] = originalConfig["mode"];
+    enforceBaseAccuracy(base);
+    if (baseDoc.overflowed())
+    {
+        error = "Base configuration exceeds memory capacity";
+        return false;
+    }
+    if (fixedBase)
+    {
+        GnssCmdBuilder::CommandList unused;
+        if (chip == GnssCmdBuilder::GnssSensorType::Invalid ||
+            !buildStartupCommands(baseDoc.as<JsonObjectConst>(), chip, true, unused, expected, error))
+        {
+            if (error.isEmpty()) error = "unsupported GNSS sensor_type";
+            return false;
+        }
+    }
+    serializeJson(baseDoc, updatedConfig);
+    return true;
+}
+
+bool BackendAgent::saveNearestAutoBaseConfig(JsonObject payload, bool pending, String &error)
+{
+    DynamicJsonDocument saved(CONFIG_DOCUMENT_SIZE);
+    if (deserializeJson(saved, baseConfig_) != DeserializationError::Ok || !saved.is<JsonObject>())
+        saved.to<JsonObject>();
+    JsonObject base = saved.as<JsonObject>();
+    for (JsonPairConst item : payload["auto_base_config"].as<JsonObjectConst>())
+        base[item.key()] = item.value();
+    base["base_setup_method"] = "AUTO_CORS";
+    base["auto_cors_source_mode"] = "nearest";
+    base["mode"] = "BASE";
+    base.remove("auto_base_previous_config");
+    if (pending)
+    {
+        base.remove("auto_base_started_boot_id");
+        base.remove("auto_base_started_request_id");
+    }
+    else if (payload["startup_auto"] == true && !String(payload["startup_boot_id"] | "").isEmpty())
+    {
+        base["auto_base_started_boot_id"] = payload["startup_boot_id"];
+        base["auto_base_started_request_id"] = payload["startup_request_id"] | String();
+    }
+    enforceBaseAccuracy(base);
+    if (saved.overflowed())
+    {
+        error = "nearest CORS configuration exceeds memory capacity";
+        return false;
+    }
+    baseConfig_.clear();
+    serializeJson(saved, baseConfig_);
+    if (!saveStatePreferences())
+    {
+        error = pending ? "cannot save nearest CORS request" : "cannot save nearest CORS startup mode";
+        return false;
+    }
+    return true;
+}
+
 bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
                                           String &detail)
 {
@@ -674,32 +720,7 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
     if (!hasConnection && sourceMode == "nearest" && (payload["auto_apply"] | false))
     {
         sensorType_ = sensorType;
-        DynamicJsonDocument saved(CONFIG_DOCUMENT_SIZE);
-        if (deserializeJson(saved, baseConfig_) != DeserializationError::Ok || !saved.is<JsonObject>())
-            saved.to<JsonObject>();
-        JsonObject base = saved.as<JsonObject>();
-        const JsonObjectConst requested = payload["auto_base_config"].as<JsonObjectConst>();
-        for (JsonPairConst item : requested)
-            base[item.key()] = item.value();
-        base["base_setup_method"] = "AUTO_CORS";
-        base["auto_cors_source_mode"] = "nearest";
-        base["mode"] = "BASE";
-        base.remove("auto_base_started_boot_id");
-        base.remove("auto_base_started_request_id");
-        base.remove("auto_base_previous_config");
-        enforceBaseAccuracy(base);
-        if (saved.overflowed())
-        {
-            error = "nearest CORS configuration exceeds memory capacity";
-            return false;
-        }
-        baseConfig_.clear();
-        serializeJson(saved, baseConfig_);
-        if (!saveStatePreferences())
-        {
-            error = "cannot save nearest CORS request";
-            return false;
-        }
+        if (!saveNearestAutoBaseConfig(payload, true, error)) return false;
         // Command callbacks already hold tcpStreamMutex in the MQTT task.
         stopNtrip();
         stopNtripRover();
@@ -726,35 +747,7 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
     sensorType_ = sensorType;
     if (sourceMode == "nearest")
     {
-        DynamicJsonDocument saved(CONFIG_DOCUMENT_SIZE);
-        if (deserializeJson(saved, baseConfig_) != DeserializationError::Ok || !saved.is<JsonObject>())
-            saved.to<JsonObject>();
-        JsonObject base = saved.as<JsonObject>();
-        const JsonObjectConst requested = payload["auto_base_config"].as<JsonObjectConst>();
-        for (JsonPairConst item : requested)
-            base[item.key()] = item.value();
-        base["base_setup_method"] = "AUTO_CORS";
-        base["auto_cors_source_mode"] = "nearest";
-        base["mode"] = "BASE";
-        base.remove("auto_base_previous_config");
-        if (payload["startup_auto"] == true && !String(payload["startup_boot_id"] | "").isEmpty())
-        {
-            base["auto_base_started_boot_id"] = payload["startup_boot_id"];
-            base["auto_base_started_request_id"] = payload["startup_request_id"] | String();
-        }
-        enforceBaseAccuracy(base);
-        if (saved.overflowed())
-        {
-            error = "nearest CORS configuration exceeds memory capacity";
-            return false;
-        }
-        baseConfig_.clear();
-        serializeJson(saved, baseConfig_);
-        if (!saveStatePreferences())
-        {
-            error = "cannot save nearest CORS startup mode";
-            return false;
-        }
+        if (!saveNearestAutoBaseConfig(payload, false, error)) return false;
         publishConfigState("base_config_state");
     }
     String workflowPayload;
