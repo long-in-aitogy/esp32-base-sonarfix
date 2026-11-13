@@ -258,6 +258,22 @@ bool appendSavedConfiguration(JsonArray entries, uint32_t offset, uint32_t &tota
                               config.as<JsonVariantConst>(), String());
     return true;
 }
+
+void appendPartitionEntries(JsonArray entries, uint32_t offset, uint32_t &total,
+                            const char *partition, int priority) {
+    for (auto iterator = nvs_entry_find(partition, nullptr, NVS_TYPE_ANY); iterator;
+         iterator = nvs_entry_next(iterator)) {
+        nvs_entry_info_t entry;
+        nvs_entry_info(iterator, &entry);
+        const bool wifi = configurationNamespace(entry) && !strncmp(entry.key, "WIFI_", 5);
+        const int entryPriority = wifi ? 0 : configurationNamespace(entry) ? 1 : 2;
+        if (entryPriority != priority) continue;
+        if (appendSavedConfiguration(entries, offset, total, partition, entry)) continue;
+        if (total >= offset && entries.size() < 6)
+            describeNvsEntry(entries.createNestedObject(), partition, entry);
+        ++total;
+    }
+}
 } // namespace
 
 bool readNvsInventory(uint32_t offset, const String &commandId, String &output, String &error) {
@@ -280,19 +296,7 @@ bool readNvsInventory(uint32_t offset, const String &commandId, String &output, 
                 if (priority == 0) unavailable.add(partition);
                 continue;
             }
-            for (auto iterator = nvs_entry_find(partition, nullptr, NVS_TYPE_ANY); iterator;
-                 iterator = nvs_entry_next(iterator)) {
-                nvs_entry_info_t entry;
-                nvs_entry_info(iterator, &entry);
-                const bool wifi = configurationNamespace(entry) && !strncmp(entry.key, "WIFI_", 5);
-                const int entryPriority = wifi ? 0 : configurationNamespace(entry) ? 1 : 2;
-                if (entryPriority != priority) continue;
-                if (appendSavedConfiguration(entries, offset, total, partition, entry))
-                    continue;
-                if (total >= offset && entries.size() < 6)
-                    describeNvsEntry(entries.createNestedObject(), partition, entry);
-                ++total;
-            }
+            appendPartitionEntries(entries, offset, total, partition, priority);
         }
     }
     doc["fields_expanded"] = true;

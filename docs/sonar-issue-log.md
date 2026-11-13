@@ -494,3 +494,144 @@ Hai issue dưới đây đã chuyển sang **Accepted** trên nhánh `main` củ
 | [AaGan_WSXbG6mhdFzmTD](https://sonarcloud.io/project/issues?id=long-in-aitogy_esp32-base-sonarfix&open=AaGan_WSXbG6mhdFzmTD) | [AaHAB4XswAMFQ7NSc-l8](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4XswAMFQ7NSc-l8) | `cpp:S5421` | `src/functions/ntrip/RTCM_Receiver.cpp:32` |
 | [AaGan_WiXbG6mhdFzmUH](https://sonarcloud.io/project/issues?id=long-in-aitogy_esp32-base-sonarfix&open=AaGan_WiXbG6mhdFzmUH) | [AaHAB4WJwAMFQ7NSc-iO](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4WJwAMFQ7NSc-iO) | `cpp:S5421` | `include/hardware/Connection_type.h:14` |
 | [AaGan_WVXbG6mhdFzmTY](https://sonarcloud.io/project/issues?id=long-in-aitogy_esp32-base-sonarfix&open=AaGan_WVXbG6mhdFzmTY) | [AaHAB4X1wAMFQ7NSc-l_](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4X1wAMFQ7NSc-l_) | `cpp:S5421` | `src/hardware/Connection_type.cpp:4` |
+
+## 2026-11-13 · ArduinoJson 6 trong backend
+
+Đã Accepted 112 issue `cpp:S1874` trong `src/functions/backend`. Firmware dùng ArduinoJson 6.21.6 (PlatformIO khai báo `^6.21.5`); các API được dùng có trong phiên bản 6. Rà soát lại khi nâng lên ArduinoJson 7. Không thay đổi trạng thái issue ngoài backend.
+
+| Issue | Vị trí | API được báo |
+| --- | --- | --- |
+| [AaHT6_x_Dfen3veeSkHi](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_x_Dfen3veeSkHi) | `src/functions/backend/Backend_Agent.cpp:109` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_x_Dfen3veeSkHj](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_x_Dfen3veeSkHj) | `src/functions/backend/Backend_Agent.cpp:382` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_x_Dfen3veeSkHk](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_x_Dfen3veeSkHk) | `src/functions/backend/Backend_Agent.cpp:636` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_x_Dfen3veeSkHl](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_x_Dfen3veeSkHl) | `src/functions/backend/Backend_Agent.cpp:698` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yUDfen3veeSkH4](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yUDfen3veeSkH4) | `src/functions/backend/Backend_Agent_Commands.cpp:166` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yUDfen3veeSkH5](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yUDfen3veeSkH5) | `src/functions/backend/Backend_Agent_Commands.cpp:677` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yUDfen3veeSkH6](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yUDfen3veeSkH6) | `src/functions/backend/Backend_Agent_Commands.cpp:729` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yUDfen3veeSkH7](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yUDfen3veeSkH7) | `src/functions/backend/Backend_Agent_Commands.cpp:929` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_xzDfen3veeSkGt](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkGt) | `src/functions/backend/Backend_Agent_Gnss.cpp:102` | 'createNestedObject' is deprecated |
+| [AaHT6_xzDfen3veeSkGu](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkGu) | `src/functions/backend/Backend_Agent_Gnss.cpp:102` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_xzDfen3veeSkGv](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkGv) | `src/functions/backend/Backend_Agent_Gnss.cpp:126` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_xzDfen3veeSkGw](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkGw) | `src/functions/backend/Backend_Agent_Gnss.cpp:128` | 'createNestedObject' is deprecated |
+| [AaHT6_xzDfen3veeSkGx](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkGx) | `src/functions/backend/Backend_Agent_Gnss.cpp:128` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_xzDfen3veeSkGy](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkGy) | `src/functions/backend/Backend_Agent_Gnss.cpp:131` | 'createNestedArray' is deprecated |
+| [AaHT6_xzDfen3veeSkGz](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkGz) | `src/functions/backend/Backend_Agent_Gnss.cpp:131` | 'createNestedArray<const char>' is deprecated |
+| [AaHT6_xzDfen3veeSkG0](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkG0) | `src/functions/backend/Backend_Agent_Gnss.cpp:132` | 'createNestedObject' is deprecated |
+| [AaHT6_xzDfen3veeSkG1](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkG1) | `src/functions/backend/Backend_Agent_Gnss.cpp:132` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_xzDfen3veeSkG2](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkG2) | `src/functions/backend/Backend_Agent_Gnss.cpp:133` | 'createNestedObject' is deprecated |
+| [AaHT6_xzDfen3veeSkG3](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkG3) | `src/functions/backend/Backend_Agent_Gnss.cpp:133` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_xzDfen3veeSkG4](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkG4) | `src/functions/backend/Backend_Agent_Gnss.cpp:136` | 'createNestedObject' is deprecated |
+| [AaHT6_xzDfen3veeSkG5](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkG5) | `src/functions/backend/Backend_Agent_Gnss.cpp:136` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_xzDfen3veeSkG6](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkG6) | `src/functions/backend/Backend_Agent_Gnss.cpp:137` | 'createNestedObject' is deprecated |
+| [AaHT6_xzDfen3veeSkG7](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkG7) | `src/functions/backend/Backend_Agent_Gnss.cpp:137` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_xzDfen3veeSkG8](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkG8) | `src/functions/backend/Backend_Agent_Gnss.cpp:139` | 'createNestedObject' is deprecated |
+| [AaHT6_xzDfen3veeSkG9](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkG9) | `src/functions/backend/Backend_Agent_Gnss.cpp:139` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_xzDfen3veeSkG-](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkG-) | `src/functions/backend/Backend_Agent_Gnss.cpp:151` | 'createNestedArray' is deprecated |
+| [AaHT6_xzDfen3veeSkG_](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkG_) | `src/functions/backend/Backend_Agent_Gnss.cpp:151` | 'createNestedArray<const char>' is deprecated |
+| [AaHT6_xzDfen3veeSkHA](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHA) | `src/functions/backend/Backend_Agent_Gnss.cpp:153` | 'createNestedObject' is deprecated |
+| [AaHT6_xzDfen3veeSkHB](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHB) | `src/functions/backend/Backend_Agent_Gnss.cpp:207` | 'createNestedObject' is deprecated |
+| [AaHT6_xzDfen3veeSkHC](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHC) | `src/functions/backend/Backend_Agent_Gnss.cpp:207` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_xzDfen3veeSkHD](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHD) | `src/functions/backend/Backend_Agent_Gnss.cpp:264` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_xzDfen3veeSkHE](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHE) | `src/functions/backend/Backend_Agent_Gnss.cpp:266` | 'createNestedObject' is deprecated |
+| [AaHT6_xzDfen3veeSkHF](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHF) | `src/functions/backend/Backend_Agent_Gnss.cpp:266` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_xzDfen3veeSkHG](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHG) | `src/functions/backend/Backend_Agent_Gnss.cpp:268` | 'createNestedObject' is deprecated |
+| [AaHT6_xzDfen3veeSkHH](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHH) | `src/functions/backend/Backend_Agent_Gnss.cpp:268` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_xzDfen3veeSkHI](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHI) | `src/functions/backend/Backend_Agent_Gnss.cpp:269` | 'createNestedObject' is deprecated |
+| [AaHT6_xzDfen3veeSkHJ](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHJ) | `src/functions/backend/Backend_Agent_Gnss.cpp:269` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_xzDfen3veeSkHK](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHK) | `src/functions/backend/Backend_Agent_Gnss.cpp:270` | 'createNestedObject' is deprecated |
+| [AaHT6_xzDfen3veeSkHL](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHL) | `src/functions/backend/Backend_Agent_Gnss.cpp:270` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_xzDfen3veeSkHM](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHM) | `src/functions/backend/Backend_Agent_Gnss.cpp:279` | 'createNestedArray' is deprecated |
+| [AaHT6_xzDfen3veeSkHN](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHN) | `src/functions/backend/Backend_Agent_Gnss.cpp:279` | 'createNestedArray<const char>' is deprecated |
+| [AaHT6_xzDfen3veeSkHO](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHO) | `src/functions/backend/Backend_Agent_Gnss.cpp:280` | 'createNestedArray' is deprecated |
+| [AaHT6_xzDfen3veeSkHP](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHP) | `src/functions/backend/Backend_Agent_Gnss.cpp:280` | 'createNestedArray<const char>' is deprecated |
+| [AaHT6_xzDfen3veeSkHQ](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHQ) | `src/functions/backend/Backend_Agent_Gnss.cpp:295` | 'createNestedObject' is deprecated |
+| [AaHT6_xzDfen3veeSkHR](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHR) | `src/functions/backend/Backend_Agent_Gnss.cpp:299` | 'createNestedArray' is deprecated |
+| [AaHT6_xzDfen3veeSkHS](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHS) | `src/functions/backend/Backend_Agent_Gnss.cpp:299` | 'createNestedArray<const char>' is deprecated |
+| [AaHT6_xzDfen3veeSkHT](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHT) | `src/functions/backend/Backend_Agent_Gnss.cpp:322` | 'createNestedObject' is deprecated |
+| [AaHT6_xzDfen3veeSkHU](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHU) | `src/functions/backend/Backend_Agent_Gnss.cpp:322` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_xzDfen3veeSkHV](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHV) | `src/functions/backend/Backend_Agent_Gnss.cpp:323` | 'createNestedObject' is deprecated |
+| [AaHT6_xzDfen3veeSkHW](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHW) | `src/functions/backend/Backend_Agent_Gnss.cpp:323` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_xzDfen3veeSkHX](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHX) | `src/functions/backend/Backend_Agent_Gnss.cpp:328` | 'createNestedObject' is deprecated |
+| [AaHT6_xzDfen3veeSkHY](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHY) | `src/functions/backend/Backend_Agent_Gnss.cpp:328` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_xsDfen3veeSkGr](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xsDfen3veeSkGr) | `src/functions/backend/Backend_Agent_Startup.cpp:265` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yHDfen3veeSkHm](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yHDfen3veeSkHm) | `src/functions/backend/Backend_Agent_Status.cpp:122` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yHDfen3veeSkHn](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yHDfen3veeSkHn) | `src/functions/backend/Backend_Agent_Status.cpp:136` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yHDfen3veeSkHo](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yHDfen3veeSkHo) | `src/functions/backend/Backend_Agent_Status.cpp:296` | 'createNestedObject' is deprecated |
+| [AaHT6_yHDfen3veeSkHp](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yHDfen3veeSkHp) | `src/functions/backend/Backend_Agent_Status.cpp:296` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_yHDfen3veeSkHq](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yHDfen3veeSkHq) | `src/functions/backend/Backend_Agent_Status.cpp:305` | 'createNestedObject' is deprecated |
+| [AaHT6_yHDfen3veeSkHr](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yHDfen3veeSkHr) | `src/functions/backend/Backend_Agent_Status.cpp:305` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_yHDfen3veeSkH0](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yHDfen3veeSkH0) | `src/functions/backend/Backend_Agent_Status.cpp:436` | 'createNestedObject' is deprecated |
+| [AaHT6_yHDfen3veeSkH1](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yHDfen3veeSkH1) | `src/functions/backend/Backend_Agent_Status.cpp:436` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_yHDfen3veeSkH2](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yHDfen3veeSkH2) | `src/functions/backend/Backend_Agent_Status.cpp:468` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_y1Dfen3veeSkJB](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_y1Dfen3veeSkJB) | `src/functions/backend/Backend_Agent_Storage.cpp:21` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yrDfen3veeSkIX](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIX) | `src/functions/backend/Backend_Agent_Workflows.cpp:63` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yrDfen3veeSkIY](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIY) | `src/functions/backend/Backend_Agent_Workflows.cpp:71` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yrDfen3veeSkIZ](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIZ) | `src/functions/backend/Backend_Agent_Workflows.cpp:641` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yrDfen3veeSkIa](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIa) | `src/functions/backend/Backend_Agent_Workflows.cpp:666` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yrDfen3veeSkIb](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIb) | `src/functions/backend/Backend_Agent_Workflows.cpp:667` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yrDfen3veeSkIc](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIc) | `src/functions/backend/Backend_Agent_Workflows.cpp:714` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yrDfen3veeSkId](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkId) | `src/functions/backend/Backend_Agent_Workflows.cpp:758` | 'createNestedObject' is deprecated |
+| [AaHT6_yrDfen3veeSkIe](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIe) | `src/functions/backend/Backend_Agent_Workflows.cpp:758` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_yrDfen3veeSkIf](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIf) | `src/functions/backend/Backend_Agent_Workflows.cpp:767` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yrDfen3veeSkIg](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIg) | `src/functions/backend/Backend_Agent_Workflows.cpp:829` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yrDfen3veeSkIh](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIh) | `src/functions/backend/Backend_Agent_Workflows.cpp:892` | 'createNestedObject' is deprecated |
+| [AaHT6_yrDfen3veeSkIi](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIi) | `src/functions/backend/Backend_Agent_Workflows.cpp:892` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_yrDfen3veeSkIj](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIj) | `src/functions/backend/Backend_Agent_Workflows.cpp:915` | 'createNestedObject' is deprecated |
+| [AaHT6_yrDfen3veeSkIk](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIk) | `src/functions/backend/Backend_Agent_Workflows.cpp:915` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_yrDfen3veeSkIl](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIl) | `src/functions/backend/Backend_Agent_Workflows.cpp:987` | 'containsKey' is deprecated |
+| [AaHT6_yrDfen3veeSkIm](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIm) | `src/functions/backend/Backend_Agent_Workflows.cpp:987` | 'containsKey<const char>' is deprecated |
+| [AaHT6_yrDfen3veeSkIs](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIs) | `src/functions/backend/Backend_Agent_Workflows.cpp:1116` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yrDfen3veeSkIu](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIu) | `src/functions/backend/Backend_Agent_Workflows.cpp:1311` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yZDfen3veeSkIA](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yZDfen3veeSkIA) | `src/functions/backend/Storage_Status.cpp:25` | 'createNestedObject' is deprecated |
+| [AaHT6_yZDfen3veeSkIB](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yZDfen3veeSkIB) | `src/functions/backend/Storage_Status.cpp:49` | 'createNestedObject' is deprecated |
+| [AaHT6_yZDfen3veeSkIC](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yZDfen3veeSkIC) | `src/functions/backend/Storage_Status.cpp:49` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_yZDfen3veeSkID](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yZDfen3veeSkID) | `src/functions/backend/Storage_Status.cpp:55` | 'createNestedArray' is deprecated |
+| [AaHT6_yZDfen3veeSkIE](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yZDfen3veeSkIE) | `src/functions/backend/Storage_Status.cpp:55` | 'createNestedArray<const char>' is deprecated |
+| [AaHT6_yZDfen3veeSkIF](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yZDfen3veeSkIF) | `src/functions/backend/Storage_Status.cpp:56` | 'createNestedObject' is deprecated |
+| [AaHT6_yZDfen3veeSkIG](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yZDfen3veeSkIG) | `src/functions/backend/Storage_Status.cpp:59` | 'createNestedObject' is deprecated |
+| [AaHT6_yZDfen3veeSkIH](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yZDfen3veeSkIH) | `src/functions/backend/Storage_Status.cpp:170` | 'createNestedObject' is deprecated |
+| [AaHT6_yZDfen3veeSkII](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yZDfen3veeSkII) | `src/functions/backend/Storage_Status.cpp:264` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yZDfen3veeSkIJ](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yZDfen3veeSkIJ) | `src/functions/backend/Storage_Status.cpp:279` | 'createNestedArray' is deprecated |
+| [AaHT6_yZDfen3veeSkIK](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yZDfen3veeSkIK) | `src/functions/backend/Storage_Status.cpp:279` | 'createNestedArray<const char>' is deprecated |
+| [AaHT6_yZDfen3veeSkIL](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yZDfen3veeSkIL) | `src/functions/backend/Storage_Status.cpp:293` | 'createNestedObject' is deprecated |
+| [AaHT6_yrDfen3veeSkIt](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIt) | `src/functions/backend/Backend_Agent_Workflows.cpp:1220` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yHDfen3veeSkHw](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yHDfen3veeSkHw) | `src/functions/backend/Backend_Agent_Status.cpp:337` | 'createNestedObject' is deprecated |
+| [AaHT6_yHDfen3veeSkHx](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yHDfen3veeSkHx) | `src/functions/backend/Backend_Agent_Status.cpp:337` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_yHDfen3veeSkHs](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yHDfen3veeSkHs) | `src/functions/backend/Backend_Agent_Status.cpp:312` | 'createNestedObject' is deprecated |
+| [AaHT6_yHDfen3veeSkHt](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yHDfen3veeSkHt) | `src/functions/backend/Backend_Agent_Status.cpp:312` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_yHDfen3veeSkHu](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yHDfen3veeSkHu) | `src/functions/backend/Backend_Agent_Status.cpp:320` | 'createNestedObject' is deprecated |
+| [AaHT6_yHDfen3veeSkHv](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yHDfen3veeSkHv) | `src/functions/backend/Backend_Agent_Status.cpp:320` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_yHDfen3veeSkHy](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yHDfen3veeSkHy) | `src/functions/backend/Backend_Agent_Status.cpp:347` | 'createNestedObject' is deprecated |
+| [AaHT6_yHDfen3veeSkHz](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yHDfen3veeSkHz) | `src/functions/backend/Backend_Agent_Status.cpp:347` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_xsDfen3veeSkGq](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xsDfen3veeSkGq) | `src/functions/backend/Backend_Agent_Startup.cpp:177` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_y1Dfen3veeSkJC](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_y1Dfen3veeSkJC) | `src/functions/backend/Backend_Agent_Storage.cpp:177` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yrDfen3veeSkIn](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIn) | `src/functions/backend/Backend_Agent_Workflows.cpp:1013` | 'createNestedObject' is deprecated |
+| [AaHT6_yrDfen3veeSkIo](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIo) | `src/functions/backend/Backend_Agent_Workflows.cpp:1013` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_yrDfen3veeSkIp](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIp) | `src/functions/backend/Backend_Agent_Workflows.cpp:1019` | 'createNestedObject' is deprecated |
+| [AaHT6_yrDfen3veeSkIq](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIq) | `src/functions/backend/Backend_Agent_Workflows.cpp:1019` | 'createNestedObject<const char>' is deprecated |
+| [AaHT6_y1Dfen3veeSkJD](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_y1Dfen3veeSkJD) | `src/functions/backend/Backend_Agent_Storage.cpp:231` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_y1Dfen3veeSkJE](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_y1Dfen3veeSkJE) | `src/functions/backend/Backend_Agent_Storage.cpp:252` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yrDfen3veeSkIr](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIr) | `src/functions/backend/Backend_Agent_Workflows.cpp:1108` | 'DynamicJsonDocument' is deprecated |
+| [AaHT6_yrDfen3veeSkIv](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIv) | `src/functions/backend/Backend_Agent_Workflows.cpp:1536` | 'DynamicJsonDocument' is deprecated |
+
+## 2026-11-13 · Kiểu byte trong backend
+
+Đã Accepted 5 issue `cpp:S6022`: các giá trị `uint8_t` được dùng trong phép toán bit và giải mã giao thức; thay bằng `std::byte` cần chuyển kiểu thêm.
+
+| Issue |
+| --- |
+| [AaHT6_xzDfen3veeSkHc](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHc) |
+| [AaHT6_yxDfen3veeSkI8](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yxDfen3veeSkI8) |
+| [AaHT6_yxDfen3veeSkI-](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yxDfen3veeSkI-) |
+| [AaHT6_yxDfen3veeSkI_](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yxDfen3veeSkI_) |
+| [AaHT6_yxDfen3veeSkJA](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yxDfen3veeSkJA) |
+
+## 2026-11-13 · Tham số chuyển đổi tọa độ
+
+Đã Accepted ba issue `cpp:S107`: các hàm dùng tham số toán học và tham chiếu đầu ra tường minh; gom tham số chỉ để giảm số lượng sẽ tăng độ phức tạp.
+
+| Issue |
+| --- |
+| [AaHT6_yxDfen3veeSkI5](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yxDfen3veeSkI5) |
+| [AaHT6_yxDfen3veeSkI6](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yxDfen3veeSkI6) |
+| [AaHT6_yxDfen3veeSkI7](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yxDfen3veeSkI7) |
