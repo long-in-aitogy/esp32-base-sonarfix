@@ -71,16 +71,15 @@ void sendRoverGgaIfAvailable(Client &client, const bool force = false)
 
 String buildNtripRoverRequest(const String &host, const uint16_t port, const String &user,
                               const String &password, const String &mountpoint,
-                              const uint8_t version, const String &receiverId,
-                              const bool reportSelected)
+                              const NtripRoverOptions &options)
 {
     const auto auth = base64Encode(user + ":" + password);
     String agent = "NTRIP ESP32-Agent/" + String(AGENT_VERSION);
-    if (!receiverId.isEmpty())
-        agent += "/" + receiverId;
+    if (!options.receiverId.isEmpty())
+        agent += "/" + options.receiverId;
 
     String request;
-    if (version == 2)
+    if (options.version == 2)
     {
         request = "GET /" + mountpoint + " HTTP/1.1\r\n"
                                          "Host: " +
@@ -116,7 +115,7 @@ String buildNtripRoverRequest(const String &host, const uint16_t port, const Str
             request += "Ntrip-GGA: " + gga + "\r\n\r\n";
         }
     }
-    if (reportSelected)
+    if (options.selectedMountpoint)
     {
         request.remove(request.length() - 2);
         request += "X-NTRIP-Report-Selected: 1\r\n\r\n";
@@ -198,9 +197,7 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
     }
 
     const auto user = username.isEmpty() ? String("source") : username;
-    const auto request = buildNtripRoverRequest(host, port, user, password, mountpoint,
-                                                options.version, options.receiverId,
-                                                options.selectedMountpoint != nullptr);
+    const auto request = buildNtripRoverRequest(host, port, user, password, mountpoint, options);
     if (!sendNtripRoverRequest(client, request, options.selectedMountpoint))
         return false;
     roverSession().authenticated = true;

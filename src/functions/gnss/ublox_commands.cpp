@@ -312,7 +312,7 @@ namespace UbloxCommands
         {
             if (end - i < 4)
                 return false;
-            const uint8_t type = packet[i + 3] >> 4;
+            const uint8_t type = std::to_integer<uint8_t>(std::byte{packet[i + 3]} >> 4);
             const size_t valueSize = valsetValueSize(type);
             if (valueSize == 0 || end - i < 4 + valueSize)
                 return false;
@@ -325,7 +325,7 @@ namespace UbloxCommands
             uint32_t key = 0;
             for (uint8_t b = 0; b < 4; ++b)
                 key |= static_cast<uint32_t>(packet[i + b]) << (8 * b);
-            const uint8_t type = packet[i + 3] >> 4;
+            const uint8_t type = std::to_integer<uint8_t>(std::byte{packet[i + 3]} >> 4);
             const size_t valueSize = valsetValueSize(type);
             if (baseMode && (key == 0x4003000FU || key == 0x40030011U))
             {
