@@ -4,10 +4,16 @@
 #include "functions/ntrip/ntrip_common.h"
 #include "functions/backend/Vn2000_Datum.h"
 
+struct NtripRoverOptions
+{
+    uint8_t version = 1;
+    String *selectedMountpoint = nullptr;
+    String receiverId;
+};
+
 bool startNtripRover(const String &host, uint16_t port, const String &username,
                      const String &password, String mountpoint,
-                     uint8_t version = 1, String *selectedMountpoint = nullptr,
-                     const String &receiverId = String());
+                     const NtripRoverOptions &options = NtripRoverOptions());
 // Returns 200 while the session is alive, or 504 when unavailable/disconnected.
 int loopNtripRover();
 void stopNtripRover();

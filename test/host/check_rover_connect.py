@@ -25,6 +25,11 @@ void delay(uint32_t ms) { now += ms; }
 const char *AGENT_VERSION = "test";
 struct GnssTelemetrySnapshot { std::array<char, 128> lastGga{}; uint32_t lastGgaMs = 0; } snapshot;
 GnssTelemetrySnapshot getGnssTelemetrySnapshot() { return snapshot; }
+struct NtripRoverOptions {
+    uint8_t version = 1;
+    String *selectedMountpoint = nullptr;
+    String receiverId;
+};
 struct RoverSession {
     struct Datum { int resets = 0; void reset() { ++resets; } } datum;
     bool active = false, authenticated = false;
@@ -117,8 +122,16 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='rover-connect-') as directory:
     path = Path(directory)
-    prototype = 'bool startNtripRover(const String &, uint16_t, const String &, const String &, String, uint8_t, String * = nullptr, const String & = String());\n'
-    (path / 'check.cpp').write_text(shim + harness + declarations + prototype + mapped(root / 'src/functions/ntrip/ntrip_common.cpp', wait) + mapped(root / 'src/functions/ntrip/ntrip_rover.cpp', start) + checks)
+    prototype = 'bool startNtripRover(const String &, uint16_t, const String &, const String &, String, const NtripRoverOptions &);\n'
+    compatibility = r'''
+bool startNtripRover(const String &host, uint16_t port, const String &username,
+                     const String &password, const String &mountpoint, uint8_t version,
+                     String *selection = nullptr, const String &receiver = String()) {
+    return startNtripRover(host, port, username, password, mountpoint,
+                           NtripRoverOptions{version, selection, receiver});
+}
+'''
+    (path / 'check.cpp').write_text(shim + harness + declarations + prototype + mapped(root / 'src/functions/ntrip/ntrip_common.cpp', wait) + mapped(root / 'src/functions/ntrip/ntrip_rover.cpp', start) + compatibility + checks)
     compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     run_cpp([str(path / 'check')], check=True)

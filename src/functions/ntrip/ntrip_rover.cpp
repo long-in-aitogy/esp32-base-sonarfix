@@ -165,13 +165,13 @@ bool sendNtripRoverRequest(Client &client, const String &request,
 
 /** @brief Implements startNtripRover. */
 bool startNtripRover(const String &host, const uint16_t port, const String &username,
-                     const String &password, String mountpoint, const uint8_t version,
-                     String *selectedMountpoint, const String &receiverId)
+                     const String &password, String mountpoint,
+                     const NtripRoverOptions &options)
 {
-    if (selectedMountpoint)
-        selectedMountpoint->clear();
+    if (options.selectedMountpoint)
+        options.selectedMountpoint->clear();
     roverSession().lastError = "cannot connect to CORS rover mountpoint";
-    if (host.isEmpty() || port == 0 || mountpoint.isEmpty() || !safeNtripField(host) || !safeNtripField(username) || !safeNtripField(password) || !safeNtripField(mountpoint) || !safeNtripField(receiverId))
+    if (host.isEmpty() || port == 0 || mountpoint.isEmpty() || !safeNtripField(host) || !safeNtripField(username) || !safeNtripField(password) || !safeNtripField(mountpoint) || !safeNtripField(options.receiverId))
         return false;
     while (mountpoint.startsWith("/"))
         mountpoint.remove(0, 1);
@@ -199,8 +199,9 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
 
     const auto user = username.isEmpty() ? String("source") : username;
     const auto request = buildNtripRoverRequest(host, port, user, password, mountpoint,
-                                                version, receiverId, selectedMountpoint != nullptr);
-    if (!sendNtripRoverRequest(client, request, selectedMountpoint))
+                                                options.version, options.receiverId,
+                                                options.selectedMountpoint != nullptr);
+    if (!sendNtripRoverRequest(client, request, options.selectedMountpoint))
         return false;
     roverSession().authenticated = true;
     roverSession().lastError = "CORS rover connection lost";

@@ -502,8 +502,9 @@ bool BackendAgent::startAutoBaseRover(const String &host, const uint16_t port,
         return false;
     }
     stopNtrip();
-    const auto started = startNtripRover(host, port, username, password, mountpoint, ntripVersion,
-                                         selectedMountpoint, selectedMountpoint ? serialNumber_ : String());
+    const NtripRoverOptions options{ntripVersion, selectedMountpoint,
+                                    selectedMountpoint ? serialNumber_ : String()};
+    const auto started = startNtripRover(host, port, username, password, mountpoint, options);
     if (!started)
         error = ntripRoverLastError();
     xSemaphoreGive(tcpStreamMutex);
@@ -1384,7 +1385,8 @@ bool BackendAgent::startReferenceRover(const String &host, const uint16_t port,
         return false;
     }
     stopNtrip();
-    const auto started = startNtripRover(host, port, username, password, mountpoint, 1);
+    const auto started = startNtripRover(host, port, username, password, mountpoint,
+                                         NtripRoverOptions{});
     if (!started)
         error = ntripRoverLastError();
     xSemaphoreGive(tcpStreamMutex);
