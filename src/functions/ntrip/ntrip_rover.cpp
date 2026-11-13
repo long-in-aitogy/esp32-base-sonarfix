@@ -69,47 +69,17 @@ void sendRoverGgaIfAvailable(Client &client, const bool force = false)
     roverSession().lastGgaMs = millis();
 }
 
-/** @brief Implements startNtripRover. */
-bool startNtripRover(const String &host, const uint16_t port, const String &username,
-                     const String &password, String mountpoint, const uint8_t version,
-                     String *selectedMountpoint, const String &receiverId)
+String buildNtripRoverRequest(const String &host, const uint16_t port, const String &user,
+                              const String &password, const String &mountpoint,
+                              const NtripRoverOptions &options)
 {
-    if (selectedMountpoint)
-        selectedMountpoint->clear();
-    roverSession().lastError = "cannot connect to CORS rover mountpoint";
-    if (host.isEmpty() || port == 0 || mountpoint.isEmpty() || !safeNtripField(host) || !safeNtripField(username) || !safeNtripField(password) || !safeNtripField(mountpoint) || !safeNtripField(receiverId))
-        return false;
-    while (mountpoint.startsWith("/"))
-        mountpoint.remove(0, 1);
-    if (mountpoint.isEmpty())
-        return false;
-
-    // The temporary rover reuses source server 1's client and modem mux 0.
-    // Close that client before opening a receive-only correction stream.
-    roverSession().datum.reset();
-    roverSession().bytesReceived = 0;
-    roverSession().bytesWritten = 0;
-    roverSession().packetsReceived = 0;
-    roverSession().lastDiagnosticMs = millis();
-    roverSession().active = true;
-    roverSession().authenticated = false;
-    roverSession().lastGgaMs = 0;
-    Client &client = clientFor(0);
-    client.stop();
-    client.setTimeout(3000);
-    if (!client.connect(host.c_str(), port))
-    {
-        roverSession().active = false;
-        return false;
-    }
-
-    const auto user = username.isEmpty() ? String("source") : username;
     const auto auth = base64Encode(user + ":" + password);
     String agent = "NTRIP ESP32-Agent/" + String(AGENT_VERSION);
-    if (!receiverId.isEmpty())
-        agent += "/" + receiverId;
+    if (!options.receiverId.isEmpty())
+        agent += "/" + options.receiverId;
+
     String request;
-    if (version == 2)
+    if (options.version == 2)
     {
         request = "GET /" + mountpoint + " HTTP/1.1\r\n"
                                          "Host: " +
@@ -117,7 +87,7 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
                                               "Ntrip-Version: Ntrip/2.0\r\n"
                                               "User-Agent: " +
                   agent + "\r\n"
-                                          "Authorization: Basic " +
+                          "Authorization: Basic " +
                   auth + "\r\n"
                          "Accept: */*\r\n"
                          "Connection: Keep-Alive\r\n\r\n";
@@ -127,12 +97,12 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
         request = "GET /" + mountpoint + " HTTP/1.0\r\n"
                                          "User-Agent: " +
                   agent + "\r\n"
-                                          "Authorization: Basic " +
+                          "Authorization: Basic " +
                   auth + "\r\n"
                          "Accept: */*\r\n"
                          "Connection: close\r\n\r\n";
     }
-    // The caster can use a fresh position before it accepts the Rover stream.
+
     const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
     if (snapshot.lastGga[0] != '\0' && snapshot.lastGgaMs != 0
         && millis() - snapshot.lastGgaMs <= 3000UL)
@@ -145,11 +115,17 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
             request += "Ntrip-GGA: " + gga + "\r\n\r\n";
         }
     }
-    if (selectedMountpoint)
+    if (options.selectedMountpoint)
     {
         request.remove(request.length() - 2);
         request += "X-NTRIP-Report-Selected: 1\r\n\r\n";
     }
+    return request;
+}
+
+bool sendNtripRoverRequest(Client &client, const String &request,
+                           String *selectedMountpoint)
+{
     if (client.print(request) != request.length())
     {
         client.stop();
@@ -183,6 +159,47 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
         roverSession().active = false;
         return false;
     }
+    return true;
+}
+
+/** @brief Implements startNtripRover. */
+bool startNtripRover(const String &host, const uint16_t port, const String &username,
+                     const String &password, String mountpoint,
+                     const NtripRoverOptions &options)
+{
+    if (options.selectedMountpoint)
+        options.selectedMountpoint->clear();
+    roverSession().lastError = "cannot connect to CORS rover mountpoint";
+    if (host.isEmpty() || port == 0 || mountpoint.isEmpty() || !safeNtripField(host) || !safeNtripField(username) || !safeNtripField(password) || !safeNtripField(mountpoint) || !safeNtripField(options.receiverId))
+        return false;
+    while (mountpoint.startsWith("/"))
+        mountpoint.remove(0, 1);
+    if (mountpoint.isEmpty())
+        return false;
+
+    // The temporary rover reuses source server 1's client and modem mux 0.
+    // Close that client before opening a receive-only correction stream.
+    roverSession().datum.reset();
+    roverSession().bytesReceived = 0;
+    roverSession().bytesWritten = 0;
+    roverSession().packetsReceived = 0;
+    roverSession().lastDiagnosticMs = millis();
+    roverSession().active = true;
+    roverSession().authenticated = false;
+    roverSession().lastGgaMs = 0;
+    Client &client = clientFor(0);
+    client.stop();
+    client.setTimeout(3000);
+    if (!client.connect(host.c_str(), port))
+    {
+        roverSession().active = false;
+        return false;
+    }
+
+    const auto user = username.isEmpty() ? String("source") : username;
+    const auto request = buildNtripRoverRequest(host, port, user, password, mountpoint, options);
+    if (!sendNtripRoverRequest(client, request, options.selectedMountpoint))
+        return false;
     roverSession().authenticated = true;
     roverSession().lastError = "CORS rover connection lost";
     sendRoverGgaIfAvailable(client, true);
