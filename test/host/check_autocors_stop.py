@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 root=Path(__file__).resolve().parents[2]
 source=(root/'src/functions/backend/Backend_Agent_Commands.cpp').read_text()
-a=source.index('bool BackendAgent::executeStopWorkflowCommand('); b=source.index('\nbool BackendAgent::executeStorageStatus(',a)
+a=source.index('bool BackendAgent::executeStopWorkflowCommand('); b=source.index('\nbool BackendAgent::executeVerifyGnssCommand(',a)
 method=source[a:b]
 harness=r'''
 #include <Arduino.h>
