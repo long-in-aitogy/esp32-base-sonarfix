@@ -149,6 +149,8 @@ struct BackendAgent {
     bool completeAutoBaseSetupFull(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &, String &, const String &);
     bool waitForAutoBaseFix(uint32_t, uint8_t, bool &, String &, const String &);
     bool collectAutoBaseSamples(int, std::vector<double> &, std::vector<double> &, std::vector<double> &, bool &, String &, const String &);
+    bool waitForAutoNearestPosition(uint32_t);
+    bool startSurveyInFallback(JsonObject, JsonDocument &, const String &, const String &, String &);
     void finishAutoBaseWorkflow(JsonDocument &, bool, const String &, bool, bool, const String &);
     bool runAutoBaseWorkflow(JsonObject);
     bool waitForReferenceFix(uint32_t, String &);

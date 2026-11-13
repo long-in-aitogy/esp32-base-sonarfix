@@ -12,16 +12,22 @@ for name, next_state in [('runAutoBaseWorkflow', 'auto_setup_rover'), ('runRefer
 harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include "functions/gnss/gnss_cmd_builder.h"
 #include <cmath>
 #include <cassert>
 constexpr size_t CONFIG_DOCUMENT_SIZE = 6144;
+uint32_t millis() { return 0; }
+int pdMS_TO_TICKS(int ms) { return ms; }
+void vTaskDelay(int) {}
+struct Snapshot { uint32_t lastGgaMs; double latitude, longitude; };
+Snapshot getGnssTelemetrySnapshot() { return {}; }
 double coordinateNumber(JsonVariantConst value) { return value.isNull() ? NAN : value.as<double>(); }
 struct BackendAgent {
     String baseStartupState_;
     void markStatusDirty() {}
     String baseConfig_ = R"({"base_setup_method":"SURVEY_IN","survey_in_duration":1800})";
     uint32_t surveyInTargetSeconds_ = 120;
-    bool valid = false, stopOk = true, restoreOk = true;
+    bool valid = false, stopOk = true, restoreOk = true, workflowCancelRequested_ = false;
     int writes = 0, stops = 0, restarts = 0, saved = 0;
     String stage;
     template<class... T> bool prepareAutoBaseConfig(T&&...) { return valid; }
@@ -34,6 +40,8 @@ struct BackendAgent {
     void setWorkflowProgress(const String &s, int, int, const String &) { stage = s; }
     bool saveStatePreferences() { ++saved; return true; }
     void publishConfigState(const char *) {}
+    bool waitForAutoNearestPosition(uint32_t);
+    bool startSurveyInFallback(JsonObject, JsonDocument &, const String &, const String &, String &);
     void finishAutoBaseWorkflow(JsonDocument &, bool, const String &, bool, bool, const String &);
     bool runAutoBaseWorkflow(JsonObject);
     bool runReferenceCheckWorkflow(JsonObject);
@@ -65,7 +73,7 @@ with tempfile.TemporaryDirectory(prefix='workflow-validation-') as directory:
     path = Path(directory)
     (path / 'check.cpp').write_text(harness + '\n'.join(methods) + checks)
     subprocess.run(['c++', '-std=c++17', '-fsanitize=address,undefined',
-                    '-I' + str(root / 'test/host'),
+                    '-I' + str(root / 'test/host'), '-I' + str(root / 'include'),
                     '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     subprocess.run([str(path / 'check')], check=True)

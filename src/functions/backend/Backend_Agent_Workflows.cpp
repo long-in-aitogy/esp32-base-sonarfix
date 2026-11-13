@@ -1158,6 +1158,77 @@ void BackendAgent::finishAutoBaseWorkflow(JsonDocument &previousBase, bool hasSa
     saveStatePreferences();
 }
 
+bool BackendAgent::startSurveyInFallback(JsonObject payload, JsonDocument &previousBase,
+                                         const String &startedBootId, const String &startedRequestId,
+                                         String &failureReason)
+{
+    Serial.println("[AUTO BASE][FALLBACK] No station within 20 km; starting Survey-In.");
+    DynamicJsonDocument survey(CONFIG_DOCUMENT_SIZE);
+    survey.set(previousBase.as<JsonObjectConst>());
+    survey["base_setup_method"] = "SURVEY_IN";
+    survey["accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
+    survey["survey_in_accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
+    if (survey["survey_in_duration"].isNull())
+        survey["survey_in_duration"] = 120;
+    survey.remove("coords");
+    survey.remove("coordinate_source");
+    survey.remove("conversion_report");
+    survey.remove("auto_base_started_boot_id");
+    survey.remove("auto_base_started_request_id");
+    if (payload["startup_auto"] == true && !startedBootId.isEmpty())
+    {
+        survey["auto_base_started_boot_id"] = startedBootId;
+        survey["auto_base_started_request_id"] = startedRequestId;
+    }
+    if (survey.overflowed())
+    {
+        failureReason = "Survey-In fallback configuration exceeds memory capacity";
+        return false;
+    }
+    if (!restoreWorkflowBase(survey.as<JsonObjectConst>()) || !restartConfiguredNtrip())
+    {
+        failureReason = "cannot start Survey-In fallback";
+        return false;
+    }
+    const String oldConfig = baseConfig_;
+    baseConfig_.clear();
+    serializeJson(survey, baseConfig_);
+    if (!saveStatePreferences())
+    {
+        baseConfig_ = oldConfig;
+        failureReason = "cannot save Survey-In fallback";
+        return false;
+    }
+    setAgentState(normalAgentState());
+    setWorkflowProgress("completed", 4, 4,
+        R"({"mode":"survey_in","auto_applied":true,"receiver_write_completed":true,"reason":"no_fixed_station_within_20_km"})");
+    saveStatePreferences();
+    publishConfigState("base_config_state");
+    Serial.printf("[AUTO BASE][SURVEY-IN] Started; target=%lu seconds; RTCM SOURCE restored.\n",
+                  static_cast<unsigned long>(surveyInTargetSeconds_));
+    return true;
+}
+
+bool BackendAgent::waitForAutoNearestPosition(uint32_t timeoutSeconds)
+{
+    const uint32_t started = millis();
+    bool hasPosition = false;
+    while (!workflowCancelRequested_ && millis() - started < timeoutSeconds * 1000UL)
+    {
+        const auto position = getGnssTelemetrySnapshot();
+        if (position.lastGgaMs != 0 && millis() - position.lastGgaMs < 3000UL
+            && std::isfinite(position.latitude) && std::abs(position.latitude) <= 90
+            && std::isfinite(position.longitude) && std::abs(position.longitude) <= 180
+            && (position.latitude != 0 || position.longitude != 0))
+        {
+            hasPosition = true;
+            break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    return hasPosition && !workflowCancelRequested_;
+}
+
 bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
 {
     String host;
@@ -1216,22 +1287,7 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
     if (autoNearest)
     {
         setWorkflowProgress("wait_gga", 1, 4);
-        const uint32_t started = millis();
-        bool hasPosition = false;
-        while (!workflowCancelRequested_ && millis() - started < timeoutSeconds * 1000UL)
-        {
-            const auto position = getGnssTelemetrySnapshot();
-            if (position.lastGgaMs != 0 && millis() - position.lastGgaMs < 3000UL
-                && std::isfinite(position.latitude) && std::abs(position.latitude) <= 90
-                && std::isfinite(position.longitude) && std::abs(position.longitude) <= 180
-                && (position.latitude != 0 || position.longitude != 0))
-            {
-                hasPosition = true;
-                break;
-            }
-            vTaskDelay(pdMS_TO_TICKS(100));
-        }
-        if (!hasPosition || workflowCancelRequested_)
+        if (!waitForAutoNearestPosition(timeoutSeconds))
         {
             finish(false, workflowCancelRequested_, "no valid GGA position for AutoNearest");
             return false;
@@ -1248,50 +1304,11 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         Serial.printf("[AUTO BASE][CASTER][FAILED] %s\n", failureReason.c_str());
         if (autoNearest && failureReason == "ERROR - NO STATION WITHIN 20 KM" && !workflowCancelRequested_)
         {
-            Serial.println("[AUTO BASE][FALLBACK] No station within 20 km; starting Survey-In.");
-            DynamicJsonDocument survey(CONFIG_DOCUMENT_SIZE);
-            survey.set(previousBase.as<JsonObjectConst>());
-            survey["base_setup_method"] = "SURVEY_IN";
-            survey["accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
-            survey["survey_in_accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
-            if (survey["survey_in_duration"].isNull())
-                survey["survey_in_duration"] = 120;
-            survey.remove("coords");
-            survey.remove("coordinate_source");
-            survey.remove("conversion_report");
-            survey.remove("auto_base_started_boot_id");
-            survey.remove("auto_base_started_request_id");
-            if (payload["startup_auto"] == true && !startedBootId.isEmpty())
+            if (!startSurveyInFallback(payload, previousBase, startedBootId, startedRequestId, failureReason))
             {
-                survey["auto_base_started_boot_id"] = startedBootId;
-                survey["auto_base_started_request_id"] = startedRequestId;
-            }
-            if (survey.overflowed())
-            {
-                finish(false, false, "Survey-In fallback configuration exceeds memory capacity");
+                finish(false, false, failureReason);
                 return false;
             }
-            if (!restoreWorkflowBase(survey.as<JsonObjectConst>()) || !restartConfiguredNtrip())
-            {
-                finish(false, false, "cannot start Survey-In fallback");
-                return false;
-            }
-            const String oldConfig = baseConfig_;
-            baseConfig_.clear();
-            serializeJson(survey, baseConfig_);
-            if (!saveStatePreferences())
-            {
-                baseConfig_ = oldConfig;
-                finish(false, false, "cannot save Survey-In fallback");
-                return false;
-            }
-            setAgentState(normalAgentState());
-            setWorkflowProgress("completed", 4, 4,
-                R"({"mode":"survey_in","auto_applied":true,"receiver_write_completed":true,"reason":"no_fixed_station_within_20_km"})");
-            saveStatePreferences();
-            publishConfigState("base_config_state");
-            Serial.printf("[AUTO BASE][SURVEY-IN] Started; target=%lu seconds; RTCM SOURCE restored.\n",
-                          static_cast<unsigned long>(surveyInTargetSeconds_));
             return true;
         }
         finish(false, workflowCancelRequested_, failureReason);
