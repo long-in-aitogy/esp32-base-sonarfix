@@ -132,24 +132,28 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
                          "Accept: */*\r\n"
                          "Connection: close\r\n\r\n";
     }
-    // The caster can use a fresh position before it accepts the Rover stream.
-    const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-    if (snapshot.lastGga[0] != '\0' && snapshot.lastGgaMs != 0
-        && millis() - snapshot.lastGgaMs <= 3000UL)
+    const auto appendOptionalRequestHeaders = [&request, &selectedMountpoint]()
     {
-        String gga = snapshot.lastGga.data();
-        gga.trim();
-        if (!gga.isEmpty() && gga.indexOf('\r') < 0 && gga.indexOf('\n') < 0)
+        // The caster can use a fresh position before it accepts the Rover stream.
+        const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
+        if (snapshot.lastGga[0] != '\0' && snapshot.lastGgaMs != 0
+            && millis() - snapshot.lastGgaMs <= 3000UL)
+        {
+            String gga = snapshot.lastGga.data();
+            gga.trim();
+            if (!gga.isEmpty() && gga.indexOf('\r') < 0 && gga.indexOf('\n') < 0)
+            {
+                request.remove(request.length() - 2);
+                request += "Ntrip-GGA: " + gga + "\r\n\r\n";
+            }
+        }
+        if (selectedMountpoint)
         {
             request.remove(request.length() - 2);
-            request += "Ntrip-GGA: " + gga + "\r\n\r\n";
+            request += "X-NTRIP-Report-Selected: 1\r\n\r\n";
         }
-    }
-    if (selectedMountpoint)
-    {
-        request.remove(request.length() - 2);
-        request += "X-NTRIP-Report-Selected: 1\r\n\r\n";
-    }
+    };
+    appendOptionalRequestHeaders();
     if (client.print(request) != request.length())
     {
         client.stop();
