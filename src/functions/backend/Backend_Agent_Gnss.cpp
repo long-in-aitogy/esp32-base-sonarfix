@@ -219,6 +219,19 @@ int ubxPortIndex(const String &name) {
         if (name == names[i]) return static_cast<int>(i);
     return -1;
 }
+int appendUbxPortValues(JsonObject port, int portIndex, const uint8_t *records,
+                        const uint8_t *observed, size_t count) {
+    JsonArray values = port.createNestedArray("values");
+    int enabled = -1;
+    for (size_t i = 0; i < count; ++i) {
+        values.add(observed[i]);
+        if (UbxBaseStatus::u32(records + i * 5) == UbxConfigVerification::enabledKey(portIndex)) {
+            port["enabled"] = observed[i];
+            enabled = observed[i];
+        }
+    }
+    return enabled;
+}
 bool matchUbxOutputValues(const uint8_t *expected, size_t expectedLength,
                           const uint8_t *actual, size_t actualLength,
                           const uint8_t *observed, uint8_t *values) {
@@ -234,6 +247,19 @@ bool matchUbxOutputValues(const uint8_t *expected, size_t expectedLength,
         if (!found) allFound = false;
     }
     return allFound;
+}
+void compareUbxOutputGroups(JsonObject groups, const uint8_t *expected, size_t length,
+                            const uint8_t *values, bool outputRead) {
+    for (size_t i = 0; i < length; i += 5) {
+        const uint32_t key = UbxBaseStatus::u32(expected + i);
+        const char *name = key >= 0x209102BD ? "rtcm" : "diagnostics";
+        if (key >> 28 == 1) name = "protocols";
+        JsonObject group = groups[name];
+        const char *count = outputRead ? "checked" : "unread";
+        group[count] = group[count].as<unsigned>() + 1;
+        if (outputRead && values[i / 5] != expected[i + 4])
+            group["mismatched"] = group["mismatched"].as<unsigned>() + 1;
+    }
 }
 
 }
@@ -298,13 +324,10 @@ bool BackendAgent::verifyGnssConfig(JsonObjectConst payload, const String &comma
             port["name"] = name;
             port["state"] = read ? "ok" : "unread";
             if (read) {
-                JsonArray array = port.createNestedArray("values");
-                for (size_t i = 0; i < fields.size(); ++i) {
-                    array.add(observed[i]);
-                    if (UbxBaseStatus::u32(records.data() + i * 5) == UbxConfigVerification::enabledKey(portIndex)) {
-                        port["enabled"] = observed[i];
-                        if (portIndex == 1) { interfaceRead = true; interfaceEnabled = observed[i]; }
-                    }
+                const int enabled = appendUbxPortValues(port, portIndex, records.data(), observed.data(), fields.size());
+                if (portIndex == 1 && enabled >= 0) {
+                    interfaceRead = true;
+                    interfaceEnabled = static_cast<uint8_t>(enabled);
                 }
             } else port["error"] = readError;
             if (portIndex == 1 || portIndex == 2) {
@@ -330,16 +353,7 @@ bool BackendAgent::verifyGnssConfig(JsonObjectConst payload, const String &comma
         JsonObject group = groups.createNestedObject(name);
         group["checked"] = 0; group["mismatched"] = 0; group["unread"] = 0;
     }
-    for (size_t i = 0; i < outputLength; i += 5) {
-        const uint32_t key = UbxBaseStatus::u32(expectedOutput.data() + i);
-        const char *name = key >= 0x209102BD ? "rtcm" : "diagnostics";
-        if (key >> 28 == 1) name = "protocols";
-        JsonObject group = groups[name];
-        const char *count = outputRead ? "checked" : "unread";
-        group[count] = group[count].as<unsigned>() + 1;
-        if (outputRead && values[i / 5] != expectedOutput[i + 4])
-            group["mismatched"] = group["mismatched"].as<unsigned>() + 1;
-    }
+    compareUbxOutputGroups(groups, expectedOutput.data(), outputLength, values.data(), outputRead);
     if (!inspection.isNull()) {
         JsonObject protocols = groups["protocols"];
         const char *count = interfaceRead ? "checked" : "unread";

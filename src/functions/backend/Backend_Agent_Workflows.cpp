@@ -1239,28 +1239,28 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
                 finish(false, false, "Survey-In fallback configuration exceeds memory capacity");
                 return false;
             }
-            if (restoreWorkflowBase(survey.as<JsonObjectConst>()) && restartConfiguredNtrip())
+            if (!restoreWorkflowBase(survey.as<JsonObjectConst>()) || !restartConfiguredNtrip())
             {
-                const String oldConfig = baseConfig_;
-                baseConfig_.clear();
-                serializeJson(survey, baseConfig_);
-                if (saveStatePreferences())
-                {
-                    setAgentState(normalAgentState());
-                    setWorkflowProgress("completed", 4, 4,
-                        R"({"mode":"survey_in","auto_applied":true,"receiver_write_completed":true,"reason":"no_fixed_station_within_20_km"})");
-                    saveStatePreferences();
-                    publishConfigState("base_config_state");
-                    Serial.printf("[AUTO BASE][SURVEY-IN] Started; target=%lu seconds; RTCM SOURCE restored.\n",
-                                  static_cast<unsigned long>(surveyInTargetSeconds_));
-                    return true;
-                }
+                finish(false, false, "cannot start Survey-In fallback");
+                return false;
+            }
+            const String oldConfig = baseConfig_;
+            baseConfig_.clear();
+            serializeJson(survey, baseConfig_);
+            if (!saveStatePreferences())
+            {
                 baseConfig_ = oldConfig;
                 finish(false, false, "cannot save Survey-In fallback");
                 return false;
             }
-            finish(false, false, "cannot start Survey-In fallback");
-            return false;
+            setAgentState(normalAgentState());
+            setWorkflowProgress("completed", 4, 4,
+                R"({"mode":"survey_in","auto_applied":true,"receiver_write_completed":true,"reason":"no_fixed_station_within_20_km"})");
+            saveStatePreferences();
+            publishConfigState("base_config_state");
+            Serial.printf("[AUTO BASE][SURVEY-IN] Started; target=%lu seconds; RTCM SOURCE restored.\n",
+                          static_cast<unsigned long>(surveyInTargetSeconds_));
+            return true;
         }
         finish(false, workflowCancelRequested_, failureReason);
         return false;
