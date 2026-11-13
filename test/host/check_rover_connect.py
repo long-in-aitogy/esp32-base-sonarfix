@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 root = Path(__file__).resolve().parents[2]
 rover = (root / 'src/functions/ntrip/ntrip_rover.cpp').read_text()
 start = rover[rover.index('bool startNtripRover('):rover.index('/** @brief Implements loopNtripRover.')]
@@ -25,15 +26,16 @@ const char *AGENT_VERSION = "test";
 struct GnssTelemetrySnapshot { std::array<char, 128> lastGga{}; uint32_t lastGgaMs = 0; } snapshot;
 GnssTelemetrySnapshot getGnssTelemetrySnapshot() { return snapshot; }
 struct RoverSession {
+    struct Datum { int resets = 0; void reset() { ++resets; } } datum;
     bool active = false, authenticated = false;
-    uint32_t bytesReceived = 0, packetsReceived = 0, lastGgaMs = 0;
+    uint32_t bytesReceived = 0, bytesWritten = 0, packetsReceived = 0, lastGgaMs = 0, lastDiagnosticMs = 0;
     const char *lastError = "old error";
 } session;
 RoverSession &roverSession() { return session; }
 struct Client {
     String reply, request;
     size_t offset = 0;
-    bool up = false, connectOk = true;
+    bool up = false, connectOk = true, shortWrite = false;
     int connects = 0;
     void stop() { up = false; }
     void setTimeout(int) {}
@@ -41,7 +43,7 @@ struct Client {
     bool connected() { return up; }
     int available() { return offset < reply.size(); }
     int read() { return available() ? static_cast<unsigned char>(reply[offset++]) : -1; }
-    size_t print(const String &s) { request = s; return s.size(); }
+    size_t print(const String &s) { request = s; return shortWrite ? s.size() - 1 : s.size(); }
 } client;
 Client &clientFor(int) { return client; }
 bool safeNtripField(const String &s) { return s.find_first_of("\r\n") == String::npos; }
@@ -62,6 +64,9 @@ int main() {
     client = Client{}; client.reply = "HTTP/1.1 401 secret\r\n\r\n";
     assert(!startNtripRover("host", 2101, "user", "secret", "mount", 2));
     assert(String(session.lastError) == "cannot connect to CORS rover mountpoint");
+    client = Client{}; client.reply = "ICY 200 OK\r\n"; client.shortWrite = true;
+    assert(!startNtripRover("host", 2101, "user", "secret", "mount", 1));
+    assert(!client.up && !session.active && !session.authenticated && String(session.lastError) == "incomplete NTRIP request write");
     client = Client{}; client.connectOk = false;
     assert(!startNtripRover("host", 2101, "user", "secret", "mount", 1));
     assert(String(session.lastError) == "cannot connect to CORS rover mountpoint");
@@ -71,6 +76,7 @@ int main() {
     client = Client{}; client.reply = "ICY 200 OK\r\n";
     assert(startNtripRover("host", 2101, "user", "secret", "mount", 1));
     assert(session.active && session.authenticated && String(session.lastError) == "CORS rover connection lost");
+    assert(session.datum.resets > 0);
     String selected = "old";
     client = Client{}; client.reply = "HTTP/1.1 200 OK\r\nX-NTRIP-Selected-Mountpoint:  STATION1  \r\n\r\n";
     client.reply += char(0xD3);
@@ -111,10 +117,11 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='rover-connect-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + harness + declarations + wait + start.replace('String *selectedMountpoint, const String &receiverId)', 'String *selectedMountpoint = nullptr, const String &receiverId = String())') + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    prototype = 'bool startNtripRover(const String &, uint16_t, const String &, const String &, String, uint8_t, String * = nullptr, const String & = String());\n'
+    (path / 'check.cpp').write_text(shim + harness + declarations + prototype + mapped(root / 'src/functions/ntrip/ntrip_common.cpp', wait) + mapped(root / 'src/functions/ntrip/ntrip_rover.cpp', start) + checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: allowlisted caster errors, sanitized fallback, invalid input and successful Rover connection')
 
 workflow = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_text()
@@ -169,8 +176,8 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='rover-connect-wrapper-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + wrapper_harness + '\n'.join(methods) + wrapper_checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
+    (path / 'check.cpp').write_text(shim + wrapper_harness + ''.join(mapped(root / 'src/functions/backend/Backend_Agent_Workflows.cpp', method) for method in methods) + wrapper_checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                     str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: workflow distinguishes busy transport from caster errors and releases mutex')

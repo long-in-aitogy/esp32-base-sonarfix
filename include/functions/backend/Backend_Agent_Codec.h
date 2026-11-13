@@ -3,6 +3,7 @@
 
 namespace BackendAgentInternal
 {
+    String encodeBase64(const uint8_t *data, size_t length);
     String urlEncode(const String &value);
     String tokenFingerprint(const String &token);
     size_t decodeBase64(const String &encoded, uint8_t *output, size_t outputCapacity);

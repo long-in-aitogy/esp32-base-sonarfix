@@ -72,28 +72,23 @@ Client &activeMqttClient()
 /** @brief Implements mqttCallback. */
 void mqttCallback(char *topic, byte *payload, unsigned int length)
 {
+  if (!topic || !payload || length == 0)
+    return;
   backendAgent.onMqttMessage(topic, payload, length);
 
   // Dispatch plain-text ATG commands separately from JSON device commands.
   if (strcmp(topic, TOPIC_SUB_CMD) == 0)
   {
-    Serial.printf("[MQTT DOWNLINK] Nhan lenh legacy (%u bytes).\n", length);
-    String cmd = "";
-    for (int i = 0; i < length; i++)
-      cmd += (char)payload[i];
-
-#if PROGRAM_DEBUG
-    Serial.print("\n[MQTT DOWNLINK] Lenh: ");
-    Serial.println(cmd);
-#endif
-
-    if (cmd.isEmpty())
+    if (backendAgent.isLocked() || length > 1024 || memchr(payload, '\0', length))
     {
-#if PROGRAM_DEBUG
-      Serial.println("[MQTT DOWNLINK] Lenh rong, khong xu ly.");
-#endif
+      Serial.println("[MQTT DOWNLINK] Rejected locked device or invalid legacy command.");
       return;
     }
+    Serial.printf("[MQTT DOWNLINK] Nhan lenh legacy (%u bytes).\n", length);
+    String cmd;
+    cmd.reserve(length);
+    for (unsigned int i = 0; i < length; ++i)
+      cmd += static_cast<char>(payload[i]);
 
     // Phân tích lệnh ATG để cấu hình ESP32, kết nối hoặc receiver GNSS.
     std::vector<String> cmdWords = splitCommand(cmd);
@@ -177,7 +172,7 @@ int connectMQTT()
     prefs.begin("myPrefs", false);
     auto mqttUser = prefs.getString("MQTT_USER", String(MQTT_USER));
     auto mqttPass = prefs.getString("MQTT_PASS", String(MQTT_PASS));
-    auto topicSubCmd = prefs.getString("TPC_SUB_CMD", String(TOPIC_SUB_CMD));
+    const auto topicSubCmd = prefs.getString("TPC_SUB_CMD", String(TOPIC_SUB_CMD));
     prefs.end();
     const auto statusTopic = String("pi/devices/") + backendAgent.serial() + "/status";
     const auto lwtPayload = backendAgent.lwtPayload();

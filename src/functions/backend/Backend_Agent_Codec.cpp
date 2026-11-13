@@ -13,6 +13,24 @@
 
 namespace BackendAgentInternal
 {
+    String encodeBase64(const uint8_t *data, size_t length) {
+    static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    String encoded;
+    encoded.reserve(((length + 2) / 3) * 4);
+    for (size_t i = 0; i < length; i += 3) {
+        const uint32_t a = data[i];
+        const uint32_t b = i + 1 < length ? data[i + 1] : 0;
+        const uint32_t c = i + 2 < length ? data[i + 2] : 0;
+        const uint32_t value = (a << 16) | (b << 8) | c;
+        encoded += alphabet[(value >> 18) & 0x3F];
+        encoded += alphabet[(value >> 12) & 0x3F];
+        encoded += i + 1 < length ? alphabet[(value >> 6) & 0x3F] : '=';
+        encoded += i + 2 < length ? alphabet[value & 0x3F] : '=';
+    }
+    return encoded;
+}
+
+
     String urlEncode(const String &value)
     {
         static constexpr char hexDigits[] = "0123456789ABCDEF";
@@ -94,27 +112,28 @@ namespace BackendAgentInternal
         uint32_t value = 0;
         int bits = -8;
         size_t outputLength = 0;
+        size_t symbols = 0;
+        size_t padding = 0;
         for (const char character : encoded)
         {
             const auto c = character;
+            if (c == '\r' || c == '\n' || c == ' ' || c == '\t')
+                continue;
             if (c == '=')
             {
-                break;
+                if (++padding > 2)
+                    return 0;
+                continue;
             }
             const auto decoded = base64Value(c);
-            if (decoded < 0)
-            {
-                if (c == '\r' || c == '\n' || c == ' ' || c == '\t')
-                {
-                    continue;
-                }
+            if (decoded < 0 || padding)
                 return 0;
-            }
+            ++symbols;
             value = (value << 6) | static_cast<uint32_t>(decoded);
             bits += 6;
             if (bits >= 0)
             {
-                if (outputLength >= outputCapacity)
+                if (!output || outputLength >= outputCapacity)
                 {
                     return 0;
                 }
@@ -122,6 +141,9 @@ namespace BackendAgentInternal
                 bits -= 8;
             }
         }
+        if (symbols % 4 == 1 || (padding && (symbols + padding) % 4 != 0) ||
+            (value & ((1U << (bits + 8)) - 1U)))
+            return 0;
         return outputLength;
     }
 

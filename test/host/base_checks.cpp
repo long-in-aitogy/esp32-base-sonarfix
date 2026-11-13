@@ -11,6 +11,8 @@
 #include "functions/gnss/unicore_commands.h"
 #include "functions/gnss/Ubx_Base_Status.h"
 #include <cassert>
+#include <cstdio>
+#include <cstdlib>
 #include <iostream>
 #include <string>
 
@@ -57,8 +59,30 @@ bool roverSettingEnabled(const CommandList &rover, uint32_t key)
 
 void checkUbloxModes(const CommandList &survey, const CommandList &fixed, const CommandList &rover)
 {
+    GnssOptions options;
+    const auto measured = buildBaseFixedLlaCommand(-84.54808557036529, 105, 650.1759102147155, 5, GnssSensorType::Ublox, options);
+    const auto restored = buildBaseFixedLlaCommand(-84.548085570, 105, 650.1759, 5, GnssSensorType::Ublox, options);
+    assert(measured[0] == restored[0]);
+    for (const auto &position : {std::array<double, 3>{21.084989583712345, 105.78665644691234, -7.93456},
+                                 {-84.54808557036529, -179.999999999, 650.1759102147155},
+                                 {90, 180, 100000}, {-90, -180, -12000}, {0, 0, 0}})
+    {
+        const auto original = buildBaseFixedLlaCommand(position[0], position[1], position[2], 5, GnssSensorType::Ublox, options);
+        UbxBaseStatus readback;
+        assert(readback.tmode(original[0].data() + 6, 40));
+        char lat[32], lon[32], alt[32];
+        std::snprintf(lat, sizeof(lat), "%.9f", readback.latitude);
+        std::snprintf(lon, sizeof(lon), "%.9f", readback.longitude);
+        std::snprintf(alt, sizeof(alt), "%.4f", readback.height);
+        const auto replay = buildBaseFixedLlaCommand(std::strtod(lat, nullptr), std::strtod(lon, nullptr),
+                                                      std::strtod(alt, nullptr), 5, GnssSensorType::Ublox, options);
+        assert(original[0] == replay[0]);
+    }
     const auto all = buildBaseAllRtcmOutputCommand("UART1", true, GnssSensorType::Ublox);
     assert(all.size() == 2);
+    assert(roverSettingEnabled(all, 0x20910369U)); // RTCM 1094 on UART1.
+    assert(roverSettingEnabled(all, 0x20910319U)); // RTCM 1097 on UART1.
+    assert(roverSettingEnabled(all, 0x209102D7U)); // RTCM 1127 on UART1.
     assert(survey[0][8] == 1 && fixed[0][8] == 2 && fixed[0][9] == 1);
     const auto readAccuracy = [](const Command &packet, size_t offset)
     {
@@ -285,6 +309,11 @@ void checkUnicoreReplies()
         assert(rejected.state == UnicoreReply::State::Error);
     }
     um = umReply();
+    assert(feedUm(um, "$command,mo,response: OK\r\n") == 0);
+    assert(um.state == UnicoreReply::State::Pending);
+    assert(feedUm(um, "$command,mode rover,response: O\r\n") == 1);
+    assert(um.state == UnicoreReply::State::Error);
+    um = umReply();
     assert(feedUm(um, "$command,mode rover,response: \r\n") == 0);
     assert(feedUm(um, "$command,mode rover,response: OK*00\r\n") == 0);
     assert(feedUm(um, "$command,mode rover,response: OK*xx\r\n") == 0);
@@ -422,6 +451,38 @@ void checkReceiverCommands()
     assert(diagnosticOutput.find("config undulation 0.0\r\n") < diagnosticOutput.find("mode base time "));
     assert(diagnosticOutput.find("gpgga 1\r\n") != std::string::npos);
     assert(diagnosticOutput.find("rtcm1074 1\r\n") != std::string::npos);
+
+    GnssOptions allPorts;
+    allPorts.ports = {"UART1", "UART2", "USB"};
+    allPorts.outputMode = OutputMode::RtcmOnly;
+    allPorts.msmLevel = MsmLevel::Both;
+    allPorts.gal = true;
+    allPorts.bds = false;
+    const auto multiPortOutput = buildUbloxOutputConfigCommand(allPorts);
+    checkPackets(multiPortOutput);
+    size_t valsets = 0, outputKeys = 0;
+    bool galileoMsm4 = false, galileoMsm7 = false, beidouMsm7Disabled = false;
+    for (size_t offset = 0; offset < multiPortOutput.size();)
+    {
+        const uint8_t *packet = multiPortOutput.data() + offset;
+        const size_t length = packet[4] | (size_t(packet[5]) << 8);
+        if (packet[2] == 6 && packet[3] == 0x8A)
+        {
+            ++valsets;
+            assert((length - 4) / 5 <= 64);
+            outputKeys += (length - 4) / 5;
+            for (size_t i = 10; i < length + 6; i += 5)
+            {
+                const uint32_t key = UbxBaseStatus::u32(packet + i);
+                if (key == 0x20910369) galileoMsm4 = packet[i + 4] == 1;
+                if (key == 0x20910319) galileoMsm7 = packet[i + 4] == 1;
+                if (key == 0x209102D7) beidouMsm7Disabled = packet[i + 4] == 0;
+            }
+        }
+        offset += length + 8;
+    }
+    assert(valsets == 2 && outputKeys == 93);
+    assert(galileoMsm4 && galileoMsm7 && beidouMsm7Disabled);
 
     for (const auto mode : {OutputMode::DiagnosticsRtcm, OutputMode::RtcmOnly})
     {

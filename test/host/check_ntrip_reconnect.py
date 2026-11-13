@@ -2,6 +2,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/ntrip/ntrip_base.cpp').read_text()
 loop = source[source.index('int loopNTRIP('):source.index('/** @brief Implements stopNtrip.')]
@@ -25,10 +26,12 @@ struct Client {
 };
 std::array<NtripEndpoint, 2> endpoints;
 std::array<Client, 2> clients;
-std::array<bool, 2> accept;
+std::array<bool, 2> accept, failWrites;
 std::array<int, 2> attempts;
 int sends = 0, updates = 0;
 bool roverActive = false;
+bool workflowActive = false;
+struct { bool workflowActive() const { return ::workflowActive; } } backendAgent;
 uint32_t now = 5000;
 uint32_t millis() { return now; }
 bool ntripRoverSessionStarted() { return roverActive; }
@@ -41,10 +44,14 @@ bool connectEndpoint(uint8_t i) {
     clients[i].up = endpoints[i].authenticated = accept[i];
     return accept[i];
 }
-bool sendEndpointRtcm(NtripEndpoint &, Client &, const String &data) { ++sends; return !data.empty(); }
+bool sendEndpointRtcm(NtripEndpoint &endpoint, Client &client, const String &data) {
+    ++sends;
+    if (failWrites[&endpoint - endpoints.data()]) { client.stop(); endpoint.authenticated=false; return false; }
+    return !data.empty();
+}
 void updateBps(NtripEndpoint &) { ++updates; }
 void reset() {
-    endpoints = {}; clients = {}; accept = {}; attempts = {};
+    endpoints = {}; clients = {}; accept = {}; failWrites = {}; attempts = {};
     sends = updates = 0; roverActive = false; now = 5000;
 }
 '''
@@ -65,14 +72,20 @@ int main() {
     assert(loopNTRIP(empty) == NTRIP_MODE && attempts[0] == 1 && attempts[1] == 0);
     endpoints[1].stream = false;
     assert(loopNTRIP(empty) == 504 && !clients[1].up && !endpoints[1].authenticated);
+    reset(); clients[0].up = endpoints[0].authenticated = true; endpoints[1].enabled = false; failWrites[0] = true;
+    assert(loopNTRIP(data) == 504 && !clients[0].up && !endpoints[0].authenticated);
+    reset(); clients[0].up = endpoints[0].authenticated = true; clients[1].up = endpoints[1].authenticated = true; failWrites[0] = true;
+    assert(loopNTRIP(data) == NTRIP_MODE + 4 && !clients[0].up && clients[1].up && endpoints[1].authenticated);
     reset(); roverActive = true;
+    assert(loopNTRIP(data) == 504 && attempts[0] == 0 && attempts[1] == 0 && sends == 0);
+    roverActive = false; workflowActive = true;
     assert(loopNTRIP(data) == 504 && attempts[0] == 0 && attempts[1] == 0 && sends == 0);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='ntrip-reconnect-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(harness + loop + checks)
-    subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
+    (path / 'check.cpp').write_text(harness + mapped(root / 'src/functions/ntrip/ntrip_base.cpp', loop) + checks)
+    compile_cpp(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
                     '-fsanitize=address,undefined', str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
-    subprocess.run([str(path / 'check')], check=True)
+    run_cpp([str(path / 'check')], check=True)
 print('PASS: immediate reconnect status, retry backoff, dual servers, stream gates and Rover exclusion')

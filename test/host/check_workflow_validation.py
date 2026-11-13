@@ -14,7 +14,7 @@ harness = r'''
 #include <ArduinoJson.h>
 #include <cmath>
 #include <cassert>
-constexpr size_t CONFIG_DOCUMENT_SIZE = 4096;
+constexpr size_t CONFIG_DOCUMENT_SIZE = 6144;
 double coordinateNumber(JsonVariantConst value) { return value.isNull() ? NAN : value.as<double>(); }
 struct BackendAgent {
     String baseStartupState_;
@@ -32,7 +32,8 @@ struct BackendAgent {
     String normalAgentState() { return "ready"; }
     void setAgentState(const String &) {}
     void setWorkflowProgress(const String &s, int, int, const String &) { stage = s; }
-    void saveStatePreferences() { ++saved; }
+    bool saveStatePreferences() { ++saved; return true; }
+    void publishConfigState(const char *) {}
     bool runAutoBaseWorkflow(JsonObject);
     bool runReferenceCheckWorkflow(JsonObject);
 };

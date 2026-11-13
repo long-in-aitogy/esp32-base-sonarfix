@@ -5,6 +5,7 @@
 #include "Prog_Config.h"
 #include "functions/gnss/gnss_cmd_builder.h"
 #include "functions/backend/Backend_Agent.h"
+#include "hardware/Wifi_Credentials.h"
 #include <cstring>
 
 extern SemaphoreHandle_t rtcmBufferMutex;
@@ -326,6 +327,11 @@ cmd_action_t handleEspValueSet(const std::vector<String> &cmdWords) {
     }};
     const auto setting = cmdWords[1] + " " + cmdWords[2];
     if (const char *key = cmd_helper::findPreferenceKey(setting, settings.data(), settings.size()); key != nullptr) {
+        if ((setting == "WIFI SSID" && !validWifiSsid(cmdWords[3]))
+            || (setting == "WIFI PASS" && !validWifiPassword(cmdWords[3]))) {
+            Serial.println("[WIFI][ERROR] Invalid Wi-Fi credential.");
+            return cmd_action_t::CMD_ACTION_NONE;
+        }
         if (setting != "BACKEND HOST") {
             Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau cau hinh " + setting);
         }

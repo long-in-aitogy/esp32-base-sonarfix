@@ -31,8 +31,12 @@ for sensor in ("Ublox", "Unicorecomm"):
             assert any(b"gga 1" in packet for packet in routed)
             assert any(b"rtcm1074 1" in packet for packet in routed)
         else:
-            # Coordinate/survey TMODE3 and SAVE stay byte-for-byte intact.
-            assert routed[0] == commands[0] and routed[-1] == commands[-1]
+            # The receiver always uses the 5 m Base accuracy policy.
+            if method == "SURVEY_IN":
+                expected_mode = builder.build_base_survey_in_command(sensor, 300, 5.0)[0]
+            else:
+                expected_mode = builder.build_base_fixed_lla_command(sensor, 10.75, 106.5, 12.5, 5.0)[0]
+            assert routed[0] == expected_mode and routed[-1] == commands[-1]
             expected = builder.build_ublox_output_config_command({"ports": ["UART1"]})
             assert routed[1] == expected
         print(f"PASS: CORS {sensor} {method}")
@@ -43,7 +47,8 @@ for msm in (4, 7, "both"):
         builder.build_base_survey_in_command("Unicorecomm", 120, 5, options),
         builder.build_lte_unicore_config("SURVEY_IN", duration=120, gnss_options=options),
     ):
-        assert commands.index(b"config undulation 0.0\r\n") < commands.index(b"mode base time 120\r\n")
+        mode_index = next(i for i, packet in enumerate(commands) if packet.startswith(b"mode base time 120"))
+        assert commands.index(b"config undulation 0.0\r\n") < mode_index
         assert b"unlogall\r\n" in commands
         assert not any(packet.lower().startswith((b"gpgga", b"gpgsa", b"gpgsv", b"gpgst")) for packet in commands)
         assert any(packet.lower().startswith(b"rtcm1074") for packet in commands) == (msm in (4, "both"))

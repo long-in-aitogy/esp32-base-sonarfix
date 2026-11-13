@@ -9,7 +9,7 @@ harness=r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <cassert>
-constexpr size_t CONFIG_DOCUMENT_SIZE=4096;
+constexpr size_t AUTO_BASE_RESULT_SIZE=6144, PROGRESS_DOCUMENT_SIZE=8192;
 struct Epoch { long toInt() { return 123; } };
 Epoch epochString() { return {}; }
 struct BackendAgent {

@@ -8,6 +8,7 @@
 #include "functions/ntrip/RTCM_Receiver.h"
 #include "functions/backend/Device_Token.h"
 #include "functions/gnss/Unicore_Identification.h"
+#include "functions/gnss/Ubx_Reply.h"
 #include "hardware/Connection_type.h"
 #include "hardware/Sim_handler.h"
 #include "hardware/Wifi_handler.h"
@@ -103,16 +104,15 @@ namespace BackendAgentInternal
         return value.as<String>();
     }
 
-    void copyJsonObject(JsonDocument &target, const char *key, const String &serialized)
+    bool copyJsonObject(JsonDocument &target, const char *key, const String &serialized)
     {
-        DynamicJsonDocument source(CONFIG_DOCUMENT_SIZE);
+        DynamicJsonDocument source(std::strcmp(key, "auto_base_progress") == 0 ? PROGRESS_DOCUMENT_SIZE : CONFIG_DOCUMENT_SIZE);
         if (deserializeJson(source, serialized) != DeserializationError::Ok || !source.is<JsonObject>())
         {
-            target.createNestedObject(key);
-            return;
+            return false;
         }
         JsonObject destination = target.createNestedObject(key);
-        destination.set(source.as<JsonObjectConst>());
+        return destination.set(source.as<JsonObjectConst>()) && !target.overflowed();
     }
 
 } // namespace BackendAgentInternal
@@ -135,18 +135,24 @@ void BackendAgent::begin()
     loadPreferences();
     ensureDefaultServiceConfig();
 
+    if (!autoBaseLocationQueue_)
+        autoBaseLocationQueue_ = xQueueCreate(1, sizeof(AutoBaseLocationReply));
     if (!nmeaQueue_)
     {
         nmeaQueue_ = xQueueCreate(NMEA_QUEUE_LENGTH, sizeof(NmeaPacket));
     }
+#if BACKEND_PUBLISH_RAW_RTCM
     if (!rtcmQueue_)
     {
         rtcmQueue_ = xQueueCreate(RTCM_QUEUE_LENGTH, sizeof(DataPacket));
     }
+#endif
+#if BACKEND_WEBSOCKET_ENABLED
     if (!websocket_)
     {
         websocket_ = std::make_unique<BackendAgentWebsocket>(this);
     }
+#endif
     // Initialize the WebSocket endpoint with the restored device identity and token.
     setupWebsocket();
     lastStatusMs_ = 0;
@@ -202,25 +208,16 @@ bool BackendAgent::probeUblox(Stream &stream)
     stream.write(ubxMonVer.data(), ubxMonVer.size());
 
     const uint32_t startMs = millis();
-    uint8_t ubxMatch = 0;
-    while (millis() - startMs < 400)
+    UbxReplyBuffer<512> reply;
+    while (millis() - startMs < 1000)
     {
         while (stream.available())
         {
-            const auto b = static_cast<uint8_t>(stream.read());
-            if (ubxMatch == 0 && b == 0xB5)
-                ubxMatch = 1;
-            else if (ubxMatch == 1 && b == 0x62)
-                ubxMatch = 2;
-            else if (ubxMatch == 2 && b == 0x0A)
-                ubxMatch = 3;
-            else if (ubxMatch == 3 && b == 0x04)
+            if (reply.feed(static_cast<uint8_t>(stream.read())) && reply.length >= 48
+                && reply.frame[2] == 0x0A && reply.frame[3] == 0x04)
                 return true;
-            else
-                ubxMatch = (b == 0xB5) ? 1 : 0;
         }
-        // Stop early after 150 ms if no partial UBX header or unread data remains.
-        if (millis() - startMs > 150 && ubxMatch == 0 && !stream.available())
+        if (millis() - startMs > 150 && reply.used == 0 && !stream.available())
             return false;
         delay(10);
     }
@@ -301,8 +298,6 @@ String BackendAgent::normalAgentState() const
 }
 
 String BackendAgent::serviceConfigJson() const { return serviceConfig_; }
-String BackendAgent::baseConfigJson() const { return baseConfig_; }
-String BackendAgent::licenseToken() const { return licenseToken_; }
 
 String BackendAgent::statusTopic() const
 {
@@ -331,8 +326,7 @@ bool BackendAgent::effectiveStreamActive(const JsonObjectConst &service,
     if (serverId < 1 || serverId > 2)
         return false;
     const auto prefix = String("server") + String(serverId);
-    const auto enabled = jsonBool(service, prefix + "_enabled", false);
-    if (!enabled)
+    if (const auto enabled = jsonBool(service, prefix + "_enabled", false); !enabled)
         return false;
     const auto globalOnDemand = jsonBool(service, "stream_on_demand", false);
     const auto onDemand = jsonBool(service, prefix + "_stream_on_demand", globalOnDemand);
@@ -367,6 +361,11 @@ void BackendAgent::publishStatus(bool force)
     lastStatusMs_ = millis();
     ++statusSequence_;
     const auto payload = buildStatusPayload();
+    if (payload.isEmpty())
+    {
+        Serial.println("[BACKEND][ERROR] Cannot build complete status payload");
+        return;
+    }
     if (mqttConnected())
     {
         const auto sent = mqtt.publish(statusTopic().c_str(), payload.c_str(), true);
@@ -380,16 +379,12 @@ void BackendAgent::publishStatus(bool force)
     }
     if (websocketConnected())
     {
-        DynamicJsonDocument message(STATUS_DOCUMENT_SIZE + 512);
+        DynamicJsonDocument message(256);
         message["type"] = "status_update";
-        DynamicJsonDocument status(STATUS_DOCUMENT_SIZE);
-        if (deserializeJson(status, payload) == DeserializationError::Ok)
-        {
-            message["payload"].set(status.as<JsonObjectConst>());
-            String websocketPayload;
-            serializeJson(message, websocketPayload);
-            websocket_->sendText(websocketPayload);
-        }
+        message["payload"] = serialized(payload.c_str());
+        String websocketPayload;
+        serializeJson(message, websocketPayload);
+        websocket_->sendText(websocketPayload);
     }
 }
 
@@ -544,7 +539,7 @@ void BackendAgent::evaluateControlPlaneFailover()
         recoveryStartedMs_ = 0;
         return;
     }
-    if (statusSequence_ <= 0)
+    if (statusSequence_ <= 0 || workflowActive())
         return;
 
     const uint32_t now = millis();
@@ -602,6 +597,7 @@ void BackendAgent::loop()
     if (!baseStartupAttempted_ && sensorType_ != "UNKNOWN" && !sensorType_.isEmpty())
         initializeBaseAtBoot(GnssCmdBuilder::sensorTypeFromString(sensorType_));
 
+    startBootAutoBaseWhenReady();
     pollGnssStatus();
     publishStatus(false);
 }
@@ -637,16 +633,27 @@ void BackendAgent::handleControlAck(const String &source, const String &message,
 {
     if (retained)
         return;
-    DynamicJsonDocument doc(1024);
+    DynamicJsonDocument doc(4096);
     if (deserializeJson(doc, message) != DeserializationError::Ok)
         return;
     if (doc["type"] != "control_plane_ack")
         return;
     if (doc["status_boot_id"].as<String>() != statusBootId_)
         return;
+    if (doc["serial"].as<String>() != serialNumber_)
+        return;
     const int32_t sequence = doc["status_sequence"] | -1;
     if (sequence < 0)
         return;
+    const JsonObjectConst location = doc["auto_base_location"].as<JsonObjectConst>();
+    if (autoBaseLocationQueue_
+        && workflowActive() && !location.isNull()
+        && measureJson(location) < AutoBaseLocationReply::capacity)
+    {
+        AutoBaseLocationReply reply{};
+        serializeJson(location, reply.json.data(), reply.json.size());
+        xQueueOverwrite(autoBaseLocationQueue_, &reply);
+    }
     if (source == "mqtt")
     {
         if (sequence > lastMqttAckSequence_)
@@ -688,7 +695,7 @@ void BackendAgent::onMqttMessage(const char *topic, const uint8_t *payload, size
 
 void BackendAgent::handleWebsocketText(const String &message)
 {
-    DynamicJsonDocument envelope(1024);
+    DynamicJsonDocument envelope(4096);
     if (deserializeJson(envelope, message) != DeserializationError::Ok)
         return;
     if (envelope["type"] == "control_plane_ack")
@@ -699,11 +706,6 @@ void BackendAgent::handleWebsocketText(const String &message)
     handleCommand("websocket", message);
 }
 
-void BackendAgent::publishTextFallback(const String &message)
-{
-    if (websocketConnected())
-        websocket_->sendText(message);
-}
 
 bool backendDeviceLocked(uint8_t serverId) { return serverId == 0 ? backendAgent.isLocked() : backendAgent.isServerLocked(serverId); }
 bool backendControlPlaneFailOpen() { return backendAgent.controlPlaneFailOpen(); }

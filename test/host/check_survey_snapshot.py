@@ -23,7 +23,7 @@ for method, name, end in (
     }}''')
 with tempfile.TemporaryDirectory(prefix='survey-snapshot-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text('#include <Arduino.h>\n#include <ArduinoJson.h>\n#include <cassert>\nconstexpr size_t CONFIG_DOCUMENT_SIZE=4096;\nint main() {\n' + '\n'.join(blocks) + '\n}')
+    (path / 'check.cpp').write_text('#include <Arduino.h>\n#include <ArduinoJson.h>\n#include <cassert>\nconstexpr size_t CONFIG_DOCUMENT_SIZE=6144;\nint main() {\n' + '\n'.join(blocks) + '\n}')
     subprocess.run(['c++', '-std=c++17', '-fsanitize=address,undefined',
                     '-I' + str(root / 'test/host'),
                     '-I' + str(root / '.pio/libdeps/tdm240x_dev_general/ArduinoJson/src'),

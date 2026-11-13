@@ -16,6 +16,18 @@ namespace BackendAgentInternal
     Preferences backendPrefs;
     bool useDedicatedBackendPrefs = false;
 
+    String restoreWorkflowProgress(const String &saved)
+    {
+        DynamicJsonDocument progress(PROGRESS_DOCUMENT_SIZE);
+        if (deserializeJson(progress, saved) != DeserializationError::Ok)
+            return "{}";
+        if (const String phase = progress["phase"] | String(); phase == "ready_for_review" || phase == "completed" || phase == "failed" ||
+            phase == "stopped" || phase == "reference_check_completed" ||
+            phase == "reference_check_failed" || phase == "reprojected")
+            return saved;
+        return "{}";
+    }
+
     bool enforceBaseAccuracy(JsonObject base)
     {
         const bool survey = base["base_setup_method"] == "SURVEY_IN";
@@ -31,13 +43,17 @@ namespace BackendAgentInternal
             base["accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
             changed = true;
         }
-        JsonObject coords = base["coords"].as<JsonObject>();
-        if (!coords.isNull() && (fixed || !coords["accuracy"].isUnbound()) && coords["accuracy"] != GnssCmdBuilder::BASE_ACCURACY_METERS)
+        if (JsonObject coords = base["coords"].as<JsonObject>(); !coords.isNull() && (fixed || !coords["accuracy"].isUnbound()) && coords["accuracy"] != GnssCmdBuilder::BASE_ACCURACY_METERS)
         {
             coords["accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
             changed = true;
         }
         return changed;
+    }
+
+    const char *backendPreferencesPartition()
+    {
+        return useDedicatedBackendPrefs ? BACKEND_PREFS_PARTITION : "nvs";
     }
 
     Preferences &backendPreferences()
@@ -100,6 +116,7 @@ namespace BackendAgentInternal
         migrated &= copyString("LICENSE_KEY");
         migrated &= copyString("CMD_RESULT");
         migrated &= copyString("PROGRESS_JSON");
+        migrated &= copyString("SURVEY_RESULT");
         if (migrated)
             migrated = backendPrefs.putBool("MIGRATED", true) == 1;
         prefs.end();
@@ -173,7 +190,7 @@ void BackendAgent::loadPreferences()
     serviceConfig_ = statePrefs.getString("SERVICE_JSON", "{}");
     licenseToken_ = statePrefs.getString("LICENSE_KEY", "");
     lastCommandResult_ = statePrefs.getString("CMD_RESULT", "{}");
-    autoBaseProgress_ = statePrefs.getString("PROGRESS_JSON", "{}");
+    autoBaseProgress_ = restoreWorkflowProgress(statePrefs.getString("PROGRESS_JSON", "{}"));
     surveyInResult_ = statePrefs.isKey("SURVEY_RESULT") ? statePrefs.getString("SURVEY_RESULT") : "{}";
     statePrefs.end();
     if (baseAccuracyChanged)
@@ -212,7 +229,13 @@ void BackendAgent::loadPreferences()
 void BackendAgent::ensureDefaultServiceConfig()
 {
     DynamicJsonDocument parsed(CONFIG_DOCUMENT_SIZE);
-    if (deserializeJson(parsed, serviceConfig_) == DeserializationError::Ok && parsed.is<JsonObject>() && parsed.as<JsonObjectConst>().size() > 0)
+    const auto parseError = deserializeJson(parsed, serviceConfig_);
+    if (parseError == DeserializationError::NoMemory)
+    {
+        Serial.println("[BACKEND][NVS] SERVICE_JSON exceeds memory capacity; keeping saved configuration.");
+        return;
+    }
+    if (parseError == DeserializationError::Ok && parsed.is<JsonObject>() && parsed.as<JsonObjectConst>().size() > 0)
     {
         return;
     }

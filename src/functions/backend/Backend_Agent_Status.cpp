@@ -1,5 +1,6 @@
 #include "functions/backend/Backend_Agent.h"
 #include "functions/backend/Backend_Agent_Internal.h"
+#include "functions/backend/Storage_Status.h"
 #include "Prog_Config.h"
 #include "functions/ntrip/ntrip_base.h"
 #include "functions/ntrip/ntrip_rover.h"
@@ -108,10 +109,34 @@ void BackendAgent::appendSystemInfo(JsonDocument &doc, uint32_t nowMs,
                                     const String &timestamp) const
 {
     JsonObject system = doc.createNestedObject("system_info");
+    system["auto_base_review_supported"] = true;
+    system["auto_base_nearest_supported"] = true;
+    system["auto_base_firmware_profile"] = true;
+    system["gnss_verification_supported"] = sensorType_ == "Unicorecomm" || sensorType_ == "Ublox";
+    system["gnss_verification_details_supported"] = sensorType_ == "Unicorecomm" || sensorType_ == "Ublox";
+    system["gnss_verification_uart1"] = sensorType_ == "Unicorecomm" || sensorType_ == "Ublox";
+    system["gnss_rf_supported"] = false;
+    system["gnss_verification"] = nullptr;
+    if (!gnssVerification_.isEmpty() && nowMs - gnssVerificationMs_ < 60000UL)
+    {
+        DynamicJsonDocument verification(VERIFICATION_DOCUMENT_SIZE);
+        if (deserializeJson(verification, gnssVerification_) == DeserializationError::Ok)
+        {
+            system["gnss_verification"].set(verification.as<JsonObjectConst>());
+            system["gnss_verification"]["age_seconds"] = (nowMs - gnssVerificationMs_) / 1000UL;
+        }
+    }
     appendStartupInfo(system);
     JsonObject survey = appendSurveyInfo(system, nowMs);
     appendReceiverReadback(system, survey);
     appendResourceInfo(system, timestamp);
+    appendStorageStatus(system);
+    if (!nvsInventory_.isEmpty())
+    {
+        DynamicJsonDocument inventory(3072);
+        if (deserializeJson(inventory, nvsInventory_) == DeserializationError::Ok)
+            system["nvs"]["inventory"].set(inventory.as<JsonObjectConst>());
+    }
     JsonObject deviceLock = system.createNestedObject("device_lock");
     deviceLock["scoped"] = true;
     deviceLock["all"] = stationLock_.all;
@@ -258,6 +283,30 @@ void BackendAgent::appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapsh
     doc["rtk_fix_status"] = gnss.fixStatus.data();
     if (gnss.satellites > 0)
         doc["satellite_count"] = gnss.satellites;
+    doc["hacc"] = nullptr;
+    doc["gnss_quality"] = nullptr;
+    doc["gnss_dop"] = nullptr;
+    doc["gnss_satellites"] = nullptr;
+    doc["gnss_receiver"] = nullptr;
+    doc["gnss_rf"] = nullptr;
+    doc["gnss_spectrum"] = nullptr;
+    doc["gnss_rf_monitor"] = nullptr;
+    if (sensorType_ == "Ublox" && receiverInfoMs_ && (!versionReadback_.isEmpty() || nowMs - receiverInfoMs_ <= 45000UL))
+    {
+        JsonObject receiver = doc.createNestedObject("gnss_receiver");
+        receiver["source"] = "ubx_mon_ver";
+        receiver["age_seconds"] = (nowMs - receiverInfoMs_) / 1000.0;
+        if (!versionReadback_.isEmpty()) receiver["payload_b64"] = versionReadback_;
+        if (!versionReadbackError_.isEmpty()) receiver["error"] = versionReadbackError_;
+    }
+    if (sensorType_ == "Ublox" && !satelliteReadback_.isEmpty()
+        && nowMs - satelliteReadbackMs_ <= 45000UL)
+    {
+        JsonObject satellites = doc.createNestedObject("gnss_satellites");
+        satellites["source"] = "ubx_nav_sat";
+        satellites["age_seconds"] = (nowMs - satelliteReadbackMs_) / 1000.0;
+        satellites["payload_b64"] = satelliteReadback_;
+    }
     if (sensorType_ == "Ublox" && dopMs_ > 0 && nowMs - dopMs_ <= 45000UL)
     {
         JsonObject dop = doc.createNestedObject("gnss_dop");
@@ -384,6 +433,11 @@ void BackendAgent::appendTransportStatus(JsonDocument &doc,
     transport["websocket_host"] = readPreference("BACKEND_HOST", BACKEND_HOST);
     transport["control_plane_fail_open"] = controlPlaneFailOpen_;
     copyJsonObject(doc, "last_command_result", lastCommandResult_);
+    JsonObject lastStorageAction = doc["system_info"]["nvs"].createNestedObject("last_action");
+    const JsonObjectConst lastCommand = doc["last_command_result"];
+    lastStorageAction["command_id"] = lastCommand["command_id"];
+    lastStorageAction["status"] = lastCommand["status"];
+    lastStorageAction["detail"] = lastCommand["detail"];
     JsonObject control = doc.createNestedObject("control_plane_failover");
     control["active"] = controlPlaneFailOpen_;
     control["stale_after_seconds"] = BACKEND_CONTROL_STALE_MS / 1000UL;
@@ -399,7 +453,25 @@ void BackendAgent::appendTransportStatus(JsonDocument &doc,
 
 String BackendAgent::buildStatusPayload()
 {
-    DynamicJsonDocument doc(STATUS_DOCUMENT_SIZE);
+    if (!nvsInventory_.isEmpty() && millis() - nvsInventoryMs_ >= 60000UL)
+        nvsInventory_.clear();
+    if (!gnssVerification_.isEmpty() && millis() - gnssVerificationMs_ >= 60000UL)
+        gnssVerification_.clear();
+    if (!satelliteReadback_.isEmpty() && millis() - satelliteReadbackMs_ > 45000UL)
+        satelliteReadback_.clear();
+    if (versionReadback_.isEmpty() && receiverInfoMs_ && millis() - receiverInfoMs_ > 45000UL)
+    {
+        versionReadback_.clear();
+        versionReadbackError_.clear();
+        receiverInfoMs_ = 0;
+    }
+    DynamicJsonDocument doc(STATUS_DOCUMENT_SIZE + 1024
+                            + (baseConfig_.length() > 2 ? CONFIG_DOCUMENT_SIZE : 0)
+                            + (serviceConfig_.length() > 2 ? CONFIG_DOCUMENT_SIZE : 0)
+                            + (autoBaseProgress_.length() > 2 ? PROGRESS_DOCUMENT_SIZE : 0)
+                            + (nvsInventory_.isEmpty() ? 0 : 3072) + (gnssVerification_.isEmpty() ? 0 : VERIFICATION_DOCUMENT_SIZE)
+                            + (satelliteReadback_.isEmpty() ? 0 : satelliteReadback_.length() + 256)
+                            + (receiverInfoMs_ ? versionReadback_.length() + versionReadbackError_.length() + 256 : 0));
     DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
     deserializeJson(serviceDoc, serviceConfig_);
     const JsonObjectConst service = serviceDoc.as<JsonObjectConst>();
@@ -417,7 +489,10 @@ String BackendAgent::buildStatusPayload()
     appendGnssStatus(doc, gnss, nowMs);
     appendNtripStatus(doc, service, server1Active, server2Active);
     appendTransportStatus(doc, gnss, nowMs, signal);
+    if (doc.overflowed())
+        return String();
     String payload;
-    serializeJson(doc, payload);
+    if (serializeJson(doc, payload) != measureJson(doc))
+        return String();
     return payload;
 }

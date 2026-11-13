@@ -1,5 +1,6 @@
 #include "functions/backend/Backend_Agent_Websocket.h"
 #include "functions/backend/Backend_Agent.h"
+#include "functions/backend/Backend_Agent_Codec.h"
 #include "functions/backend/Websocket_Protocol.h"
 
 #include <mbedtls/sha1.h>
@@ -21,7 +22,6 @@ namespace
 
     String websocketNonce()
     {
-        static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
         std::array<uint8_t, 16> nonce = {};
         for (size_t i = 0; i < nonce.size(); i += sizeof(uint32_t))
         {
@@ -32,20 +32,7 @@ namespace
 #endif
             memcpy(nonce.data() + i, &randomValue, sizeof(randomValue));
         }
-        String encoded;
-        encoded.reserve(24);
-        for (size_t i = 0; i < nonce.size(); i += 3)
-        {
-            const uint32_t a = nonce[i];
-            const uint32_t b = i + 1 < nonce.size() ? nonce[i + 1] : 0;
-            const uint32_t c = i + 2 < nonce.size() ? nonce[i + 2] : 0;
-            const uint32_t value = (a << 16) | (b << 8) | c;
-            encoded += alphabet[(value >> 18) & 0x3F];
-            encoded += alphabet[(value >> 12) & 0x3F];
-            encoded += i + 1 < nonce.size() ? alphabet[(value >> 6) & 0x3F] : '=';
-            encoded += i + 2 < nonce.size() ? alphabet[value & 0x3F] : '=';
-        }
-        return encoded;
+        return BackendAgentInternal::encodeBase64(nonce.data(), nonce.size());
     }
 } // namespace
 
@@ -231,8 +218,8 @@ void BackendAgentWebsocket::connectNow()
     const bool valid = mbedtls_sha1_ret(reinterpret_cast<const unsigned char *>(challenge.c_str()),
                                         challenge.length(), digest.data()) == 0
         && mbedtls_base64_encode(encoded.data(), encoded.size(), &encodedLength, digest.data(), digest.size()) == 0
-        && WebsocketProtocol::validUpgrade(std::string(response.c_str(), response.length()),
-                                           std::string(reinterpret_cast<const char *>(encoded.data()), encodedLength));
+        && WebsocketProtocol::validUpgrade(std::string_view(response.c_str(), response.length()),
+                                           std::string_view(reinterpret_cast<const char *>(encoded.data()), encodedLength));
     if (!valid)
     {
         client_->stop();
@@ -255,7 +242,7 @@ bool BackendAgentWebsocket::readFrame(uint8_t &opcode, String &payload)
     const std::byte second{rx_[1]};
     const bool masked = (second & std::byte{0x80}) != std::byte{};
     uint64_t payloadLength = std::to_integer<uint8_t>(second & std::byte{0x7F});
-    const uint8_t lengthCode = static_cast<uint8_t>(payloadLength);
+    const auto lengthCode = static_cast<uint8_t>(payloadLength);
     size_t headerLength = 2;
 
     if (payloadLength == 126)
@@ -326,7 +313,7 @@ void BackendAgentWebsocket::parseFrames()
 
 void BackendAgentWebsocket::sendControl(uint8_t opcode, const uint8_t *payload, size_t length)
 {
-    if (!connected_ || !client_ || length > 125)
+    if (!connected_ || !client_ || length > 125 || (length && !payload))
         return;
 #if !defined(NATIVE_BUILD)
     const uint32_t mask = esp_random();
@@ -343,14 +330,22 @@ void BackendAgentWebsocket::sendControl(uint8_t opcode, const uint8_t *payload, 
         static_cast<uint8_t>(0x80 | opcode),
         static_cast<uint8_t>(0x80 | length),
     };
-    client_->write(header.data(), header.size());
-    client_->write(maskBytes.data(), maskBytes.size());
+    if (client_->write(header.data(), header.size()) != header.size() ||
+        client_->write(maskBytes.data(), maskBytes.size()) != maskBytes.size())
+    {
+        disconnect(false);
+        return;
+    }
     if (payload && length > 0)
     {
         for (size_t i = 0; i < length; ++i)
         {
             const uint8_t byte = maskByte(payload[i], maskBytes[i % maskBytes.size()]);
-            client_->write(&byte, 1);
+            if (client_->write(&byte, 1) != 1)
+            {
+                disconnect(false);
+                return;
+            }
         }
     }
 }

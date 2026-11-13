@@ -8,9 +8,12 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <limits>
+#include <strings.h>
 #include <vector>
 
 #include "functions/gnss/Ubx_Reply.h"
+#include "functions/gnss/ublox_commands.h"
 #include "functions/gnss/Unicore_Reply.h"
 #include <cstdio>
 #include <cstdlib>
@@ -35,12 +38,29 @@ namespace
         }
         return value.is<double>() ? value.as<double>() : NAN;
     }
+    bool acceptAutoBaseLocationReply(JsonObjectConst response, const String &requestId,
+                                     double latitude, double longitude, double altitude,
+                                     JsonDocument &location)
+    {
+        if (response["request_id"].as<String>() != requestId)
+            return false;
+        JsonObjectConst result = response["location"].as<JsonObjectConst>();
+        JsonObjectConst echoed = result["input_coord"].as<JsonObjectConst>();
+        const double lat = coordinateNumber(echoed["lat"]);
+        const double lon = coordinateNumber(echoed["lon"]);
+        if (const double alt = coordinateNumber(echoed["alt"]); !std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(alt)
+            || std::abs(lat - latitude) > 1e-9 || std::abs(lon - longitude) > 1e-9
+            || std::abs(alt - altitude) > 0.00011)
+            return false;
+        location.set(result);
+        return !location.overflowed();
+    }
 } // namespace
 
 void BackendAgent::setWorkflowProgress(const String &phase, const uint8_t step,
                                        const uint8_t total, const String &details)
 {
-    DynamicJsonDocument progress(CONFIG_DOCUMENT_SIZE);
+    DynamicJsonDocument progress(PROGRESS_DOCUMENT_SIZE);
     progress["phase"] = phase;
     progress["step"] = step;
     progress["total_steps"] = total;
@@ -48,7 +68,7 @@ void BackendAgent::setWorkflowProgress(const String &phase, const uint8_t step,
 
     if (!details.isEmpty())
     {
-        DynamicJsonDocument extra(4096);
+        DynamicJsonDocument extra(AUTO_BASE_RESULT_SIZE);
         if (deserializeJson(extra, details) == DeserializationError::Ok && extra.is<JsonObject>())
         {
             for (JsonPairConst pair : extra.as<JsonObjectConst>())
@@ -108,16 +128,17 @@ void BackendAgent::workflowTaskThunk(void *parameter)
     vTaskDelete(nullptr);
 }
 
-bool BackendAgent::restartConfiguredNtrip()
+bool BackendAgent::restartConfiguredNtrip(bool transportLocked)
 {
-    if (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS * 4)) != pdTRUE)
+    if (!transportLocked && (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS * 4)) != pdTRUE))
     {
         return false;
     }
     stopNtripRover();
     setupNTRIP();
     connectNTRIP();
-    xSemaphoreGive(tcpStreamMutex);
+    if (!transportLocked)
+        xSemaphoreGive(tcpStreamMutex);
     return true;
 }
 
@@ -172,7 +193,7 @@ void BackendAgent::handleUnicoreAck(const UnicoreReply &reply, const uint8_t *da
             command += static_cast<char>(data[i]);
         command.trim();
         command.toLowerCase();
-        auto target = 0;
+        unsigned long target = 0;
         surveyInMonitoring_ = std::sscanf(command.c_str(), "mode base time %lu", &target) == 1 && target > 0;
         surveyInStartedMs_ = surveyInMonitoring_ ? millis() : 0;
         surveyInTargetSeconds_ = surveyInMonitoring_ ? target : 0;
@@ -303,8 +324,8 @@ bool BackendAgent::waitForRoverGga(const uint32_t startedMs)
         }
         vTaskDelay(pdMS_TO_TICKS(100));
     }
-    Serial.println("[AUTO BASE][ERROR] Chip o Rover nhung khong co GGA moi trong 10s");
-    return false;
+    Serial.println("[AUTO BASE] Rover mode confirmed; waiting for GNSS GGA position");
+    return !workflowCancelRequested_;
 }
 
 bool BackendAgent::configureUbloxRover()
@@ -346,38 +367,6 @@ bool BackendAgent::applyRoverMode()
     return configureUbloxRover();
 }
 
-bool BackendAgent::applyBaseCoordinates(const double latitude, const double longitude,
-                                        const double altitude, JsonObjectConst base)
-{
-    if (!std::isfinite(latitude) || !std::isfinite(longitude) || !std::isfinite(altitude) || latitude < -90.0 || latitude > 90.0 || longitude < -180.0 || longitude > 180.0)
-    {
-        return false;
-    }
-    if (sensorType_ != "Ublox" && sensorType_ != "Unicorecomm")
-        return false;
-    GnssCmdBuilder::GnssOptions options;
-    options.ports = {"UART1"};
-    options.outputMode = GnssCmdBuilder::OutputMode::RtcmOnly;
-    const JsonObjectConst output = base["gnss_options"];
-    const String level = output["msm_level"].isNull() ? "4" : output["msm_level"].as<String>();
-    if (level == "7")
-        options.msmLevel = GnssCmdBuilder::MsmLevel::Msm7;
-    else if (level == "both")
-        options.msmLevel = GnssCmdBuilder::MsmLevel::Both;
-    const JsonObjectConst systems = output["constellations"];
-    options.gps = systems["gps"] | true;
-    options.glo = systems["glo"] | true;
-    options.gal = systems["gal"] | true;
-    options.bds = systems["bds"] | true;
-    options.qzss = systems["qzss"] | false;
-    options.sbas = systems["sbas"] | false;
-    return writeGnssCommands(GnssCmdBuilder::buildBaseFixedLlaCommand(
-        latitude, longitude, altitude, GnssCmdBuilder::BASE_ACCURACY_METERS,
-        sensorType_ == "Ublox" ? GnssCmdBuilder::GnssSensorType::Ublox
-                               : GnssCmdBuilder::GnssSensorType::Unicore,
-        options));
-}
-
 bool BackendAgent::restoreWorkflowBase(JsonObjectConst base)
 {
     using namespace GnssCmdBuilder;
@@ -395,8 +384,7 @@ bool BackendAgent::restoreWorkflowBase(JsonObjectConst base)
         coords = base;
     const double lat = coordinateNumber(coords["lat"]);
     const double lon = coordinateNumber(coords["lon"]);
-    const double alt = coordinateNumber(coords["alt"]);
-    if ((method.isEmpty() || method == "AUTO_CORS")
+    if (const double alt = coordinateNumber(coords["alt"]); (method.isEmpty() || method == "AUTO_CORS")
         && !std::isfinite(lat) && !std::isfinite(lon) && !std::isfinite(alt))
     {
         if (!applyRoverMode())
@@ -414,8 +402,7 @@ bool BackendAgent::restoreWorkflowBase(JsonObjectConst base)
     {
         const double duration = base["survey_in_duration"].isNull() ? 120 : coordinateNumber(base["survey_in_duration"]);
         const double accuracy = GnssCmdBuilder::BASE_ACCURACY_METERS;
-        const double maxDuration = sensorType_ == "Unicorecomm" ? 3600 : 604800;
-        if (!std::isfinite(duration) || duration < 1 || duration > maxDuration || std::floor(duration) != duration
+        if (const double maxDuration = sensorType_ == "Unicorecomm" ? 3600 : 604800; !std::isfinite(duration) || duration < 1 || duration > maxDuration || std::floor(duration) != duration
             || !std::isfinite(accuracy) || accuracy < 0.001 || accuracy > 10000)
             return fail("invalid saved Survey-In parameters");
         GnssOptions options;
@@ -423,8 +410,9 @@ bool BackendAgent::restoreWorkflowBase(JsonObjectConst base)
         const JsonObjectConst output = base["gnss_options"];
         options.outputMode = String(output["output_mode"] | "rtcm_only") == "rtcm_only"
             ? OutputMode::RtcmOnly : OutputMode::DiagnosticsRtcm;
-        const String level = output["msm_level"].isNull() ? "both" : output["msm_level"].as<String>();
-        options.msmLevel = level == "7" ? MsmLevel::Msm7 : level == "4" ? MsmLevel::Msm4 : MsmLevel::Both;
+        if (const String level = output["msm_level"].isNull() ? "both" : output["msm_level"].as<String>(); level == "7") options.msmLevel = MsmLevel::Msm7;
+        else if (level == "4") options.msmLevel = MsmLevel::Msm4;
+        else options.msmLevel = MsmLevel::Both;
         const JsonObjectConst systems = output["constellations"];
         options.gps = systems["gps"] | true;
         options.glo = systems["glo"] | true;
@@ -640,93 +628,63 @@ bool BackendAgent::collectAutoBaseSamples(const int configuredSamples,
     return true;
 }
 
-bool BackendAgent::resolveAutoBaseProjection(JsonObject payload, const double rawLongitude,
-                                             double &centralMeridianDeg, double &scale,
-                                             String &provinceName, String &provinceCode,
-                                             String &failureReason)
-{
-    centralMeridianDeg = 105.0;
-    scale = 0.9999;
-    provinceName = "Khong xac dinh (fallback theo kinh do)";
-    provinceCode = "UNKNOWN";
-    if (const auto requestedProvince = payload["province_code"] | String(); !requestedProvince.isEmpty())
-    {
-        if (!getProvinceProjection(requestedProvince, centralMeridianDeg, scale, provinceName))
-        {
-            failureReason = "invalid province_code";
-            return false;
-        }
-        provinceCode = requestedProvince;
-    }
-    else if (payload["l0_deg"].isNull())
-    {
-        static constexpr std::array candidates = {
-            103.0,
-            104.0,
-            104.5,
-            104.75,
-            105.0,
-            105.5,
-            105.75,
-            106.0,
-            106.5,
-            107.0,
-            107.25,
-            107.75,
-            108.0,
-            108.25,
-            108.5,
-        };
-        auto bestDistance = 1e9;
-        for (const double candidate : candidates)
-        {
-            const auto distance = fabs(candidate - rawLongitude);
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                centralMeridianDeg = candidate;
-            }
-        }
-    }
-    if (!payload["l0_deg"].isNull())
-        centralMeridianDeg = payload["l0_deg"].as<double>();
-    if (!payload["k0"].isNull())
-        scale = payload["k0"].as<double>();
-    return true;
-}
-
 String BackendAgent::buildAutoBaseResult(
     const double finalLatitude, const double finalLongitude, const double finalAltitude,
     const double rawLatitude, const double rawLongitude, const double rawAltitude,
     const bool transformed, const bool transportRestored, const size_t sampleCount,
     const String &projectionSource, const String &provinceCode, const String &provinceName,
-    const double centralMeridianDeg, const double scale)
+    const double centralMeridianDeg, const double scale, JsonObjectConst report)
 {
-    DynamicJsonDocument completed(2048);
-    completed["averaged_coord"]["lat"] = finalLatitude;
-    completed["averaged_coord"]["lon"] = finalLongitude;
-    completed["averaged_coord"]["alt"] = finalAltitude;
-    completed["raw_itrf_coord"]["lat"] = rawLatitude;
-    completed["raw_itrf_coord"]["lon"] = rawLongitude;
-    completed["raw_itrf_coord"]["alt"] = rawAltitude;
-    completed["sample_count"] = sampleCount;
-    completed["fixed_samples_only"] = true;
-    completed["transform_applied"] = transformed;
-    completed["configured_ntrip_restarted"] = transportRestored;
-    completed["projection_source"] = projectionSource;
-    completed["province_code"] = provinceCode;
-    completed["province_name"] = provinceName;
-    completed["central_meridian_deg"] = centralMeridianDeg;
-    completed["k0"] = scale;
+    const String mountpoint = report["source"]["mountpoint"] | String();
     String serialized;
-    serializeJson(completed, serialized);
+    {
+        DynamicJsonDocument completed(AUTO_BASE_RESULT_SIZE);
+        completed["averaged_coord"]["lat"] = finalLatitude;
+        completed["averaged_coord"]["lon"] = finalLongitude;
+        completed["averaged_coord"]["alt"] = finalAltitude;
+        completed["raw_itrf_coord"]["lat"] = rawLatitude;
+        completed["raw_itrf_coord"]["lon"] = rawLongitude;
+        completed["raw_itrf_coord"]["alt"] = rawAltitude;
+        if (report["output_coord"].is<JsonObjectConst>())
+            completed["averaged_coord"].set(report["output_coord"]);
+        completed["raw_coord"].set(report["input_coord"]);
+        completed["calculated_coord"].set(report["calculated_coord"]);
+        completed["sample_count"] = sampleCount;
+        completed["fixed_samples_only"] = true;
+        completed["transform_applied"] = transformed;
+        completed["configured_ntrip_restarted"] = transportRestored;
+        completed["projection_source"] = projectionSource;
+        completed["province_code"] = provinceCode;
+        completed["province_name"] = provinceName;
+        completed["central_meridian_deg"] = centralMeridianDeg;
+        completed["k0"] = scale;
+        completed["conversion_report"].set(report);
+        if (completed.overflowed())
+            return String();
+        serializeJson(completed, serialized);
+    }
+    DynamicJsonDocument checked(AUTO_BASE_RESULT_SIZE);
+    DynamicJsonDocument progress(PROGRESS_DOCUMENT_SIZE);
+    if (deserializeJson(checked, serialized) != DeserializationError::Ok)
+        return String();
+    checked["source_mountpoint"] = mountpoint;
+    checked["auto_applied"] = true;
+    checked["receiver_write_completed"] = true;
+    progress["phase"] = String("ready_for_review");
+    progress["step"] = 4;
+    progress["total_steps"] = 4;
+    progress["updated_at"] = 0;
+    for (JsonPairConst pair : checked.as<JsonObjectConst>())
+        progress[String(pair.key().c_str())] = pair.value();
+    if (checked.overflowed() || progress.overflowed())
+        return String();
     return serialized;
 }
 
 bool BackendAgent::completeAutoBaseSetup(
     JsonObject payload, const std::vector<double> &latitudes,
     const std::vector<double> &longitudes, const std::vector<double> &altitudes,
-    String &resultJson, String &failureReason)
+    String &resultJson, String &failureReason, const String &sourceMountpoint)
 {
     auto rawLatitude = 0.0;
     auto rawLongitude = 0.0;
@@ -745,34 +703,260 @@ bool BackendAgent::completeAutoBaseSetup(
     double scale = 0.0;
     String provinceName;
     String provinceCode;
-    if (!resolveAutoBaseProjection(payload, rawLongitude, centralMeridianDeg, scale,
-                                   provinceName, provinceCode, failureReason))
+    String host = payload["ip"] | String();
+    host.trim();
+    const bool vngeonet = strcasecmp(host.c_str(), "vngeonet.vn") == 0
+        || strcasecmp(host.c_str(), "vngeonet.vn.") == 0 || host == "14.238.1.125";
+    const bool requestedTransform = vngeonet && jsonBool(payload, "enable_itrf_vn2000_transform", true);
+    const char *projectionSource = "not_used";
+    bool transformed = false;
+    Vn2000Datum datum;
+    DynamicJsonDocument location(2048);
+    double projectedHeight = rawAltitude;
+    ProjectedPosition result{rawLatitude, rawLongitude, rawAltitude};
+    if (tcpStreamMutex && xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS * 4)) == pdTRUE)
     {
+        datum = ntripRoverDatum();
+        stopNtripRover();
+        xSemaphoreGive(tcpStreamMutex);
+    }
+    else
+    {
+        failureReason = "cannot acquire rover transport for datum readback";
         return false;
     }
-
-    auto transformed = false;
-    ProjectedPosition result{rawLatitude, rawLongitude, rawAltitude};
-    if (payload["enable_itrf_vn2000_transform"] | true)
+    if (workflowCancelRequested_)
     {
-        transformed = transformToVn2000(rawLatitude, rawLongitude, rawAltitude,
-                                        centralMeridianDeg, scale, result);
-        if (!transformed)
+        failureReason = "cancelled by user";
+        return false;
+    }
+    if (requestedTransform)
+    {
+        if (!datum.has1021)
+        {
+            failureReason = "missing RTCM 1021 from this CORS session";
+            return false;
+        }
+        if (datum.has1025)
+            projectionSource = "rtcm1025";
+        else if (!payload["l0_deg"].isNull() && !payload["k0"].isNull())
+        {
+            datum.centralMeridianDeg = coordinateNumber(payload["l0_deg"]);
+            datum.scale = coordinateNumber(payload["k0"]);
+            projectionSource = "manual";
+        }
+        else
+        {
+            if (!autoBaseLocationQueue_)
+            {
+                failureReason = "location reply queue could not be allocated";
+                return false;
+            }
+            xQueueReset(autoBaseLocationQueue_);
+            const String requestId = statusBootId_ + ":" + String(millis());
+            StaticJsonDocument<384> requestDoc;
+            JsonObject request = requestDoc.createNestedObject("location_request");
+            request["request_id"] = requestId;
+            std::array<char, 32> value{};
+            snprintf(value.data(), value.size(), "%.17g", rawLatitude); request["lat"] = String(value.data());
+            snprintf(value.data(), value.size(), "%.17g", rawLongitude); request["lon"] = String(value.data());
+            snprintf(value.data(), value.size(), "%.17g", rawAltitude); request["alt"] = String(value.data());
+            String requestJson;
+            serializeJson(requestDoc, requestJson);
+            setWorkflowProgress("resolving_location", 4, 4, requestJson);
+            DynamicJsonDocument received(2048);
+            AutoBaseLocationReply reply{};
+            const uint32_t started = millis();
+            bool located = false;
+            while (!workflowCancelRequested_ && millis() - started < 30000UL)
+            {
+                if (xQueueReceive(autoBaseLocationQueue_, &reply, pdMS_TO_TICKS(50)) == pdTRUE
+                    && deserializeJson(received, static_cast<const char *>(reply.json.data())) == DeserializationError::Ok
+                    && acceptAutoBaseLocationReply(received.as<JsonObjectConst>(), requestId,
+                                                   rawLatitude, rawLongitude, rawAltitude, location))
+                {
+                    located = true;
+                    break;
+                }
+            }
+            if (!located || workflowCancelRequested_)
+            {
+                failureReason = workflowCancelRequested_ ? "cancelled by user" : "backend location ACK timed out or did not match sampled LLH";
+                return false;
+            }
+            datum.centralMeridianDeg = coordinateNumber(location["l0_deg"]);
+            datum.scale = coordinateNumber(location["k0"]);
+            if (!std::isfinite(datum.centralMeridianDeg) || !std::isfinite(datum.scale))
+            {
+                failureReason = "province projection unresolved; RTCM 1025 or a unique server region is required";
+                return false;
+            }
+            provinceCode = location["province_code"] | String();
+            provinceName = location["province_name"] | String();
+            projectionSource = "server_catalog";
+        }
+        for (const char *key : {"resN", "resE", "resHS"})
+        {
+            const double value = payload[key].isNull() ? 0 : coordinateNumber(payload[key]);
+            if (!std::isfinite(value))
+            {
+                failureReason = "invalid CORS shift";
+                return false;
+            }
+            if (!std::strcmp(key, "resN")) datum.resN = value;
+            else if (!std::strcmp(key, "resE")) datum.resE = value;
+            else datum.resHS = value;
+        }
+        Vn2000Result converted;
+        if (!transformVn2000(rawLatitude, rawLongitude, rawAltitude, datum, converted))
         {
             failureReason = "VN2000 conversion failed; no candidate coordinates were installed";
             return false;
         }
+        result = {converted.latitude, converted.longitude, converted.altitude, converted.north, converted.east};
+        projectedHeight = converted.h;
+        centralMeridianDeg = datum.centralMeridianDeg;
+        scale = datum.scale;
+        transformed = true;
     }
-
-    const auto requestedProvince = payload["province_code"] | String();
-    const char *projectionSource = requestedProvince.isEmpty() ? "lon_fallback" : "manual_province";
-    if (!(payload["auto_apply"] | false))
+    if (!std::isfinite(result.latitude) || !std::isfinite(result.longitude) || !std::isfinite(result.altitude)
+        || std::abs(result.latitude) > 90.0 || std::abs(result.longitude) > 180.0
+        || result.altitude < -12000.0 || result.altitude > 100000.0)
     {
-        resultJson = buildAutoBaseResult(
-            result.latitude, result.longitude, result.altitude, rawLatitude, rawLongitude, rawAltitude,
-            transformed, false, latitudes.size(), projectionSource,
-            provinceCode, provinceName, centralMeridianDeg, scale);
+        failureReason = "Auto Base result coordinates are invalid";
+        return false;
+    }
+    DynamicJsonDocument report(CONFIG_DOCUMENT_SIZE);
+    const auto numberText = [](double number)
+    {
+        std::array<char, 32> text{};
+        snprintf(text.data(), text.size(), "%.17g", number);
+        return String(text.data());
+    };
+    report["version"] = 1;
+    report["input_coord"]["lat"] = numberText(rawLatitude);
+    report["input_coord"]["lon"] = numberText(rawLongitude);
+    report["input_coord"]["alt"] = numberText(rawAltitude);
+    report["calculated_coord"]["lat"] = numberText(result.latitude);
+    report["calculated_coord"]["lon"] = numberText(result.longitude);
+    report["calculated_coord"]["alt"] = numberText(result.altitude);
+    const auto receiverCoordinate = [&](double value, bool altitude)
+    {
+        if (sensorType_ == "Ublox")
+        {
+            const double coordinateScale = altitude ? 100.0 : 10000000.0;
+            const auto units = UbloxCommands::fixedCoordinateUnits(value, coordinateScale);
+            return String(static_cast<double>(units) / (coordinateScale * 100.0), altitude ? 4 : 9);
+        }
+        if (altitude)
+            return String(value, 4);
+        double scaled = value * 1e10;
+        if (const double integer = std::round(scaled); std::abs(scaled - integer) <= 4 * std::numeric_limits<double>::epsilon() * std::fmax(1.0, std::abs(scaled)))
+            scaled = integer;
+        return String(std::trunc(scaled) / 1e10, 10);
+    };
+    report["output_coord"]["lat"] = receiverCoordinate(result.latitude, false);
+    report["output_coord"]["lon"] = receiverCoordinate(result.longitude, false);
+    report["output_coord"]["alt"] = receiverCoordinate(result.altitude, true);
+    report["source"]["host"] = host;
+    report["source"]["port"] = payload["port"];
+    report["source"]["mountpoint"] = sourceMountpoint;
+    if (!String(payload["source_name"] | "").isEmpty()) report["source"]["station_name"] = payload["source_name"];
+    if (!String(payload["source_serial"] | "").isEmpty()) report["source"]["station_serial"] = payload["source_serial"];
+    if (!payload["source_distance_m"].isNull()) report["source"]["distance_m"] = payload["source_distance_m"];
+    if (payload["source_mode"] == "nearest")
+        report["source"]["requested_mountpoint"] = payload["mountpoint"];
+    report["input_reference"] = "receiver_reported";
+    report["output_reference"] = transformed ? "local_llh" : "receiver_reported";
+    report["altitude_reference"] = "ELLIPSOID";
+    report["transform_requested"] = requestedTransform;
+    report["transform_applied"] = transformed;
+    report["receiver_write_completed"] = false;
+    report["auto_applied"] = false;
+    report["reason"] = transformed ? "applied" : "disabled";
+    report["sample_count"] = latitudes.size();
+    report["processor"] = "esp32";
+    report["province_code"] = provinceCode;
+    report["province_name"] = provinceName;
+    report["location"].set(location.as<JsonObjectConst>());
+    report["projection_source"] = projectionSource;
+    report["central_meridian_deg"] = numberText(centralMeridianDeg);
+    report["k0"] = numberText(scale);
+    if (transformed && std::abs(scale - 0.9999) < 1e-9)
+        report["zone_width_deg"] = 3;
+    else if (transformed && std::abs(scale - 0.9996) < 1e-9)
+        report["zone_width_deg"] = 6;
+    report["rtcm1025_used"] = transformed && datum.has1025;
+    if (datum.has1025)
+    {
+        JsonObject projection = report.createNestedObject("rtcm1025");
+        projection["raw_l0"] = String(static_cast<long long>(datum.projectionLongitudeRaw));
+        projection["raw_k0"] = datum.projectionScaleRaw;
+        projection["projection_type"] = datum.projectionType;
+        projection["l0_deg"] = numberText(datum.centralMeridianDeg);
+        projection["k0"] = numberText(datum.scale);
+        projection["false_easting"] = numberText(datum.falseEasting);
+        projection["false_northing"] = numberText(datum.falseNorthing);
+        projection["frame_hex"] = datum.projectionFrameHex.data();
+        projection["frame_bytes"] = datum.projectionFrameBytes;
+        projection["frame_truncated"] = datum.projectionFrameBytes > 32;
+    }
+    if (datum.count1021) report["received_messages"]["1021"] = datum.count1021;
+    if (datum.count1023) report["received_messages"]["1023"] = datum.count1023;
+    if (datum.count1025) report["received_messages"]["1025"] = datum.count1025;
+    if (vngeonet && transformed)
+    {
+        report["zone_width_source"] = "inferred_from_k0";
+        report["parameter_source"] = "rtcm1021";
+        report["residual_source"] = datum.has1023 ? "rtcm1023" : "none";
+        report["projected_coord"]["north"] = numberText(result.northing);
+        report["projected_coord"]["east"] = numberText(result.easting);
+        report["projected_coord"]["h"] = numberText(projectedHeight);
+        JsonObject parameters = report.createNestedObject("parameters");
+        parameters["dX"] = numberText(datum.dX); parameters["dY"] = numberText(datum.dY); parameters["dZ"] = numberText(datum.dZ);
+        parameters["rX"] = numberText(datum.rX); parameters["rY"] = numberText(datum.rY); parameters["rZ"] = numberText(datum.rZ);
+        parameters["kT"] = numberText(datum.kT);
+        parameters["resB"] = numberText(datum.resB); parameters["resL"] = numberText(datum.resL); parameters["resH"] = numberText(datum.resH);
+        parameters["resN"] = numberText(datum.resN); parameters["resE"] = numberText(datum.resE); parameters["resHS"] = numberText(datum.resHS);
+    }
+    else
+        report["parameter_source"] = "not_used";
+    if (report.overflowed())
+    {
+        failureReason = "Auto Base report exceeds memory capacity";
+        return false;
+    }
+    resultJson = buildAutoBaseResult(
+        result.latitude, result.longitude, result.altitude, rawLatitude, rawLongitude, rawAltitude,
+        transformed, false, latitudes.size(), projectionSource,
+        provinceCode, provinceName, centralMeridianDeg, scale, report.as<JsonObjectConst>());
+    if (resultJson.isEmpty())
+    {
+        failureReason = "Auto Base result exceeds memory capacity";
+        return false;
+    }
+    if (workflowCancelRequested_)
+    {
+        failureReason = "cancelled by user";
+        return false;
+    }
+    if (!(payload["auto_apply"] | false))
         return true;
+    report["receiver_write_completed"] = true;
+    report["auto_applied"] = true;
+    if (report.overflowed())
+    {
+        failureReason = "Auto Base report exceeds memory capacity";
+        return false;
+    }
+    resultJson = buildAutoBaseResult(
+        result.latitude, result.longitude, result.altitude, rawLatitude, rawLongitude, rawAltitude,
+        transformed, true, latitudes.size(), projectionSource,
+        provinceCode, provinceName, centralMeridianDeg, scale, report.as<JsonObjectConst>());
+    if (resultJson.isEmpty())
+    {
+        failureReason = "cannot allocate Auto Base result";
+        return false;
     }
 
     setAgentState("auto_setup_base");
@@ -797,10 +981,24 @@ bool BackendAgent::completeAutoBaseSetup(
         failureReason = "cannot read previous Base configuration";
         return false;
     }
+    bool removedOldData = false;
+    for (const char *key : {"auto_base_previous_config", "coords", "auto_base_raw_itrf_llh", "conversion_report"})
+    {
+        if (baseConfig.containsKey(key))
+        {
+            baseConfig.remove(key);
+            removedOldData = true;
+        }
+    }
+    if (removedOldData && !baseConfig.garbageCollect())
+    {
+        failureReason = "cannot allocate Auto Base configuration";
+        return false;
+    }
     JsonObject coordinates = baseConfig.createNestedObject("coords");
-    coordinates["lat"] = result.latitude;
-    coordinates["lon"] = result.longitude;
-    coordinates["alt"] = result.altitude;
+    coordinates["lat"] = report["output_coord"]["lat"];
+    coordinates["lon"] = report["output_coord"]["lon"];
+    coordinates["alt"] = report["output_coord"]["alt"];
     coordinates["accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
     coordinates["altitude_reference"] = "ELLIPSOID";
     baseConfig["altitude_reference"] = "ELLIPSOID";
@@ -835,9 +1033,10 @@ bool BackendAgent::completeAutoBaseSetup(
     baseConfig["vn2000_northing"] = result.northing;
     baseConfig["vn2000_easting"] = result.easting;
     JsonObject raw = baseConfig.createNestedObject("auto_base_raw_itrf_llh");
-    raw["lat"] = rawLatitude;
-    raw["lon"] = rawLongitude;
-    raw["alt"] = rawAltitude;
+    raw["lat"] = report["input_coord"]["lat"];
+    raw["lon"] = report["input_coord"]["lon"];
+    raw["alt"] = report["input_coord"]["alt"];
+    baseConfig["conversion_report"].set(report.as<JsonObjectConst>());
     if (baseConfig.overflowed())
     {
         failureReason = "Auto Base configuration exceeds memory capacity";
@@ -854,6 +1053,8 @@ bool BackendAgent::completeAutoBaseSetup(
         return false;
     }
 
+    baseConfig["conversion_report"]["receiver_write_completed"] = true;
+    baseConfig["conversion_report"]["auto_applied"] = true;
     const String previousConfig = baseConfig_;
     baseConfig_.clear();
     serializeJson(baseConfig, baseConfig_);
@@ -874,10 +1075,6 @@ bool BackendAgent::completeAutoBaseSetup(
     }
     publishConfigState("base_config_state");
     setAgentState(normalAgentState());
-    resultJson = buildAutoBaseResult(
-        result.latitude, result.longitude, result.altitude, rawLatitude, rawLongitude, rawAltitude,
-        transformed, transportRestored, latitudes.size(), projectionSource,
-        provinceCode, provinceName, centralMeridianDeg, scale);
     Serial.printf("[AUTO BASE] KET QUA: THANH CONG; samples=%u; lat=%.10f; lon=%.10f; alt=%.4f\n",
                   static_cast<unsigned>(latitudes.size()), result.latitude, result.longitude,
                   result.altitude);
@@ -910,6 +1107,16 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
     String selectedMountpoint;
     DynamicJsonDocument previousBase(CONFIG_DOCUMENT_SIZE);
     deserializeJson(previousBase, baseConfig_);
+    const String startedBootId = previousBase["auto_base_started_boot_id"] | String();
+    const String startedRequestId = previousBase["auto_base_started_request_id"] | String();
+    const JsonObjectConst savedPrevious = previousBase["auto_base_previous_config"].as<JsonObjectConst>();
+    const bool hasSavedPrevious = !savedPrevious.isNull();
+    if (hasSavedPrevious)
+    {
+        DynamicJsonDocument snapshot(CONFIG_DOCUMENT_SIZE);
+        snapshot.set(savedPrevious);
+        previousBase.set(snapshot.as<JsonObjectConst>());
+    }
     // Startup may use a different duration from the saved UI preference.
     if (previousBase.size() == 0 && surveyInTargetSeconds_ > 0)
         previousBase["base_setup_method"] = "SURVEY_IN";
@@ -921,7 +1128,20 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         const bool roverStopped = stopNtripRoverLocked();
         const bool baseRestored = roverStopped && restoreWorkflowBase(previousBase.as<JsonObjectConst>());
         const bool transportRestored = baseRestored && restartConfiguredNtrip();
-        const bool cleanupSucceeded = baseRestored && transportRestored;
+        bool cleanupSucceeded = baseRestored && transportRestored;
+        if (cleanupSucceeded && hasSavedPrevious)
+        {
+            const String pendingConfig = baseConfig_;
+            baseConfig_.clear();
+            serializeJson(previousBase, baseConfig_);
+            if (saveStatePreferences())
+                publishConfigState("base_config_state");
+            else
+            {
+                baseConfig_ = pendingConfig;
+                cleanupSucceeded = false;
+            }
+        }
         if (cancelled && cleanupSucceeded && previousBase["base_setup_method"] == "AUTO_CORS"
             && previousBase["auto_cors_source_mode"] == "nearest")
         {
@@ -942,7 +1162,7 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
             details["source_mountpoint"] = selectedMountpoint;
         if (!reason.isEmpty())
             details["reason"] = reason;
-        if (!transportRestored)
+        if (!cleanupSucceeded)
             details["cleanup_error"] = "could not safely restore base/NTRIP state";
         String serialized;
         serializeJson(details, serialized);
@@ -986,20 +1206,39 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         }
     }
 
+    setWorkflowProgress("connect_caster", 1, 4);
     String failureReason;
+    Serial.printf("[AUTO BASE][CASTER] Connecting %s:%u/%s; AutoNearest=%s.\n",
+                  host.c_str(), static_cast<unsigned>(port), mountpoint.c_str(), autoNearest ? "YES" : "NO");
     if (!startAutoBaseRover(host, port, username, password, mountpoint, ntripVersion, failureReason,
                             autoNearest ? &selectedMountpoint : nullptr))
     {
+        Serial.printf("[AUTO BASE][CASTER][FAILED] %s\n", failureReason.c_str());
         if (autoNearest && failureReason == "ERROR - NO STATION WITHIN 20 KM" && !workflowCancelRequested_)
         {
+            Serial.println("[AUTO BASE][FALLBACK] No station within 20 km; starting Survey-In.");
             DynamicJsonDocument survey(CONFIG_DOCUMENT_SIZE);
             survey.set(previousBase.as<JsonObjectConst>());
             survey["base_setup_method"] = "SURVEY_IN";
             survey["accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
             survey["survey_in_accuracy"] = GnssCmdBuilder::BASE_ACCURACY_METERS;
+            if (survey["survey_in_duration"].isNull())
+                survey["survey_in_duration"] = 120;
             survey.remove("coords");
             survey.remove("coordinate_source");
             survey.remove("conversion_report");
+            survey.remove("auto_base_started_boot_id");
+            survey.remove("auto_base_started_request_id");
+            if (payload["startup_auto"] == true && !startedBootId.isEmpty())
+            {
+                survey["auto_base_started_boot_id"] = startedBootId;
+                survey["auto_base_started_request_id"] = startedRequestId;
+            }
+            if (survey.overflowed())
+            {
+                finish(false, false, "Survey-In fallback configuration exceeds memory capacity");
+                return false;
+            }
             if (restoreWorkflowBase(survey.as<JsonObjectConst>()) && restartConfiguredNtrip())
             {
                 const String oldConfig = baseConfig_;
@@ -1012,6 +1251,8 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
                         R"({"mode":"survey_in","auto_applied":true,"receiver_write_completed":true,"reason":"no_fixed_station_within_20_km"})");
                     saveStatePreferences();
                     publishConfigState("base_config_state");
+                    Serial.printf("[AUTO BASE][SURVEY-IN] Started; target=%lu seconds; RTCM SOURCE restored.\n",
+                                  static_cast<unsigned long>(surveyInTargetSeconds_));
                     return true;
                 }
                 baseConfig_ = oldConfig;
@@ -1050,9 +1291,9 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
 
     String resultJson;
     if (!completeAutoBaseSetup(payload, latitudes, longitudes, altitudes,
-                               resultJson, failureReason))
+                               resultJson, failureReason, sourceMountpoint))
     {
-        finish(false, false, failureReason);
+        finish(false, workflowCancelRequested_, failureReason);
         return false;
     }
     const bool autoApply = payload["auto_apply"] | false;
@@ -1067,7 +1308,7 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         }
         setAgentState(normalAgentState());
     }
-    DynamicJsonDocument result(2048);
+    DynamicJsonDocument result(AUTO_BASE_RESULT_SIZE);
     if (deserializeJson(result, resultJson) == DeserializationError::Ok)
     {
         result["source_mountpoint"] = sourceMountpoint;
@@ -1097,12 +1338,12 @@ bool BackendAgent::prepareReferenceCheckConfig(
     if (storedCoordinates.isNull())
         storedCoordinates = storedBaseObject;
 
-    referenceLatitude = reference["lat"] | NAN;
-    referenceLongitude = reference["lon"] | NAN;
-    referenceAltitude = reference["alt"] | NAN;
-    restoreLatitude = storedCoordinates["lat"] | NAN;
-    restoreLongitude = storedCoordinates["lon"] | NAN;
-    restoreAltitude = storedCoordinates["alt"] | NAN;
+    referenceLatitude = coordinateNumber(reference["lat"]);
+    referenceLongitude = coordinateNumber(reference["lon"]);
+    referenceAltitude = coordinateNumber(reference["alt"]);
+    restoreLatitude = coordinateNumber(storedCoordinates["lat"]);
+    restoreLongitude = coordinateNumber(storedCoordinates["lon"]);
+    restoreAltitude = coordinateNumber(storedCoordinates["alt"]);
     host = payload["ip"] | String();
     host.trim();
     const int requestedPort = payload["port"] | 0;
@@ -1115,7 +1356,22 @@ bool BackendAgent::prepareReferenceCheckConfig(
     requestedSamples = static_cast<uint16_t>(constrain(
         static_cast<int>(payload["samples"] | 60), 5, 120));
 
-    return baseParsed && !reference.isNull() && std::isfinite(referenceLatitude) && std::isfinite(referenceLongitude) && std::isfinite(referenceAltitude) && referenceLatitude >= -90.0 && referenceLatitude <= 90.0 && referenceLongitude >= -180.0 && referenceLongitude <= 180.0 && (storedBaseObject["base_setup_method"] == "SURVEY_IN" || (std::isfinite(restoreLatitude) && std::isfinite(restoreLongitude) && std::isfinite(restoreAltitude))) && !host.isEmpty() && !username.isEmpty() && !password.isEmpty() && !mountpoint.isEmpty() && port != 0;
+    const bool savedSurvey = storedBaseObject["base_setup_method"] == "SURVEY_IN";
+    const double savedDuration = storedBaseObject["survey_in_duration"].isNull()
+        ? 120 : coordinateNumber(storedBaseObject["survey_in_duration"]);
+    const double surveyDuration = surveyInTargetSeconds_ > 0 ? surveyInTargetSeconds_ : savedDuration;
+    const double maxSurveyDuration = sensorType_ == "Unicorecomm" ? 3600 : 604800;
+    const bool validSavedSurvey = savedSurvey && std::isfinite(surveyDuration) && surveyDuration >= 1
+        && surveyDuration <= maxSurveyDuration && std::floor(surveyDuration) == surveyDuration;
+    const String altitudeReference = storedBaseObject["altitude_reference"] | "LEGACY";
+    const bool validSavedPosition = std::isfinite(restoreLatitude) && std::isfinite(restoreLongitude)
+        && std::isfinite(restoreAltitude) && std::abs(restoreLatitude) <= 90.0
+        && std::abs(restoreLongitude) <= 180.0 && restoreAltitude >= -12000.0 && restoreAltitude <= 100000.0
+        && (sensorType_ != "Unicorecomm" || altitudeReference == "ELLIPSOID" || altitudeReference == "LEGACY");
+    return baseParsed && !reference.isNull() && std::isfinite(referenceLatitude) && std::isfinite(referenceLongitude)
+        && std::isfinite(referenceAltitude) && std::abs(referenceLatitude) <= 90.0 && std::abs(referenceLongitude) <= 180.0
+        && (validSavedSurvey || (!savedSurvey && validSavedPosition))
+        && !host.isEmpty() && !username.isEmpty() && !password.isEmpty() && !mountpoint.isEmpty() && port != 0;
 }
 
 bool BackendAgent::startReferenceRover(const String &host, const uint16_t port,
@@ -1182,6 +1438,7 @@ bool BackendAgent::collectReferenceSamples(const uint16_t requestedSamples,
     longitudes.reserve(requestedSamples);
     altitudes.reserve(requestedSamples);
     const uint32_t averageStartedMs = millis();
+    uint32_t lastSampleGgaMs = 0;
     uint32_t nextSecondMs = averageStartedMs;
     const uint32_t averagingSeconds = requestedSamples > 60U ? requestedSamples : 60U;
     while (millis() - averageStartedMs < averagingSeconds * 1000UL && latitudes.size() < requestedSamples)
@@ -1202,8 +1459,9 @@ bool BackendAgent::collectReferenceSamples(const uint16_t requestedSamples,
             nextSecondMs = now + 1000UL;
             const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
             const auto usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus.data());
-            if (usable && std::isfinite(snapshot.latitude) && std::isfinite(snapshot.longitude) && std::isfinite(snapshot.altitude) && snapshot.latitude >= -90.0 && snapshot.latitude <= 90.0 && snapshot.longitude >= -180.0 && snapshot.longitude <= 180.0)
+            if (usable && snapshot.lastGgaMs != lastSampleGgaMs && std::isfinite(snapshot.latitude) && std::isfinite(snapshot.longitude) && std::isfinite(snapshot.altitude) && snapshot.latitude >= -90.0 && snapshot.latitude <= 90.0 && snapshot.longitude >= -180.0 && snapshot.longitude <= 180.0)
             {
+                lastSampleGgaMs = snapshot.lastGgaMs;
                 latitudes.push_back(snapshot.latitude);
                 longitudes.push_back(snapshot.longitude);
                 altitudes.push_back(snapshot.altitude);
@@ -1231,7 +1489,7 @@ String BackendAgent::buildReferenceCheckResult(JsonObject reference, const doubl
                                                const double measuredAltitude,
                                                const size_t sampleCount)
 {
-    const auto meanLatitudeRad = (measuredLatitude + (reference["lat"] | NAN)) * 3.14159265358979323846 / 360.0;
+    const auto meanLatitudeRad = (measuredLatitude + coordinateNumber(reference["lat"])) * 3.14159265358979323846 / 360.0;
     DynamicJsonDocument result(2048);
     result["reference_coord"]["lat"] = reference["lat"];
     result["reference_coord"]["lon"] = reference["lon"];
@@ -1239,9 +1497,9 @@ String BackendAgent::buildReferenceCheckResult(JsonObject reference, const doubl
     result["measured_coord"]["lat"] = measuredLatitude;
     result["measured_coord"]["lon"] = measuredLongitude;
     result["measured_coord"]["alt"] = measuredAltitude;
-    result["delta_n_m"] = (measuredLatitude - (reference["lat"] | NAN)) * 3.14159265358979323846 / 180.0 * 6378137.0;
-    result["delta_e_m"] = (measuredLongitude - (reference["lon"] | NAN)) * 3.14159265358979323846 / 180.0 * 6378137.0 * cos(meanLatitudeRad);
-    result["delta_u_m"] = measuredAltitude - (reference["alt"] | NAN);
+    result["delta_n_m"] = (measuredLatitude - coordinateNumber(reference["lat"])) * 3.14159265358979323846 / 180.0 * 6378137.0;
+    result["delta_e_m"] = (measuredLongitude - coordinateNumber(reference["lon"])) * 3.14159265358979323846 / 180.0 * 6378137.0 * cos(meanLatitudeRad);
+    result["delta_u_m"] = measuredAltitude - coordinateNumber(reference["alt"]);
     result["sample_count"] = sampleCount;
     String resultJson;
     serializeJson(result, resultJson);
@@ -1264,12 +1522,10 @@ bool BackendAgent::runReferenceCheckWorkflow(JsonObject payload)
     String mountpoint;
     uint32_t timeoutSeconds = 0;
     uint16_t requestedSamples = 0;
-    const auto validConfig = prepareReferenceCheckConfig(
-        payload, reference, referenceLatitude, referenceLongitude, referenceAltitude,
-        restoreLatitude, restoreLongitude, restoreAltitude, host, port, username, password,
-        mountpoint, timeoutSeconds, requestedSamples);
-
-    if (!validConfig)
+    if (const auto validConfig = prepareReferenceCheckConfig(
+            payload, reference, referenceLatitude, referenceLongitude, referenceAltitude,
+            restoreLatitude, restoreLongitude, restoreAltitude, host, port, username, password,
+            mountpoint, timeoutSeconds, requestedSamples); !validConfig)
     {
         setAgentState(normalAgentState());
         setWorkflowProgress("reference_check_failed", 0, 4, R"({"reason":"missing or invalid reference/CORS configuration"})");

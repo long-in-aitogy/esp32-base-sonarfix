@@ -55,16 +55,17 @@ namespace UbloxCommands
     constexpr std::array<PortKeys, 2> NAV_KEYS = {
         {{0x20910007, 0x20910008, 0x20910009}, {0x20910034, 0x20910035, 0x20910036}}};
 
-    constexpr std::array<MessageKeys, 9> RTCM_KEYS = {
+    constexpr std::array<MessageKeys, 10> RTCM_KEYS = {
         {
             {"1005", {0x209102BE, 0x209102BF, 0x209102C0, 0x209102BD, 0x209102C1}},
             {"1074", {0x2091035F, 0x20910360, 0x20910361, 0x2091035E, 0x20910362}},
             {"1084", {0x20910364, 0x20910365, 0x20910366, 0x20910363, 0x20910367}},
-            {"1094", {0x20910368, 0x20910369, 0x2091036A, 0x2091036B, 0x2091036C}},
+            {"1094", {0x20910369, 0x2091036A, 0x2091036B, 0x20910368, 0x2091036C}},
             {"1124", {0x2091036E, 0x2091036F, 0x20910370, 0x2091036D, 0x20910371}},
             {"1077", {0x209102CD, 0x209102CE, 0x209102CF, 0x209102CC, 0x209102D0}},
             {"1087", {0x209102D2, 0x209102D3, 0x209102D4, 0x209102D1, 0x209102D5}},
-            {"1097", {0x209102D7, 0x209102D8, 0x209102D9, 0x209102D6, 0x209102DA}},
+            {"1097", {0x20910319, 0x2091031A, 0x2091031B, 0x20910318, 0x2091031C}},
+            {"1127", {0x209102D7, 0x209102D8, 0x209102D9, 0x209102D6, 0x209102DA}},
             {"1230", {0x20910304, 0x20910305, 0x20910306, 0x20910303, 0x20910307}},
         }};
 
@@ -126,13 +127,19 @@ namespace UbloxCommands
 /** @brief Implements ubxCfgValsetU1. */
     Command ubxCfgValsetU1(const std::vector<std::pair<uint32_t, bool>> &entries)
     {
-        Command payload = {0x00, 0x07, 0x00, 0x00};
-        for (const auto &[key, value] : entries)
+        Command result;
+        for (size_t offset = 0; offset < entries.size(); offset += 64)
         {
-            appendU32(payload, key);
-            payload.push_back(value ? 1 : 0);
+            Command payload = {0x00, 0x07, 0x00, 0x00};
+            for (size_t i = offset; i < std::min(offset + 64, entries.size()); ++i)
+            {
+                appendU32(payload, entries[i].first);
+                payload.push_back(entries[i].second ? 1 : 0);
+            }
+            const auto packet = ubxPacket(0x06, 0x8A, payload);
+            result.insert(result.end(), packet.begin(), packet.end());
         }
-        return ubxPacket(0x06, 0x8A, payload);
+        return result;
     }
 
 /** @brief Implements ubxCfgMsg. */
@@ -182,6 +189,8 @@ namespace UbloxCommands
             return msm7 && o.glo;
         if (!strcmp(message, "1097"))
             return msm7 && o.gal;
+        if (!strcmp(message, "1127"))
+            return msm7 && o.bds;
         return !strcmp(message, "1230") && o.glo;
     }
 
@@ -320,7 +329,7 @@ namespace UbloxCommands
             const size_t valueSize = valsetValueSize(type);
             if (baseMode && (key == 0x4003000FU || key == 0x40030011U))
             {
-                const uint32_t accuracy = static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000);
+                const auto accuracy = static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000);
                 for (uint8_t b = 0; b < 4; ++b)
                     packet[i + 4 + b] = static_cast<uint8_t>(accuracy >> (8 * b));
             }
@@ -347,7 +356,7 @@ namespace UbloxCommands
                  && packet[6] == 0 && (packet[8] == 1 || packet[8] == 2))
         {
             const size_t offset = packet[8] == 1 ? 34 : 26;
-            const uint32_t accuracy = static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000);
+            const auto accuracy = static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000);
             for (uint8_t i = 0; i < 4; ++i)
                 packet[offset + i] = static_cast<uint8_t>(accuracy >> (8 * i));
         }
@@ -407,13 +416,13 @@ namespace UbloxCommands
         Command message = buildTmode3Message();
         message[8] = 2;
         message[9] = 1;
-        const std::array<double, 3> values = {lat * 10000000.0, lon * 10000000.0, alt * 100.0};
+        const std::array<int64_t, 3> values = {fixedCoordinateUnits(lat, 10000000.0), fixedCoordinateUnits(lon, 10000000.0), fixedCoordinateUnits(alt, 100.0)};
         constexpr std::array<size_t, 3> offsets = {10, 14, 18};
         for (uint8_t i = 0; i < 3; ++i)
         {
-            const auto whole = static_cast<int32_t>(values[i]);
+            const auto whole = static_cast<int32_t>(values[i] / 100);
             writeU32(message, offsets[i], static_cast<uint32_t>(whole));
-            message[22 + i] = static_cast<uint8_t>(static_cast<int8_t>((values[i] - whole) * 100));
+            message[22 + i] = static_cast<uint8_t>(static_cast<int8_t>(values[i] % 100));
         }
         const auto accuracyValue = static_cast<uint32_t>(GnssCmdBuilder::BASE_ACCURACY_METERS * 10000);
         writeU32(message, 26, accuracyValue);

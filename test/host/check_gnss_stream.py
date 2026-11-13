@@ -3,9 +3,11 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from host_coverage import compile_cpp, mapped, run_cpp
 
 root = Path(__file__).resolve().parents[2]
-source = Path(sys.argv[1]).read_text() if len(sys.argv) > 1 else (root / "src/functions/ntrip/RTCM_Receiver.cpp").read_text()
+source_path = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "src/functions/ntrip/RTCM_Receiver.cpp"
+source = source_path.read_text()
 parser = source.split("void resetRtcmParser()", 1)[1].split("\n} // namespace", 1)[0]
 harness = r'''
 #include <array>
@@ -71,8 +73,8 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix="gnss-stream-") as directory:
     path = Path(directory)
-    (path / "check.cpp").write_text(harness + "void resetRtcmParser()" + parser + checks)
-    subprocess.run(["c++", "-std=c++17", "-fsanitize=address,undefined",
+    (path / "check.cpp").write_text(harness + mapped(source_path, "void resetRtcmParser()" + parser) + checks)
+    compile_cpp(["c++", "-std=c++17", "-fsanitize=address,undefined",
                     str(path / "check.cpp"), "-o", str(path / "check")], check=True)
-    subprocess.run([str(path / "check")], check=True)
+    run_cpp([str(path / "check")], check=True)
 print("PASS: 30 interleaved GGA/UBX/RTCM cycles, binary payload markers, malformed input recovery")

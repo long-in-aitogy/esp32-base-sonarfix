@@ -29,29 +29,68 @@ struct {
 } backendAgent;
 '''
 checks = r'''
+std::string withChecksum(const char *text) {
+    std::string line=text;
+    auto star=line.find('*');
+    if (star==std::string::npos) return line;
+    unsigned char checksum=0;
+    for (size_t i=1;i<star;++i) checksum ^= static_cast<unsigned char>(line[i]);
+    char suffix[4]; std::snprintf(suffix,sizeof(suffix),"*%02X",checksum);
+    line.replace(star,3,suffix);
+    return line;
+}
+void parseChecked(const char *text) { parseNmeaSentence(withChecksum(text).c_str()); }
 int main() {
-    parseNmeaSentence("$GNGGA,010000,2105.0994,N,10547.19936,E,4,20,0.7,20.5000,M,-28.5624,M,,*00");
+    parseChecked("$GNGGA,010000,2105.0994,N,10547.19936,E,4,20,0.7,20.5000,M,-28.5624,M,,*00");
     assert(telemetry.traffic.ggaCount == 1 && telemetry.satellites == 20);
     assert(strcmp(telemetry.fixStatus.data(), "RTK_FIXED") == 0);
     assert(fabs(telemetry.latitude - 21.08499) < 1e-9);
     assert(fabs(telemetry.longitude - 105.786656) < 1e-9);
     assert(fabs(telemetry.altitude + 8.0624) < 1e-9);
     assert(telemetry.lastGgaMs == now);
-    parseNmeaSentence("$GNGSA,A,3,,,,,,,,,,,,,1.0,0.7,0.8*00");
+    std::string corrupt=withChecksum("$GNGGA,010000,2105.0994,N,10547.19936,E,4,20,0.7,20.5000,M,-28.5624,M,,*00");
+    corrupt[20] = corrupt[20] == '1' ? '2' : '1';
+    now += 100; parseNmeaSentence(corrupt.c_str());
+    assert(telemetry.lastGgaMs == 1000 && telemetry.traffic.ggaCount == 1);
+    parseNmeaSentence("$GNGGA,010000,2105.0994,N,10547.19936,E,4,20,0.7,20.5,M,0,M,,*Q1");
+    assert(telemetry.lastGgaMs == 1000 && telemetry.traffic.ggaCount == 1);
+    parseNmeaSentence("$GNGGA,010000,2105.0994,N,10547.19936,E,4,20,0.7,20.5,M,0,M,,*0");
+    assert(telemetry.lastGgaMs == 1000 && telemetry.traffic.ggaCount == 1);
+    parseNmeaSentence("$GNGGA,010000,2105.0994,N,10547.19936,E,4,20,0.7,20.5,M,0,M,,");
+    assert(telemetry.lastGgaMs == now && telemetry.traffic.ggaCount == 2);
+    const auto previousGgaCount = telemetry.traffic.ggaCount;
+    parseChecked("$LONGNAMEGGA,010000,2105.0994,N,10547.19936,E,4,20,0.7,20.5000,M,-28.5624,M,,*00");
+    assert(telemetry.traffic.ggaCount == previousGgaCount + 1);
+    parseChecked("$GNGSA,A,3,,,,,,,,,,,,,1.0,0.7,0.8*00");
     assert(strcmp(telemetry.fixStatus.data(), "RTK_FIXED") == 0);
-    parseNmeaSentence("$GNGGA,010001,2105.0994,N,10547.19936,E,4,20,0.7,20.5,M,,M,,*00");
+    parseChecked("$GNGGA,010001,2105.0994,N,10547.19936,E,4,20,0.7,20.5,M,,M,,*00");
     assert(std::isnan(telemetry.altitude)); // Missing N is unknown, never zero.
-    parseNmeaSentence("$GNGGA,010002,,,,,4,20,0.7,20.5,M,-28.5624,M,,*00");
+    parseChecked("$GNGGA,010002,,,,,4,20,0.7,20.5,M,-28.5624,M,,*00");
     assert(std::isnan(telemetry.latitude) && std::isnan(telemetry.longitude));
     assert(std::isnan(telemetry.altitude)); // New epoch cannot reuse previous coordinates.
-    parseNmeaSentence("$GNGGA,010003,2105.0994,N,10547.19936,E,4,20,0.7,20.5,F,-28.5624,M,,*00");
+    parseChecked("$GNGGA,010003,2105.0994,N,10547.19936,E,4,20,0.7,20.5,F,-28.5624,M,,*00");
     assert(std::isnan(telemetry.altitude)); // Both height units must be metres.
-    parseNmeaSentence("$GNGGA,010004,2105.0994,N,10547.19936,E,4,20,0.7,20.5x,M,-28.5624,M,,*00");
+    parseChecked("$GNGGA,010004,2105.0994,N,10547.19936,E,4,20,0.7,20.5x,M,-28.5624,M,,*00");
     assert(std::isnan(telemetry.altitude)); // Reject partially parsed numbers.
-    parseNmeaSentence("$GNGGA,010005,2105.0994,N,10547.19936,E,4,20,0.7,,M,-28.5624,M,,*00");
+    parseChecked("$GNGGA,010005,2105.0994,N,10547.19936,E,4,20,0.7,,M,-28.5624,M,,*00");
     assert(std::isnan(telemetry.altitude)); // Missing H is unknown too.
-    parseNmeaSentence("$GNGGA,010006,2105.0994,N,10547.19936,E,4,20,0.7,20.5,M,0,M,,*00");
+    parseChecked("$GNGGA,010006,2105.0994,N,10547.19936,E,4,20,0.7,20.5,M,0,M,,*00");
     assert(telemetry.altitude == 20.5); // A real zero N is valid.
+    for (const char *bad : {
+        "$GNGGA,010007,garbage,N,10547.19936,E,4,20,0.7,20.5,M,0,M,,*00",
+        "$GNGGA,010007,2160.0000,N,10547.19936,E,4,20,0.7,20.5,M,0,M,,*00",
+        "$GNGGA,010007,2105.0994,E,10547.19936,N,4,20,0.7,20.5,M,0,M,,*00",
+        "$GNGGA,010007,nan,N,10547.19936,E,4,20,0.7,20.5,M,0,M,,*00",
+        "$GNGGA,010007,9000.0001,N,10547.19936,E,4,20,0.7,20.5,M,0,M,,*00"}) {
+        parseChecked(bad);
+        assert(std::isnan(telemetry.latitude) && std::isnan(telemetry.longitude) && std::isnan(telemetry.altitude));
+    }
+    parseChecked("$GNGGA,010008,2105.0994,N,10547.19936,E,4bad,20,0.7,20.5,M,0,M,,*00");
+    assert(strcmp(telemetry.fixStatus.data(), "NO_FIX") == 0);
+    parseChecked("$GNGGA,010009,0000.0000,S,00000.0000,W,4,20,0.7,20.5,M,0,M,,*00");
+    assert(telemetry.latitude == 0 && telemetry.longitude == 0 && telemetry.altitude == 20.5);
+    parseChecked("$GNGGA,010010,0000.0000,S");
+    assert(strcmp(telemetry.fixStatus.data(), "NO_FIX") == 0 && std::isnan(telemetry.latitude));
 }
 '''
 with tempfile.TemporaryDirectory(prefix='esp-gga-') as directory:

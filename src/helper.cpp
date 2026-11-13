@@ -52,7 +52,7 @@ void shutdownTcpTransportBeforeRestart()
 {
     Serial.println("[SETUP] Dong cac ket noi TCP va GPRS truoc khi khoi dong lai...");
     mqtt.disconnect();
-    activeNtripClient().stop();
+    stopNtrip();
     if (isGsmConnection() && modem.isGprsConnected())
     {
         modem.gprsDisconnect();

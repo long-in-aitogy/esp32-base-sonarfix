@@ -18,35 +18,49 @@ namespace UnicoreReadback
     namespace
     {
 /** @brief Implements appendUnicoreCandidate. */
-        bool appendUnicoreCandidate(char value, const char *prefix, String &candidate,
-                                    String &response)
+        bool appendUnicoreCandidate(char value, const char *prefix, bool multiline,
+                                    String &candidate, String &response)
         {
             if (value == prefix[0])
-            {
                 candidate = String(value);
+            else if (multiline && value == '\r' && !candidate.isEmpty())
+                candidate += value;
+            else if (value == '\r' || value == '\n')
+            {
+                if (!multiline || !candidate.startsWith(prefix))
+                {
+                    if (candidate.startsWith(prefix))
+                        response = candidate;
+                    candidate = "";
+                    return !response.isEmpty();
+                }
+                candidate += value;
+                if (candidate.endsWith("\r\n\r\n") || candidate.endsWith("\n\n"))
+                {
+                    response = candidate;
+                    return true;
+                }
+                size_t end = candidate.length();
+                while (end && (candidate[end - 1] == '\r' || candidate[end - 1] == '\n' || candidate[end - 1] == ' '))
+                    --end;
+                if (end >= 9 && candidate[end - 9] == '*')
+                {
+                    candidate.remove(end);
+                    response = candidate;
+                    return true;
+                }
                 return false;
             }
-            if (value == '\r' || value == '\n')
-            {
-                if (candidate.startsWith(prefix))
-                    response = candidate;
-                candidate = "";
-                return !response.isEmpty();
-            }
-            if (!candidate.isEmpty() && candidate.length() < 383)
-            {
+            else if (!candidate.isEmpty() && candidate.length() < (multiline ? 4095U : 383U))
                 candidate += value;
-            }
-            else if (candidate.length() >= 383)
-            {
+            else if (candidate.length() >= (multiline ? 4095U : 383U))
                 candidate = "";
-            }
-            return false;
+            return !response.isEmpty();
         }
 
 /** @brief Implements processUnicoreQueryByte. */
         bool processUnicoreQueryByte(uint8_t byte, const char *prefix, UnicoreReply &reply,
-                                     String &candidate, String &response, String &error)
+                                     String &candidate, String &response, String &error, bool multiline)
         {
             const auto value = static_cast<char>(byte);
             bufferGnssQueryByte(byte);
@@ -59,13 +73,12 @@ namespace UnicoreReadback
             }
             if (acknowledged)
                 Serial.printf("[GNSS][READBACK][ACK] %s\n", reply.line.data());
-            appendUnicoreCandidate(value, prefix, candidate, response);
-            return true;
+            return !appendUnicoreCandidate(value, prefix, multiline, candidate, response);
         }
 
 /** @brief Implements collectUnicoreResponse. */
         void collectUnicoreResponse(const char *prefix, UnicoreReply &reply,
-                                    String &response, String &error, uint32_t &receivedBytes)
+                                    String &response, String &error, uint32_t &receivedBytes, bool multiline)
         {
             String candidate;
             candidate.reserve(160);
@@ -76,7 +89,7 @@ namespace UnicoreReadback
                 {
                     const auto value = static_cast<uint8_t>(Serial1.read());
                     ++receivedBytes;
-                    if (!processUnicoreQueryByte(value, prefix, reply, candidate, response, error))
+                    if (!processUnicoreQueryByte(value, prefix, reply, candidate, response, error, multiline))
                         break;
                 }
                 if (response.isEmpty() && error.isEmpty())
@@ -85,7 +98,7 @@ namespace UnicoreReadback
         }
 
 /** @brief Implements queryUnicoreLine. */
-        bool queryUnicoreLine(const char *query, const char *prefix, String &response, String &error)
+        bool queryUnicoreLine(const char *query, const char *prefix, String &response, String &error, bool multiline = false)
         {
             if (!rtcmBufferMutex || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
             {
@@ -113,7 +126,7 @@ namespace UnicoreReadback
             uint32_t receivedBytes = 0;
             const uint32_t started = millis();
             if (written)
-                collectUnicoreResponse(prefix, reply, response, error, receivedBytes);
+                collectUnicoreResponse(prefix, reply, response, error, receivedBytes, multiline);
             xSemaphoreGive(gnssSerialMutex);
             xSemaphoreGive(rtcmBufferMutex);
 
@@ -137,6 +150,18 @@ namespace UnicoreReadback
         }
 
     } // namespace
+
+    bool readLogList(String &response, String &error)
+    {
+        if (!queryUnicoreLine("UNILOGLIST", "#UNILOGLIST,", response, error, true))
+            return false;
+        if (response.indexOf('*') >= 0 && !validUnicoreLogChecksum(response.c_str(), response.length()))
+        {
+            error = "Unicore UNILOGLIST checksum mismatch";
+            return false;
+        }
+        return true;
+    }
 
 /** @brief Implements readMode. */
     bool readMode(String &mode, String &error)
@@ -180,6 +205,7 @@ namespace UnicoreReadback
 /** @brief Implements readBestPosition. */
     bool readBestPosition(JsonObject position, String &error)
     {
+        position.remove("state");
         String response;
         if (!queryUnicoreLine("BESTNAVA", "#BESTNAVA,", response, error))
             return false;
@@ -249,7 +275,6 @@ namespace UnicoreReadback
             error = "Unicore BESTNAV coordinates are invalid";
             return false;
         }
-        position["state"] = "ok";
         position["latitude"] = latitude;
         position["longitude"] = longitude;
         position["height_msl"] = height;
@@ -260,6 +285,7 @@ namespace UnicoreReadback
             return false;
         }
         position["undulation"] = undulation;
+        position["state"] = "ok";
         if (!fields[7].isEmpty() && !fields[8].isEmpty())
         {
             const double latSigma = std::strtod(fields[7].c_str(), &end);
