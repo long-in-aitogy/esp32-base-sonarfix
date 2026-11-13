@@ -7,7 +7,7 @@ from host_coverage import compile_cpp, mapped, run_cpp
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Storage_Status.cpp').read_text()
 functions = source[source.index('bool configurationNamespace('):source.index('void describeNvsEntry(')]
-saved = source[source.index('bool appendSavedConfiguration('):source.index('} // namespace', source.index('bool appendSavedConfiguration('))]
+saved = source[source.index('bool appendSavedConfiguration('):source.index('void appendPartitionEntries(', source.index('bool appendSavedConfiguration('))]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
 shim = shim.replace('    bool isEmpty()', '    String substring(size_t from, size_t to) const { return String(substr(from, to - from)); }\n    bool isEmpty()')
 shim = shim.replace('    bool isEmpty()', '    void toLowerCase() { std::transform(begin(), end(), begin(), [](unsigned char c) { return std::tolower(c); }); }\n    int indexOf(const char *text) const { const auto pos = find(text); return pos == npos ? -1 : int(pos); }\n    bool isEmpty()')

@@ -6,7 +6,7 @@ from host_coverage import compile_cpp, mapped, run_cpp
 
 root = Path(__file__).resolve().parents[2]
 readback = (root / 'src/functions/gnss/Unicore_Readback.cpp').read_text()
-parser = readback[readback.index('    bool readBestPosition('):readback.index('    const char *modeKind(')]
+parser = readback[readback.index('    namespace\n    {\n        bool parseBestNavFields('):readback.index('    const char *modeKind(')]
 startup = (root / 'src/functions/backend/Backend_Agent_Startup.cpp').read_text()
 number = startup[startup.index('    double configNumber('):startup.index('\n}\n\nbool BackendAgent::buildStartupCommands')]
 verify = startup[startup.index('bool BackendAgent::verifyStartupReadback('):startup.index('void BackendAgent::reconcileBaseStartupReadback(')]

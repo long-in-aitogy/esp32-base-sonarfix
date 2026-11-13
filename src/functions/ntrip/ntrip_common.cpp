@@ -268,7 +268,6 @@ namespace ntrip_common
         clearEndpointState(endpointFor(index));
     }
 
-/** @brief Implements waitForNtripResponse. */
     void readNtripResponse(Client &client, String &response,
                            bool &headerComplete, bool &readFailed)
     {
@@ -338,6 +337,7 @@ namespace ntrip_common
         return true;
     }
 
+/** @brief Implements waitForNtripResponse. */
     bool waitForNtripResponse(Client &client, String *statusLine, String *selectedMountpoint)
     {
         String response;

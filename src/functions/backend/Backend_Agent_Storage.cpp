@@ -157,7 +157,7 @@ void BackendAgent::loadPreferences()
 #endif
         std::array<char, 24> generated = {};
         snprintf(generated.data(), generated.size(), "esp_%012llX",
-                 static_cast<unsigned long long>(mac & 0xFFFFFFFFFFFFULL));
+                 mac & 0xFFFFFFFFFFFFULL);
         serialNumber_ = String(generated.data());
         serialNeedsSave = true;
     }

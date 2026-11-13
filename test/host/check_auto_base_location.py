@@ -4,8 +4,9 @@ import subprocess
 import tempfile
 root=Path(__file__).resolve().parents[2]
 workflow=(root/'src/functions/backend/Backend_Agent_Workflows.cpp').read_text()
-a=workflow.index('    double coordinateNumber('); b=workflow.index('} // namespace',a)
-helpers=workflow[a:b]
+a=workflow.index('    double coordinateNumber('); b=workflow.index('    void appendAutoBaseDatumReport(',a)
+c=workflow.index('    bool acceptAutoBaseLocationReply(',b); d=workflow.index('} // namespace',c)
+helpers=workflow[a:b]+workflow[c:d]
 agent=(root/'src/functions/backend/Backend_Agent.cpp').read_text()
 a=agent.index('void BackendAgent::handleControlAck('); b=agent.index('\nvoid BackendAgent::onMqttMessage(',a)
 handler=agent[a:b]

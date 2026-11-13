@@ -250,8 +250,8 @@ void BackendAgent::appendResourceInfo(JsonObject system, const String &timestamp
     system["auth_license_bypass"] = false;
 }
 
-void BackendAgent::appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapshot &gnss,
-                                    uint32_t nowMs) const
+namespace {
+void appendNmeaHealth(JsonDocument &doc, const GnssTelemetrySnapshot &gnss, uint32_t nowMs)
 {
     JsonObject nmeaHealth = doc.createNestedObject("nmea_health");
     JsonObject typeCounts = nmeaHealth.createNestedObject("type_counts");
@@ -276,6 +276,13 @@ void BackendAgent::appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapsh
         nmeaHealth["hacc_source"] = "gst_lat_lon_sigma";
         nmeaHealth["seconds_since_gst"] = (nowMs - gnss.lastGstMs) / 1000.0;
     }
+}
+} // namespace
+
+void BackendAgent::appendGnssStatus(JsonDocument &doc, const GnssTelemetrySnapshot &gnss,
+                                    uint32_t nowMs) const
+{
+    appendNmeaHealth(doc, gnss, nowMs);
     JsonObject position = doc.createNestedObject("position");
     position["latitude"] = gnss.latitude;
     position["longitude"] = gnss.longitude;

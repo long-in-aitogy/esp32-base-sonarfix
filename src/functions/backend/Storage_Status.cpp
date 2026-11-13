@@ -223,12 +223,12 @@ void describeNvsEntry(JsonObject row, const char *partition, const nvs_entry_inf
                           : nvs_get_blob(handle, entry.key, nullptr, &length);
             row["type"] = text ? "string" : "blob";
             if (result == ESP_OK) row["bytes"] = text && length ? length - 1 : length;
-            if (text && readable && result == ESP_OK) {
-                if (length <= 97) {
-                    std::array<char, 97> value = {};
-                    result = nvs_get_str(handle, entry.key, value.data(), &length);
-                    if (result == ESP_OK) row["value"] = String(value.data());
-                } else row["value"] = "Giá trị dài hơn 96 byte";
+            if (text && readable && result == ESP_OK && length > 97)
+                row["value"] = "Giá trị dài hơn 96 byte";
+            else if (text && readable && result == ESP_OK) {
+                std::array<char, 97> value = {};
+                result = nvs_get_str(handle, entry.key, value.data(), &length);
+                if (result == ESP_OK) row["value"] = String(value.data());
             }
             break;
         }
@@ -258,6 +258,22 @@ bool appendSavedConfiguration(JsonArray entries, uint32_t offset, uint32_t &tota
                               config.as<JsonVariantConst>(), String());
     return true;
 }
+
+void appendPartitionEntries(JsonArray entries, uint32_t offset, uint32_t &total,
+                            const char *partition, int priority) {
+    for (auto iterator = nvs_entry_find(partition, nullptr, NVS_TYPE_ANY); iterator;
+         iterator = nvs_entry_next(iterator)) {
+        nvs_entry_info_t entry;
+        nvs_entry_info(iterator, &entry);
+        const bool wifi = configurationNamespace(entry) && !strncmp(entry.key, "WIFI_", 5);
+        const int entryPriority = wifi ? 0 : configurationNamespace(entry) ? 1 : 2;
+        if (entryPriority != priority) continue;
+        if (appendSavedConfiguration(entries, offset, total, partition, entry)) continue;
+        if (total >= offset && entries.size() < 6)
+            describeNvsEntry(entries.createNestedObject(), partition, entry);
+        ++total;
+    }
+}
 } // namespace
 
 bool readNvsInventory(uint32_t offset, const String &commandId, String &output, String &error) {
@@ -273,26 +289,14 @@ bool readNvsInventory(uint32_t offset, const String &commandId, String &output, 
         for (const char *partition : {"nvs", "agent_state"}) {
             nvs_stats_t stats{};
             const esp_err_t status = nvs_get_stats(partition, &stats);
-            if (status != ESP_OK) {
-                if (!strcmp(partition, "nvs")) { error = "Cannot inspect NVS"; return false; }
-                JsonArray unavailable = doc["unavailable_partitions"].isNull()
-                    ? doc.createNestedArray("unavailable_partitions") : doc["unavailable_partitions"].as<JsonArray>();
-                if (priority == 0) unavailable.add(partition);
+            if (status == ESP_OK) {
+                appendPartitionEntries(entries, offset, total, partition, priority);
                 continue;
             }
-            for (auto iterator = nvs_entry_find(partition, nullptr, NVS_TYPE_ANY); iterator;
-                 iterator = nvs_entry_next(iterator)) {
-                nvs_entry_info_t entry;
-                nvs_entry_info(iterator, &entry);
-                const bool wifi = configurationNamespace(entry) && !strncmp(entry.key, "WIFI_", 5);
-                const int entryPriority = wifi ? 0 : configurationNamespace(entry) ? 1 : 2;
-                if (entryPriority != priority) continue;
-                if (appendSavedConfiguration(entries, offset, total, partition, entry))
-                    continue;
-                if (total >= offset && entries.size() < 6)
-                    describeNvsEntry(entries.createNestedObject(), partition, entry);
-                ++total;
-            }
+            if (!strcmp(partition, "nvs")) { error = "Cannot inspect NVS"; return false; }
+            JsonArray unavailable = doc["unavailable_partitions"].isNull()
+                ? doc.createNestedArray("unavailable_partitions") : doc["unavailable_partitions"].as<JsonArray>();
+            if (priority == 0) unavailable.add(partition);
         }
     }
     doc["fields_expanded"] = true;

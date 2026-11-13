@@ -5,7 +5,7 @@ import tempfile
 from host_coverage import compile_cpp, mapped, run_cpp
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_text()
-number = source[source.index('double coordinateNumber('):source.index('    bool acceptAutoBaseLocationReply(')]
+number = source[source.index('double coordinateNumber('):source.index('    void appendAutoBaseDatumReport(')]
 startup = (root / 'src/functions/backend/Backend_Agent_Startup.cpp').read_text()
 config_number = startup[startup.index('    constexpr uint32_t AUTO_SURVEY_IN_SECONDS'):startup.index('\n}\n\nbool BackendAgent::buildStartupCommands')]
 build = startup[startup.index('bool BackendAgent::buildStartupCommands('):startup.index('bool BackendAgent::initializeBaseAtBoot(')]
@@ -50,6 +50,7 @@ struct BackendAgent {
     bool refreshReceiverReadback(String &error) { error = "read failed"; return readOk; }
     void markStatusDirty() {}
     bool restoreWorkflowBase(JsonObjectConst);
+    bool restoreSurveyInBase(JsonObjectConst, GnssCmdBuilder::GnssSensorType, String &);
     void reconcileBaseStartupReadback();
 };
 '''

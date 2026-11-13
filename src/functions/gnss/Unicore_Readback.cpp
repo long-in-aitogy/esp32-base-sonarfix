@@ -45,6 +45,7 @@ namespace UnicoreReadback
             return false;
         }
 
+/** @brief Implements appendUnicoreCandidate. */
         bool appendUnicoreCandidate(char value, const char *prefix, bool multiline,
                                     String &candidate, String &response)
         {
@@ -213,10 +214,10 @@ namespace UnicoreReadback
         return true;
     }
 
-/** @brief Implements readBestPosition. */
-    bool readBestPosition(JsonObject position, String &error)
+    namespace
     {
-        const auto parseFields = [](const String &payload, std::array<String, 10> &fields) {
+        bool parseBestNavFields(const String &payload, std::array<String, 10> &fields)
+        {
             auto start = 0;
             for (size_t index = 0; index < fields.size(); ++index)
             {
@@ -232,8 +233,10 @@ namespace UnicoreReadback
             for (String &field : fields)
                 field.trim();
             return true;
-        };
-        const auto parseNumber = [&error](const String &field, const char *name, double &value) {
+        }
+
+        bool parseBestNavNumber(const String &field, const char *name, double &value, String &error)
+        {
             char *end = nullptr;
             value = std::strtod(field.c_str(), &end);
             if (end == field.c_str() || *end != '\0')
@@ -242,13 +245,20 @@ namespace UnicoreReadback
                 return false;
             }
             return true;
-        };
-        const auto parseSigma = [](const String &field, double &value) {
+        }
+
+        bool parseBestNavSigma(const String &field, double &value)
+        {
             char *end = nullptr;
             value = std::strtod(field.c_str(), &end);
             return end != field.c_str() && *end == '\0' && std::isfinite(value) &&
                    value >= 0 && value <= 10000000;
-        };
+        }
+    } // namespace
+
+/** @brief Implements readBestPosition. */
+    bool readBestPosition(JsonObject position, String &error)
+    {
         position.remove("state");
         String response;
         if (!queryUnicoreLine("BESTNAVA", "#BESTNAVA,", response, error))
@@ -271,7 +281,7 @@ namespace UnicoreReadback
         if (checksum >= 0)
             payload.remove(checksum);
         std::array<String, 10> fields;
-        if (!parseFields(payload, fields))
+        if (!parseBestNavFields(payload, fields))
         {
             error = "Unicore BESTNAV response is incomplete";
             return false;
@@ -286,7 +296,7 @@ namespace UnicoreReadback
         std::array<double, 3> coordinates;
         const std::array<const char *, 3> coordinateNames = {"latitude", "longitude", "height"};
         for (size_t index = 0; index < coordinates.size(); ++index)
-            if (!parseNumber(fields[index + 2], coordinateNames[index], coordinates[index]))
+            if (!parseBestNavNumber(fields[index + 2], coordinateNames[index], coordinates[index], error))
                 return false;
         const auto latitude = coordinates[0];
         const auto longitude = coordinates[1];
@@ -300,7 +310,7 @@ namespace UnicoreReadback
         position["longitude"] = longitude;
         position["height_msl"] = height;
         double undulation = 0;
-        if (!parseNumber(fields[5], "undulation", undulation) || !std::isfinite(undulation) || fields[6] != "WGS84")
+        if (!parseBestNavNumber(fields[5], "undulation", undulation, error) || !std::isfinite(undulation) || fields[6] != "WGS84")
         {
             error = "Unicore BESTNAV undulation/datum is invalid";
             return false;
@@ -311,7 +321,7 @@ namespace UnicoreReadback
         {
             double latSigma = 0;
             double lonSigma = 0;
-            if (parseSigma(fields[7], latSigma) && parseSigma(fields[8], lonSigma))
+            if (parseBestNavSigma(fields[7], latSigma) && parseBestNavSigma(fields[8], lonSigma))
                 position["horizontal_sigma_m"] = std::hypot(latSigma, lonSigma);
         }
         return true;

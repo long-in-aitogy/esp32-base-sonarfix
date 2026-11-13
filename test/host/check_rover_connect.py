@@ -7,7 +7,7 @@ root = Path(__file__).resolve().parents[2]
 rover = (root / 'src/functions/ntrip/ntrip_rover.cpp').read_text()
 start = rover[rover.index('String buildNtripRoverRequest('):rover.index('/** @brief Implements loopNtripRover.')]
 common = (root / 'src/functions/ntrip/ntrip_common.cpp').read_text()
-wait = common[common.index('    bool waitForNtripResponse('):common.index('\n} // namespace ntrip_common')]
+wait = common[common.index('    void readNtripResponse('):common.index('\n} // namespace ntrip_common')]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
 shim = shim.replace('    void trim()', '''    bool startsWith(const String &value) const { return compare(0, value.size(), value) == 0; }
     void remove(unsigned start, unsigned count) { erase(start, count); }
@@ -154,9 +154,10 @@ void xSemaphoreGive(int) { ++releases; }
 void stopNtrip() { ++stops; }
 String passedReceiver;
 String *passedSelection = nullptr;
-bool startNtripRover(const String &, uint16_t, const String &, const String &, const String &, uint8_t, String *selection = nullptr, const String &receiver = String()) {
-    passedSelection = selection; passedReceiver = receiver;
-    if (selection && startOk) *selection = "station";
+struct NtripRoverOptions { uint8_t version = 1; String *selectedMountpoint = nullptr; String receiverId; };
+bool startNtripRover(const String &, uint16_t, const String &, const String &, const String &, const NtripRoverOptions &options) {
+    passedSelection = options.selectedMountpoint; passedReceiver = options.receiverId;
+    if (options.selectedMountpoint && startOk) *options.selectedMountpoint = "station";
     return startOk;
 }
 const char *ntripRoverLastError() { return "ERROR - NO STATION WITHIN 20 KM"; }

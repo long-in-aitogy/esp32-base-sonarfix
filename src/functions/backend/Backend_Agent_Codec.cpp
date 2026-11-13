@@ -88,7 +88,7 @@ namespace BackendAgentInternal
         std::array<char, 17> result = {};
         snprintf(result.data(), result.size(), "%08lx%08lx",
                  static_cast<unsigned long>(hash),
-                 static_cast<unsigned long>(hash ^ 0xA5A5A5A5UL));
+                 hash ^ 0xA5A5A5A5UL);
         return String(result.data());
     }
 
@@ -176,8 +176,8 @@ namespace BackendAgentInternal
         if (length < 2 || length > 31)
             return String();
 
-        std::vector<int> parts(static_cast<size_t>(length), 0);
-        std::vector<double> smoothed(static_cast<size_t>(length) + 1U, 0.0);
+        std::vector parts(static_cast<size_t>(length), 0);
+        std::vector smoothed(static_cast<size_t>(length) + 1U, 0.0);
         auto number = atof(base.c_str());
         if (!std::isfinite(number))
             return String();

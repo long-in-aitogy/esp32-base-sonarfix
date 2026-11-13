@@ -18,6 +18,7 @@
 
 class BackendAgentWebsocket;
 struct GnssTelemetrySnapshot;
+struct Vn2000Datum;
 
 // Device agent for backend commands, status, provisioning and base workflows.
 // Receiver coordinates come from NMEA or Unicore readback; RTCM is forwarded.
@@ -192,6 +193,16 @@ private:
                                size_t sampleCount, const String &projectionSource,
                                const String &provinceCode, const String &provinceName,
                                double centralMeridianDeg, double scale, JsonObjectConst report);
+    bool resolveAutoBaseLocation(double latitude, double longitude, double altitude,
+                                 JsonDocument &location, String &failureReason);
+    bool restoreAutoBaseAfterReview(JsonDocument &previousBase);
+    bool prepareAutoBaseSnapshot(JsonDocument &previousBase);
+    bool waitForAutoNearestPosition(uint32_t timeoutSeconds);
+    bool startSurveyInFallback(JsonObject payload, JsonDocument &previousBase,
+                               const String &startedBootId, const String &startedRequestId, String &failureReason);
+    void finishAutoBaseWorkflow(JsonDocument &previousBase, bool hasSavedPrevious,
+                                const String &selectedMountpoint, bool success,
+                                bool cancelled, const String &reason);
     bool runReferenceCheckWorkflow(JsonObject payload);
     bool prepareReferenceCheckConfig(JsonObject payload, JsonObject &reference,
                                      double &referenceLatitude, double &referenceLongitude,
@@ -213,6 +224,7 @@ private:
     int loopNtripRoverLocked();
     bool stopNtripRoverLocked();
     bool restoreWorkflowBase(JsonObjectConst base);
+    bool restoreSurveyInBase(JsonObjectConst base, GnssCmdBuilder::GnssSensorType chip, String &error);
     void reconcileBaseStartupReadback();
     bool refreshReceiverReadback(String &error);
     bool refreshUbloxReadback(String &error);
@@ -243,6 +255,15 @@ private:
         double easting = 0.0;
         double projectedHeight = 0.0;
     };
+    void appendAutoBaseReport(JsonDocument &report, JsonObject payload, const ProjectedPosition &result,
+                              double rawLatitude, double rawLongitude, double rawAltitude,
+                              const String &sourceMountpoint);
+    bool applyAutoBasePosition(JsonDocument &report, const ProjectedPosition &result, size_t sampleCount,
+                               const char *projectionSource, const String &provinceCode,
+                               const String &provinceName, String &failureReason);
+    bool transformAutoBasePosition(JsonObject payload, Vn2000Datum &datum, JsonDocument &location,
+                                   ProjectedPosition &result, double &projectedHeight,
+                                   const char *&projectionSource, String &failureReason);
     void markStatusDirty() { statusDirty_ = true; }
 
     String buildStatusPayload();
@@ -278,8 +299,11 @@ private:
     bool executeLicenseCommand(JsonObject payload, String &error, String &detail,
                                bool &restartAfterCommand);
     bool executeServiceConfigCommand(JsonObject payload, String &error, String &detail);
+    bool prepareRawBaseConfig(JsonObject config, GnssCmdBuilder::GnssSensorType chip,
+                              bool fixedBase, StartupPosition &expected, String &updatedConfig, String &error);
     bool executeRawCommand(JsonDocument &doc, JsonObject payload,
                            String &error, String &detail);
+    bool saveNearestAutoBaseConfig(JsonObject payload, bool pending, String &error);
     bool executeAutoBaseCommand(JsonObject payload, String &error, String &detail);
     bool verifyGnssConfig(JsonObjectConst payload, const String &commandId, String &error);
     bool verifyUnicoreConfig(JsonObjectConst payload, const String &commandId, String &error);
@@ -288,6 +312,9 @@ private:
     bool executeBasicCommand(const String &command, JsonObject payload,
                              String &error, String &detail);
     bool executeStreamCommand(JsonObject payload, String &error, String &detail);
+    bool executeStorageStatus(JsonObject payload, const String &commandId, String &error);
+    bool executeVerifyGnssCommand(JsonObject payload, const String &commandId, String &error, String &detail);
+    bool executeNvsCleanup(JsonObject payload, String &error, String &detail);
     bool executeBaseStatusCommand(String &error, String &detail);
     bool executeStopWorkflowCommand(String &error, String &detail);
     void finishCommand(const String &source, const String &command,

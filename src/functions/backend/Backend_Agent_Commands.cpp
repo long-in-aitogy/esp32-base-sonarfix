@@ -532,38 +532,10 @@ bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload,
     const bool fixedBase = configuringBase && originalConfig["params"]["base_setup_method"] == "FIXED_LLA";
     StartupPosition expected;
     String updatedConfig;
-    if (!originalConfig.isNull() && !originalConfig["params"].isUnbound())
+    if (!prepareRawBaseConfig(originalConfig, chip, fixedBase, expected, updatedConfig, error))
     {
-        if (!originalConfig["params"].is<JsonObject>())
-        {
-            error = "Base configuration must be an object";
-            detail = error;
-            return false;
-        }
-        DynamicJsonDocument baseDoc(CONFIG_DOCUMENT_SIZE);
-        baseDoc.set(originalConfig["params"]);
-        JsonObject base = baseDoc.as<JsonObject>();
-        if (!originalConfig["mode"].isUnbound())
-            base["mode"] = originalConfig["mode"];
-        enforceBaseAccuracy(base);
-        if (baseDoc.overflowed())
-        {
-            error = "Base configuration exceeds memory capacity";
-            detail = error;
-            return false;
-        }
-        if (fixedBase)
-        {
-            GnssCmdBuilder::CommandList unused;
-            if (chip == GnssCmdBuilder::GnssSensorType::Invalid ||
-                !buildStartupCommands(baseDoc.as<JsonObjectConst>(), chip, true, unused, expected, error))
-            {
-                if (error.isEmpty()) error = "unsupported GNSS sensor_type";
-                detail = error;
-                return false;
-            }
-        }
-        serializeJson(baseDoc, updatedConfig);
+        detail = error;
+        return false;
     }
     if (!validateRawCommands(commands, error))
     {
@@ -636,6 +608,91 @@ bool BackendAgent::executeRawCommand(JsonDocument &doc, JsonObject payload,
     return true;
 }
 
+bool BackendAgent::prepareRawBaseConfig(JsonObject originalConfig, GnssCmdBuilder::GnssSensorType chip,
+                                        bool fixedBase, StartupPosition &expected,
+                                        String &updatedConfig, String &error)
+{
+    if (originalConfig.isNull() || originalConfig["params"].isUnbound())
+        return true;
+    if (!originalConfig["params"].is<JsonObject>())
+    {
+        error = "Base configuration must be an object";
+        return false;
+    }
+    DynamicJsonDocument baseDoc(CONFIG_DOCUMENT_SIZE);
+    baseDoc.set(originalConfig["params"]);
+    JsonObject base = baseDoc.as<JsonObject>();
+    if (!originalConfig["mode"].isUnbound())
+        base["mode"] = originalConfig["mode"];
+    enforceBaseAccuracy(base);
+    if (baseDoc.overflowed())
+    {
+        error = "Base configuration exceeds memory capacity";
+        return false;
+    }
+    if (fixedBase)
+    {
+        GnssCmdBuilder::CommandList unused;
+        if (chip == GnssCmdBuilder::GnssSensorType::Invalid ||
+            !buildStartupCommands(baseDoc.as<JsonObjectConst>(), chip, true, unused, expected, error))
+        {
+            if (error.isEmpty()) error = "unsupported GNSS sensor_type";
+            return false;
+        }
+    }
+    serializeJson(baseDoc, updatedConfig);
+    return true;
+}
+
+bool BackendAgent::saveNearestAutoBaseConfig(JsonObject payload, bool pending, String &error)
+{
+    DynamicJsonDocument saved(CONFIG_DOCUMENT_SIZE);
+    if (deserializeJson(saved, baseConfig_) != DeserializationError::Ok || !saved.is<JsonObject>())
+        saved.to<JsonObject>();
+    JsonObject base = saved.as<JsonObject>();
+    for (JsonPairConst item : payload["auto_base_config"].as<JsonObjectConst>())
+        base[item.key()] = item.value();
+    base["base_setup_method"] = "AUTO_CORS";
+    base["auto_cors_source_mode"] = "nearest";
+    base["mode"] = "BASE";
+    base.remove("auto_base_previous_config");
+    if (pending)
+    {
+        base.remove("auto_base_started_boot_id");
+        base.remove("auto_base_started_request_id");
+    }
+    else if (payload["startup_auto"] == true && !String(payload["startup_boot_id"] | "").isEmpty())
+    {
+        base["auto_base_started_boot_id"] = payload["startup_boot_id"];
+        base["auto_base_started_request_id"] = payload["startup_request_id"] | String();
+    }
+    enforceBaseAccuracy(base);
+    if (saved.overflowed())
+    {
+        error = "nearest CORS configuration exceeds memory capacity";
+        return false;
+    }
+    baseConfig_.clear();
+    serializeJson(saved, baseConfig_);
+    if (!saveStatePreferences())
+    {
+        error = pending ? "cannot save nearest CORS request" : "cannot save nearest CORS startup mode";
+        return false;
+    }
+    return true;
+}
+
+namespace
+{
+    bool hasAutoBaseConnection(JsonObjectConst payload)
+    {
+        const auto port = payload["port"] | 0;
+        return !String(payload["ip"] | String()).isEmpty() && !String(payload["user"] | String()).isEmpty()
+            && !String(payload["password"] | String()).isEmpty() && !String(payload["mountpoint"] | String()).isEmpty()
+            && port >= 1 && port <= 65535;
+    }
+}
+
 bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
                                           String &detail)
 {
@@ -648,8 +705,7 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
         payload["password"] = AUTO_BASE_CASTER_PASSWORD;
         payload["mountpoint"] = AUTO_BASE_CASTER_MOUNTPOINT;
     }
-    const auto requestedPort = payload["port"] | 0;
-    const auto hasConnection = !String(payload["ip"] | String()).isEmpty() && !String(payload["user"] | String()).isEmpty() && !String(payload["password"] | String()).isEmpty() && !String(payload["mountpoint"] | String()).isEmpty() && requestedPort >= 1 && requestedPort <= 65535;
+    const bool hasConnection = hasAutoBaseConnection(payload);
     if (workflowActive())
     {
         error = "another base workflow is already running";
@@ -674,32 +730,7 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
     if (!hasConnection && sourceMode == "nearest" && (payload["auto_apply"] | false))
     {
         sensorType_ = sensorType;
-        DynamicJsonDocument saved(CONFIG_DOCUMENT_SIZE);
-        if (deserializeJson(saved, baseConfig_) != DeserializationError::Ok || !saved.is<JsonObject>())
-            saved.to<JsonObject>();
-        JsonObject base = saved.as<JsonObject>();
-        const JsonObjectConst requested = payload["auto_base_config"].as<JsonObjectConst>();
-        for (JsonPairConst item : requested)
-            base[item.key()] = item.value();
-        base["base_setup_method"] = "AUTO_CORS";
-        base["auto_cors_source_mode"] = "nearest";
-        base["mode"] = "BASE";
-        base.remove("auto_base_started_boot_id");
-        base.remove("auto_base_started_request_id");
-        base.remove("auto_base_previous_config");
-        enforceBaseAccuracy(base);
-        if (saved.overflowed())
-        {
-            error = "nearest CORS configuration exceeds memory capacity";
-            return false;
-        }
-        baseConfig_.clear();
-        serializeJson(saved, baseConfig_);
-        if (!saveStatePreferences())
-        {
-            error = "cannot save nearest CORS request";
-            return false;
-        }
+        if (!saveNearestAutoBaseConfig(payload, true, error)) return false;
         // Command callbacks already hold tcpStreamMutex in the MQTT task.
         stopNtrip();
         stopNtripRover();
@@ -726,35 +757,7 @@ bool BackendAgent::executeAutoBaseCommand(JsonObject payload, String &error,
     sensorType_ = sensorType;
     if (sourceMode == "nearest")
     {
-        DynamicJsonDocument saved(CONFIG_DOCUMENT_SIZE);
-        if (deserializeJson(saved, baseConfig_) != DeserializationError::Ok || !saved.is<JsonObject>())
-            saved.to<JsonObject>();
-        JsonObject base = saved.as<JsonObject>();
-        const JsonObjectConst requested = payload["auto_base_config"].as<JsonObjectConst>();
-        for (JsonPairConst item : requested)
-            base[item.key()] = item.value();
-        base["base_setup_method"] = "AUTO_CORS";
-        base["auto_cors_source_mode"] = "nearest";
-        base["mode"] = "BASE";
-        base.remove("auto_base_previous_config");
-        if (payload["startup_auto"] == true && !String(payload["startup_boot_id"] | "").isEmpty())
-        {
-            base["auto_base_started_boot_id"] = payload["startup_boot_id"];
-            base["auto_base_started_request_id"] = payload["startup_request_id"] | String();
-        }
-        enforceBaseAccuracy(base);
-        if (saved.overflowed())
-        {
-            error = "nearest CORS configuration exceeds memory capacity";
-            return false;
-        }
-        baseConfig_.clear();
-        serializeJson(saved, baseConfig_);
-        if (!saveStatePreferences())
-        {
-            error = "cannot save nearest CORS startup mode";
-            return false;
-        }
+        if (!saveNearestAutoBaseConfig(payload, false, error)) return false;
         publishConfigState("base_config_state");
     }
     String workflowPayload;
@@ -974,6 +977,74 @@ bool BackendAgent::executeStopWorkflowCommand(String &error, String &detail)
     return true;
 }
 
+bool BackendAgent::executeVerifyGnssCommand(JsonObject payload, const String &commandId,
+                                            String &error, String &detail)
+{
+    nvsInventory_.clear();
+    if (workflowActive() || (sensorType_ != "Unicorecomm" && sensorType_ != "Ublox"))
+    {
+        error = "Verification requires an idle supported GNSS receiver";
+        return false;
+    }
+    const bool success = sensorType_ == "Ublox" ? verifyGnssConfig(payload, commandId, error)
+                                                 : verifyUnicoreConfig(payload, commandId, error);
+    if (success)
+        detail = "GNSS readback completed; inspect verification result";
+    return success;
+}
+
+bool BackendAgent::executeStorageStatus(JsonObject payload, const String &commandId, String &error)
+{
+    if (payload["inspect"] != true)
+        return true;
+    if (!payload["offset"].is<uint32_t>() || payload["offset"].as<uint32_t>() > 8192)
+    {
+        error = "NVS offset must be an integer from 0 to 8192";
+        return false;
+    }
+    gnssVerification_.clear();
+    nvsInventory_.clear();
+    const bool success = readNvsInventory(payload["offset"].as<uint32_t>(), commandId, nvsInventory_, error);
+    nvsInventoryMs_ = millis();
+    return success;
+}
+
+bool BackendAgent::executeNvsCleanup(JsonObject payload, String &error, String &detail)
+{
+    nvsInventory_.clear();
+    const String group = payload["group"] | "";
+    const String confirmation = payload["confirm"] | "";
+    if (workflowActive() || (surveyInMonitoring_ && !surveyInReadbackReady_))
+    {
+        error = "Cannot clean storage during an active GNSS workflow or survey";
+        return false;
+    }
+    if (confirmation != group || (group != "unused_wifi" && group != "auto_base_history"))
+    {
+        error = "Select and confirm a supported cleanup group";
+        return false;
+    }
+    if (group == "unused_wifi")
+    {
+        const bool success = clearUnusedWifi(error);
+        detail = "obsolete Wi-Fi portal data cleared; active network preserved";
+        return success;
+    }
+    bool success = beginBackendPreferences(false);
+    if (success)
+    {
+        Preferences &store = backendPreferences();
+        success = !store.isKey("PROGRESS_JSON") || store.remove("PROGRESS_JSON");
+        store.end();
+    }
+    if (success)
+        autoBaseProgress_ = "{}";
+    else
+        error = "Cannot clear Auto Base history";
+    detail = "saved Auto Base history cleared; base configuration and Survey-In result preserved";
+    return success;
+}
+
 void BackendAgent::finishCommand(const String &source, const String &command,
                                  const String &commandId, bool success,
                                  const String &error, const String &detail,
@@ -1033,19 +1104,7 @@ void BackendAgent::executeCommand(const String &source, const String &command,
     }
     else if (command == "VERIFY_GNSS_CONFIG")
     {
-        nvsInventory_.clear();
-        if (workflowActive() || (sensorType_ != "Unicorecomm" && sensorType_ != "Ublox"))
-        {
-            success = false;
-            error = "Verification requires an idle supported GNSS receiver";
-        }
-        else
-        {
-            success = sensorType_ == "Ublox" ? verifyGnssConfig(payload, commandId, error)
-                                               : verifyUnicoreConfig(payload, commandId, error);
-            if (success)
-                detail = "GNSS readback completed; inspect verification result";
-        }
+        success = executeVerifyGnssCommand(payload, commandId, error, detail);
     }
     else if (command == "CHECK_BASE_STATUS")
     {
@@ -1069,58 +1128,12 @@ void BackendAgent::executeCommand(const String &source, const String &command,
     }
     else if (command == "CHECK_STORAGE_STATUS")
     {
-        if (payload["inspect"] == true)
-        {
-            if (!payload["offset"].is<uint32_t>() || payload["offset"].as<uint32_t>() > 8192)
-            {
-                success = false;
-                error = "NVS offset must be an integer from 0 to 8192";
-            }
-            else
-            {
-                gnssVerification_.clear();
-                nvsInventory_.clear();
-                success = readNvsInventory(payload["offset"].as<uint32_t>(), commandId, nvsInventory_, error);
-                nvsInventoryMs_ = millis();
-            }
-        }
+        success = executeStorageStatus(payload, commandId, error);
         detail = "storage status refreshed";
     }
     else if (command == "CLEAR_NVS_DATA")
     {
-        nvsInventory_.clear();
-        const String group = payload["group"] | "";
-        const String confirmation = payload["confirm"] | "";
-        if (workflowActive() || (surveyInMonitoring_ && !surveyInReadbackReady_))
-        {
-            success = false;
-            error = "Cannot clean storage during an active GNSS workflow or survey";
-        }
-        else if (confirmation != group || (group != "unused_wifi" && group != "auto_base_history"))
-        {
-            success = false;
-            error = "Select and confirm a supported cleanup group";
-        }
-        else if (group == "unused_wifi")
-        {
-            success = clearUnusedWifi(error);
-            detail = "obsolete Wi-Fi portal data cleared; active network preserved";
-        }
-        else
-        {
-            success = beginBackendPreferences(false);
-            if (success)
-            {
-                Preferences &store = backendPreferences();
-                success = !store.isKey("PROGRESS_JSON") || store.remove("PROGRESS_JSON");
-                store.end();
-            }
-            if (success)
-                autoBaseProgress_ = "{}";
-            else
-                error = "Cannot clear Auto Base history";
-            detail = "saved Auto Base history cleared; base configuration and Survey-In result preserved";
-        }
+        success = executeNvsCleanup(payload, error, detail);
     }
     else if (command == "REBOOT_DEVICE")
     {

@@ -5,10 +5,10 @@
 #include <Preferences.h>
 #include <ArduinoJson.h>
 #include <nvs.h>
-#include <functional>
 #include <memory>
 
-static bool connectWifi(const String &ssid, const String &password, const std::function<bool()> &validateConnection) {
+namespace {
+bool connectWifi(const String &ssid, const String &password, bool (*validateConnection)()) {
     if (!validWifiSsid(ssid) || !validWifiPassword(password)) return false;
     WiFi.disconnect(false, false);
     WiFi.begin(ssid.c_str(), password.c_str());
@@ -21,8 +21,9 @@ static bool connectWifi(const String &ssid, const String &password, const std::f
     WiFi.disconnect(false, false);
     return false;
 }
+}
 
-static bool tryLegacyWifi(const std::function<bool()> &validateConnection) {
+static bool tryLegacyWifi(bool (*validateConnection)()) {
     // Upgrade only: select a working old profile before retiring the list.
     String profiles;
     nvs_handle_t legacy;
@@ -36,21 +37,19 @@ static bool tryLegacyWifi(const std::function<bool()> &validateConnection) {
     }
     if (profiles.isEmpty()) return false;
     DynamicJsonDocument doc(3072);
-    if (!deserializeJson(doc, profiles) == DeserializationError::Ok || !doc.is<JsonArray>()) return false;
-
+    if (deserializeJson(doc, profiles) != DeserializationError::Ok || !doc.is<JsonArray>()) return false;
     for (JsonObjectConst profile : doc.as<JsonArrayConst>()) {
         const String ssid = profile["ssid"] | "";
         const String password = profile["password"] | "";
-        if (connectWifi(ssid, password, validateConnection)) {
-            if (!saveMigratedWifi(ssid, password))
-                Serial.println("[WIFI] Mang dang hoat dong; chua luu xong chuyen doi NVS.");
-            return true;
-        }
+        if (!connectWifi(ssid, password, validateConnection)) continue;
+        if (!saveMigratedWifi(ssid, password))
+            Serial.println("[WIFI] Mang dang hoat dong; chua luu xong chuyen doi NVS.");
+        return true;
     }
     return false;
 }
 
-bool setupWiFi(const std::function<bool()> &validateConnection) {
+bool setupWiFi(bool (*validateConnection)()) {
     WiFi.persistent(false);
     WiFi.mode(WIFI_STA);
     if (tryLegacyWifi(validateConnection)) return true;
