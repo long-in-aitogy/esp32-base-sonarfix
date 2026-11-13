@@ -2,9 +2,9 @@ name: SonarQube Analysis
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
-    branches: [main, develop]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -133,5 +133,5 @@ jobs:
           args: >
             -Dsonar.host.url=https://sonarcloud.io
             -Dsonar.organization=tundzai001
-            -Dsonar.projectKey=tundzai001_esp32-base-sonarfix
+            -Dsonar.projectKey=tundzai001_esp32-base
             -Dsonar.qualitygate.wait=true
