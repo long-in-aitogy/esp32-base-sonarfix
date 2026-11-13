@@ -7,6 +7,7 @@ root = Path(__file__).resolve().parents[2]
 agent = (root / 'src/functions/backend/Backend_Agent.cpp').read_text()
 json_bool = agent[agent.index('    bool jsonBool('):agent.index('    String jsonString(')]
 workflow = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_text()
+location_method = workflow[workflow.index('bool BackendAgent::resolveAutoBaseLocation('):workflow.index('bool BackendAgent::waitForAutoBaseFix(')]
 begin = workflow.index('bool BackendAgent::completeAutoBaseSetup(')
 end = workflow.index('    setAgentState("auto_setup_base");', begin)
 method = workflow[begin:end] + '    reachedWrite = true;\n    (void)resultJson;\n    return true;\n}\n'
@@ -143,6 +144,7 @@ struct BackendAgent {
         return buildRealAutoBaseResult(lat, lon, alt, rawLat, rawLon, rawAlt, transformed, restarted,
                                        count, source, code, name, meridian, scale, report);
     }
+    bool resolveAutoBaseLocation(double, double, double, JsonDocument &, String &);
     bool completeAutoBaseSetup(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &, String &, const String &);
     bool completeAutoBaseSetupFull(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &, String &, const String &);
     bool waitForAutoBaseFix(uint32_t, uint8_t, bool &, String &, const String &);
@@ -476,7 +478,7 @@ with tempfile.TemporaryDirectory(prefix='auto-base-transform-') as directory:
     workflow_path = root / 'src/functions/backend/Backend_Agent_Workflows.cpp'
     (path / 'check.cpp').write_text(harness + mapped(agent_path, json_bool) +
                                     '#define buildAutoBaseResult buildRealAutoBaseResult\n' + mapped(workflow_path, result_method) +
-                                    '#undef buildAutoBaseResult\n' + method +
+                                    '#undef buildAutoBaseResult\n' + mapped(workflow_path, location_method) + method +
                                     '#define completeAutoBaseSetup completeAutoBaseSetupFull\n' + mapped(workflow_path, full_method) +
                                     '#undef completeAutoBaseSetup\n' + mapped(workflow_path, auto_config) +
                                     mapped(workflow_path, sampling) + '#define completeAutoBaseSetup completeAutoBaseSetupFull\n' +

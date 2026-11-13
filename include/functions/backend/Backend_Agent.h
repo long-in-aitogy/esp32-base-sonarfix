@@ -192,6 +192,8 @@ private:
                                size_t sampleCount, const String &projectionSource,
                                const String &provinceCode, const String &provinceName,
                                double centralMeridianDeg, double scale, JsonObjectConst report);
+    bool resolveAutoBaseLocation(double latitude, double longitude, double altitude,
+                                 JsonDocument &location, String &failureReason);
     bool runReferenceCheckWorkflow(JsonObject payload);
     bool prepareReferenceCheckConfig(JsonObject payload, JsonObject &reference,
                                      double &referenceLatitude, double &referenceLongitude,

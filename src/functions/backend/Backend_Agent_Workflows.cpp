@@ -510,6 +510,49 @@ bool BackendAgent::startAutoBaseRover(const String &host, const uint16_t port,
     return started;
 }
 
+bool BackendAgent::resolveAutoBaseLocation(double rawLatitude, double rawLongitude, double rawAltitude,
+                                           JsonDocument &location, String &failureReason)
+{
+    if (!autoBaseLocationQueue_)
+    {
+        failureReason = "location reply queue could not be allocated";
+        return false;
+    }
+    xQueueReset(autoBaseLocationQueue_);
+    const String requestId = statusBootId_ + ":" + String(millis());
+    StaticJsonDocument<384> requestDoc;
+    JsonObject request = requestDoc.createNestedObject("location_request");
+    request["request_id"] = requestId;
+    std::array<char, 32> value{};
+    snprintf(value.data(), value.size(), "%.17g", rawLatitude); request["lat"] = String(value.data());
+    snprintf(value.data(), value.size(), "%.17g", rawLongitude); request["lon"] = String(value.data());
+    snprintf(value.data(), value.size(), "%.17g", rawAltitude); request["alt"] = String(value.data());
+    String requestJson;
+    serializeJson(requestDoc, requestJson);
+    setWorkflowProgress("resolving_location", 4, 4, requestJson);
+    DynamicJsonDocument received(2048);
+    AutoBaseLocationReply reply{};
+    const uint32_t started = millis();
+    bool located = false;
+    while (!workflowCancelRequested_ && millis() - started < 30000UL)
+    {
+        if (xQueueReceive(autoBaseLocationQueue_, &reply, pdMS_TO_TICKS(50)) == pdTRUE
+            && deserializeJson(received, static_cast<const char *>(reply.json.data())) == DeserializationError::Ok
+            && acceptAutoBaseLocationReply(received.as<JsonObjectConst>(), requestId,
+                                           rawLatitude, rawLongitude, rawAltitude, location))
+        {
+            located = true;
+            break;
+        }
+    }
+    if (!located || workflowCancelRequested_)
+    {
+        failureReason = workflowCancelRequested_ ? "cancelled by user" : "backend location ACK timed out or did not match sampled LLH";
+        return false;
+    }
+    return true;
+}
+
 bool BackendAgent::waitForAutoBaseFix(const uint32_t timeoutSeconds,
                                       const uint8_t fixedStreakRequired, bool &cancelled,
                                       String &failureReason, const String &sourceMountpoint)
@@ -747,43 +790,8 @@ bool BackendAgent::completeAutoBaseSetup(
         }
         else
         {
-            if (!autoBaseLocationQueue_)
-            {
-                failureReason = "location reply queue could not be allocated";
+            if (!resolveAutoBaseLocation(rawLatitude, rawLongitude, rawAltitude, location, failureReason))
                 return false;
-            }
-            xQueueReset(autoBaseLocationQueue_);
-            const String requestId = statusBootId_ + ":" + String(millis());
-            StaticJsonDocument<384> requestDoc;
-            JsonObject request = requestDoc.createNestedObject("location_request");
-            request["request_id"] = requestId;
-            std::array<char, 32> value{};
-            snprintf(value.data(), value.size(), "%.17g", rawLatitude); request["lat"] = String(value.data());
-            snprintf(value.data(), value.size(), "%.17g", rawLongitude); request["lon"] = String(value.data());
-            snprintf(value.data(), value.size(), "%.17g", rawAltitude); request["alt"] = String(value.data());
-            String requestJson;
-            serializeJson(requestDoc, requestJson);
-            setWorkflowProgress("resolving_location", 4, 4, requestJson);
-            DynamicJsonDocument received(2048);
-            AutoBaseLocationReply reply{};
-            const uint32_t started = millis();
-            bool located = false;
-            while (!workflowCancelRequested_ && millis() - started < 30000UL)
-            {
-                if (xQueueReceive(autoBaseLocationQueue_, &reply, pdMS_TO_TICKS(50)) == pdTRUE
-                    && deserializeJson(received, static_cast<const char *>(reply.json.data())) == DeserializationError::Ok
-                    && acceptAutoBaseLocationReply(received.as<JsonObjectConst>(), requestId,
-                                                   rawLatitude, rawLongitude, rawAltitude, location))
-                {
-                    located = true;
-                    break;
-                }
-            }
-            if (!located || workflowCancelRequested_)
-            {
-                failureReason = workflowCancelRequested_ ? "cancelled by user" : "backend location ACK timed out or did not match sampled LLH";
-                return false;
-            }
             datum.centralMeridianDeg = coordinateNumber(location["l0_deg"]);
             datum.scale = coordinateNumber(location["k0"]);
             if (!std::isfinite(datum.centralMeridianDeg) || !std::isfinite(datum.scale))
