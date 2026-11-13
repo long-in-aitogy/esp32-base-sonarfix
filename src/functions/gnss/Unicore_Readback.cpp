@@ -17,54 +17,55 @@ namespace UnicoreReadback
 {
     namespace
     {
-/** @brief Implements appendUnicoreCandidate. */
+        bool finishUnicoreCandidate(char value, const char *prefix, bool multiline,
+                                    String &candidate, String &response)
+        {
+            if (!multiline || !candidate.startsWith(prefix))
+            {
+                if (candidate.startsWith(prefix))
+                    response = candidate;
+                candidate = "";
+                return !response.isEmpty();
+            }
+            candidate += value;
+            if (candidate.endsWith("\r\n\r\n") || candidate.endsWith("\n\n"))
+            {
+                response = candidate;
+                return true;
+            }
+            size_t end = candidate.length();
+            while (end && (candidate[end - 1] == '\r' || candidate[end - 1] == '\n' || candidate[end - 1] == ' '))
+                --end;
+            if (end >= 9 && candidate[end - 9] == '*')
+            {
+                candidate.remove(end);
+                response = candidate;
+                return true;
+            }
+            return false;
+        }
+
         bool appendUnicoreCandidate(char value, const char *prefix, bool multiline,
                                     String &candidate, String &response)
         {
             if (value == prefix[0])
             {
-            candidate = String(value);
+                candidate = String(value);
                 return !response.isEmpty();
             }
             if (multiline && value == '\r' && !candidate.isEmpty())
             {
-                    candidate += value;
-                    return !response.isEmpty();
-            }
-
-            if (value != '\r' && value != '\n')
-            {
-                if (!candidate.isEmpty() && candidate.length() < (multiline ? 4095U : 383U))
-                    candidate += value;
-                else if (candidate.length() >= (multiline ? 4095U : 383U))
-                    candidate = "";
+                candidate += value;
                 return !response.isEmpty();
             }
-
-            if (multiline && candidate.startsWith(prefix))
+            if (value == '\r' || value == '\n')
             {
-                candidate += value;
-                if (candidate.endsWith("\r\n\r\n") || candidate.endsWith("\n\n"))
-                {
-                    response = candidate;
-                    return true;
-                }
-                size_t end = candidate.length();
-                while (end && (candidate[end - 1] == '\r' || candidate[end - 1] == '\n' || candidate[end - 1] == ' '))
-                    --end;
-                if (end >= 9 && candidate[end - 9] == '*')
-                {
-                    candidate.remove(end);
-                    response = candidate;
-                    return true;
-                }
-                return false;
+                return finishUnicoreCandidate(value, prefix, multiline, candidate, response);
             }
-
-            if (candidate.startsWith(prefix))
-                response = candidate;
-            
-            candidate = "";
+            if (!candidate.isEmpty() && candidate.length() < (multiline ? 4095U : 383U))
+                candidate += value;
+            else if (candidate.length() >= (multiline ? 4095U : 383U))
+                candidate = "";
             return !response.isEmpty();
         }
 
