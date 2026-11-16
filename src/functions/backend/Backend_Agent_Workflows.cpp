@@ -1219,7 +1219,8 @@ bool BackendAgent::startSurveyInFallback(JsonObject payload, JsonDocument &previ
                                          const String &startedBootId, const String &startedRequestId,
                                          String &failureReason)
 {
-    Serial.println("[AUTO BASE][FALLBACK] No station within 20 km; starting Survey-In.");
+    const char *reason = payload["fallback_reason"] | "no_fixed_station_within_20_km";
+    Serial.printf("[AUTO BASE][FALLBACK] Starting Survey-In (%s).\n", reason);
     DynamicJsonDocument survey(CONFIG_DOCUMENT_SIZE);
     survey.set(previousBase.as<JsonObjectConst>());
     survey["base_setup_method"] = "SURVEY_IN";
@@ -1257,8 +1258,14 @@ bool BackendAgent::startSurveyInFallback(JsonObject payload, JsonDocument &previ
         return false;
     }
     setAgentState(normalAgentState());
-    setWorkflowProgress("completed", 4, 4,
-        R"({"mode":"survey_in","auto_applied":true,"receiver_write_completed":true,"reason":"no_fixed_station_within_20_km"})");
+    DynamicJsonDocument details(256);
+    details["mode"] = "survey_in";
+    details["auto_applied"] = true;
+    details["receiver_write_completed"] = true;
+    details["reason"] = reason;
+    String serialized;
+    serializeJson(details, serialized);
+    setWorkflowProgress("completed", 4, 4, serialized);
     saveStatePreferences();
     publishConfigState("base_config_state");
     Serial.printf("[AUTO BASE][SURVEY-IN] Started; target=%lu seconds; RTCM SOURCE restored.\n",
@@ -1388,8 +1395,21 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
     setAgentState("auto_setup_wait_fix");
     setWorkflowProgress("wait_fix", 2, 4);
     auto cancelled = false;
-    if (!waitForAutoBaseFix(timeoutSeconds, fixedStreakRequired, cancelled, failureReason, sourceMountpoint))
+    const uint32_t waitFixTimeout = autoNearest ? std::min<uint32_t>(timeoutSeconds, 180UL) : timeoutSeconds;
+    if (!waitForAutoBaseFix(waitFixTimeout, fixedStreakRequired, cancelled, failureReason, sourceMountpoint))
     {
+        if (autoNearest && failureReason == "RTK fix timeout" && !cancelled && !workflowCancelRequested_)
+        {
+            Serial.println("[AUTO BASE][FALLBACK] AutoNearest khong the RTK Fix trong 180s; tu dong fallback sang Survey-In.");
+            stopNtripRoverLocked();
+            payload["fallback_reason"] = "autonearest_rtk_fix_timeout";
+            if (!startSurveyInFallback(payload, previousBase, startedBootId, startedRequestId, failureReason))
+            {
+                finish(false, false, failureReason);
+                return false;
+            }
+            return true;
+        }
         finish(false, cancelled, failureReason);
         return false;
     }
