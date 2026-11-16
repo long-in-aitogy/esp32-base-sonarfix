@@ -1,12 +1,12 @@
 # AITOGY-GNSS-BASE-ESP-UM980
 
-**Hướng dẫn kỹ thuật nội bộ | Firmware V2.3.5 | Cập nhật 25/10/2026**
+**Hướng dẫn kỹ thuật nội bộ | Firmware v1.0.0 | Backend v2.3.5 | Cập nhật 25/10/2026**
 
 ## 1. Phạm vi và nguyên tắc vận hành
 
 Bộ AITOGY-BASE-ESP nhận dữ liệu từ receiver GNSS, chuyển tiếp RTCM lên caster bằng 4G hoặc Wi-Fi và nhận điều khiển từ hệ thống CORS. Anten base phải đứng yên khi phát cải chính. Sau khi di chuyển anten, cấu hình lại tọa độ base trước khi cho rover sử dụng.
 
-Tài liệu mô tả firmware **V2.3.5**, cập nhật **25/10/2026**. Kết quả biên dịch và kiểm tra phần mềm không thay thế nghiệm thu ngoài thực địa. Không cam kết thời gian khởi động cố định hay độ chính xác đo khi chưa kiểm tra receiver, anten, mạng cải chính và hệ tọa độ.
+Tài liệu mô tả firmware **v1.0.0**, tương thích với backend **v2.3.5**, cập nhật **25/10/2026**. Kết quả biên dịch và kiểm tra phần mềm không thay thế nghiệm thu ngoài thực địa. Không cam kết thời gian khởi động cố định hay độ chính xác đo khi chưa kiểm tra receiver, anten, mạng cải chính và hệ tọa độ.
 
 | Chế độ | Khi sử dụng | Điều kiện hoàn thành |
 | --- | --- | --- |
@@ -440,5 +440,5 @@ Biên bản thực địa phải ghi: board/model/firmware receiver, nguồn, c�
 
 ## Tài liệu tham chiếu
 
-- Bộ lệnh ASCII và phản hồi mô tả ở đây được đối chiếu trực tiếp với bộ tạo lệnh và parser trong firmware V2.3.5; khi thay receiver/firmware GNSS cần kiểm tra tài liệu của đúng model trước khi áp dụng.
+- Bộ lệnh ASCII và phản hồi mô tả ở đây được đối chiếu trực tiếp với bộ tạo lệnh và parser trong firmware v1.0.0; khi thay receiver/firmware GNSS cần kiểm tra tài liệu của đúng model trước khi áp dụng.
 - [Hướng dẫn tích hợp CORS](base-4g.md), command handler, bộ tạo lệnh theo chip và các bài kiểm tra host trong cùng bản nguồn là cơ sở kiểm tra hành vi firmware.
