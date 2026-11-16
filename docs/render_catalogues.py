@@ -1,4 +1,5 @@
 """Render the four Markdown catalogues to PDF. Requires reportlab."""
+import os
 from pathlib import Path
 import argparse
 import html
@@ -21,6 +22,10 @@ ACCENT = colors.HexColor("#087E8B")
 MUTED = colors.HexColor("#536678")
 WIDTH = A4[0] - 36 * mm
 
+DEJAVU_SANS = "DejaVuSans.ttf"
+DEJAVU_SANS_BOLD = "DejaVuSans-Bold.ttf"
+DEJAVU_SANS_OBLIQUE = "DejaVuSans-Oblique.ttf"
+DEJAVU_SANS_MONO = "DejaVuSansMono.ttf"
 
 def _resolve_asset(base, relative):
     """Resolve a catalogue asset without allowing it to escape its directory."""
@@ -37,7 +42,7 @@ def fonts(directory=None):
     if directory:
         base = Path(directory)
         paths = [base / name for name in (
-            "DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "DejaVuSans-Oblique.ttf", "DejaVuSansMono.ttf")]
+            DEJAVU_SANS, DEJAVU_SANS_BOLD, DEJAVU_SANS_OBLIQUE, DEJAVU_SANS_MONO)]
     elif Path("/System/Library/Fonts/Supplemental/Arial.ttf").exists():
         base = Path("/System/Library/Fonts/Supplemental")
         paths = [base / "Arial.ttf", base / "Arial Bold.ttf", base / "Arial Italic.ttf",
@@ -45,7 +50,7 @@ def fonts(directory=None):
     else:
         base = Path("/usr/share/fonts/truetype/dejavu")
         paths = [base / name for name in (
-            "DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "DejaVuSans-Oblique.ttf", "DejaVuSansMono.ttf")]
+            DEJAVU_SANS, DEJAVU_SANS_BOLD, DEJAVU_SANS_OBLIQUE, DEJAVU_SANS_MONO)]
     for name, path in zip(("Body", "BodyBold", "BodyItalic", "Mono"), paths):
         if not path.is_file():
             raise SystemExit(f"Missing font: {path}. Supply --font-dir with DejaVu fonts.")
@@ -187,7 +192,6 @@ def _story(source, sheet):
 
 
 def render(source, output):
-    output = _resolve_asset(ROOT, output)
     sheet = styles()
     story, title = _story(source, sheet)
 
@@ -215,24 +219,22 @@ def render(source, output):
     doc.build(story)
     print(output)
 
-
-def _output_directory(value):
-    """Map CLI choices to fixed output paths, never to user-supplied paths."""
-    if value == "docs":
-        return ROOT
-    if value == "preview":
-        return _resolve_asset(ROOT, ROOT / "preview")
-    raise ValueError("Output directory must be docs or preview")
-
+def safe_path(path):
+    resolved = os.path.realpath(path)
+    base_dir = os.path.realpath(os.getcwd())
+    if resolved != base_dir and not resolved.startswith(base_dir + os.sep):
+        raise ValueError(f"path {path!r} is outside the allowed directory")
+    return resolved
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--font-dir", help="Directory containing the four DejaVu TTF fonts")
-    parser.add_argument("--output-dir", choices=("docs", "preview"), default="docs",
-                        help="Write PDFs to docs or docs/preview")
+    parser.add_argument("--output-dir", type=Path, default=ROOT)
     args = parser.parse_args()
-    fonts(args.font_dir)
-    output_dir = _output_directory(args.output_dir)
+
+    output_dir = Path(safe_path(args.output_dir))
+    font_dir = safe_path(args.font_dir) if args.font_dir else None
+    fonts(font_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     for source in sorted(ROOT.glob("Catalogue-*.md")):
         render(source, output_dir / source.with_suffix(".pdf").name)

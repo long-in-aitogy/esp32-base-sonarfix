@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 
 root = Path(__file__).resolve().parents[2]
-source = (root.parent / 'agent_universal.py').read_text()
+source = (root.parent / 'cors/geodetic/agent_universal.py').read_text()
 names = {'EllipPara','RTCMDatum','_rtcm_getbitu','_rtcm_getbits','_decode_type1025'}
 nodes = [n for n in ast.parse(source).body if isinstance(n,(ast.ClassDef,ast.FunctionDef)) and n.name in names]
 namespace = dict(dataclass=dataclass,field=field,math=math,logging=logging)
