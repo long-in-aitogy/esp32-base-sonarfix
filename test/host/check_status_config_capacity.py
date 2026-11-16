@@ -17,7 +17,7 @@ harness=r'''
 #include <ArduinoJson.h>
 #include <cassert>
 #include <cstring>
-constexpr size_t STATUS_DOCUMENT_SIZE=8192,PROGRESS_DOCUMENT_SIZE=8192;
+constexpr size_t STATUS_DOCUMENT_SIZE=8192,CONFIG_DOCUMENT_SIZE=6144,PROGRESS_DOCUMENT_SIZE=8192,VERIFICATION_DOCUMENT_SIZE=12288;
 '''
 checks=r'''
 int main() {

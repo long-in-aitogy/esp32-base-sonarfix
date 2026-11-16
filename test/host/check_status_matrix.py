@@ -35,7 +35,7 @@ using QueueHandle_t = void *;
 using SemaphoreHandle_t = void *;
 using TaskHandle_t = void *;
 namespace GnssCmdBuilder { enum class GnssSensorType { Invalid, Ublox, Unicore }; using Command = std::vector<uint8_t>; using CommandList = std::vector<Command>; }
-constexpr size_t STATUS_DOCUMENT_SIZE = 8192, VERIFICATION_DOCUMENT_SIZE = 12288;
+constexpr size_t CONFIG_DOCUMENT_SIZE = 6144, STATUS_DOCUMENT_SIZE = 8192, VERIFICATION_DOCUMENT_SIZE = 12288, PROGRESS_DOCUMENT_SIZE = 8192;
 constexpr unsigned BACKEND_CONTROL_STALE_MS = 30000, BACKEND_CONTROL_RECOVERY_MS = 10000;
 constexpr const char *AGENT_VERSION = "test", *MQTT_SERVER = "broker", *BACKEND_HOST = "backend";
 unsigned now = 10000, saves = 0;
