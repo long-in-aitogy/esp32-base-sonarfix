@@ -106,7 +106,8 @@ namespace BackendAgentInternal
 
     bool copyJsonObject(JsonDocument &target, const char *key, const String &serialized)
     {
-        DynamicJsonDocument source(std::strcmp(key, "auto_base_progress") == 0 ? PROGRESS_DOCUMENT_SIZE : CONFIG_DOCUMENT_SIZE);
+        const size_t capacity = serialized.length() * 2 + 128;
+        DynamicJsonDocument source(capacity < 256 ? 256 : capacity);
         if (deserializeJson(source, serialized) != DeserializationError::Ok || !source.is<JsonObject>())
         {
             return false;

@@ -473,13 +473,15 @@ String BackendAgent::buildStatusPayload()
         receiverInfoMs_ = 0;
     }
     DynamicJsonDocument doc(STATUS_DOCUMENT_SIZE + 1024
-                            + (baseConfig_.length() > 2 ? CONFIG_DOCUMENT_SIZE : 0)
-                            + (serviceConfig_.length() > 2 ? CONFIG_DOCUMENT_SIZE : 0)
-                            + (autoBaseProgress_.length() > 2 ? PROGRESS_DOCUMENT_SIZE : 0)
-                            + (nvsInventory_.isEmpty() ? 0 : 3072) + (gnssVerification_.isEmpty() ? 0 : VERIFICATION_DOCUMENT_SIZE)
+                            + (baseConfig_.length() > 2 ? baseConfig_.length() + 256 : 0)
+                            + (serviceConfig_.length() > 2 ? serviceConfig_.length() + 256 : 0)
+                            + (autoBaseProgress_.length() > 2 ? autoBaseProgress_.length() + 256 : 0)
+                            + (nvsInventory_.isEmpty() ? 0 : nvsInventory_.length() + 256)
+                            + (gnssVerification_.isEmpty() ? 0 : gnssVerification_.length() + 256)
                             + (satelliteReadback_.isEmpty() ? 0 : satelliteReadback_.length() + 256)
                             + (receiverInfoMs_ ? versionReadback_.length() + versionReadbackError_.length() + 256 : 0));
-    DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
+    const size_t serviceDocSize = serviceConfig_.length() > 2 ? serviceConfig_.length() * 2 + 128 : 256;
+    DynamicJsonDocument serviceDoc(serviceDocSize < 256 ? 256 : serviceDocSize);
     deserializeJson(serviceDoc, serviceConfig_);
     const JsonObjectConst service = serviceDoc.as<JsonObjectConst>();
     const auto server1Active = licenseValid_ && provisioned_ && !isServerLocked(1) && effectiveStreamActive(service, 1, controlPlaneFailOpen_);

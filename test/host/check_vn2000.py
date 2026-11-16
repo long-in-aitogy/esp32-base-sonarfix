@@ -9,7 +9,7 @@ import sys
 import tempfile
 
 root = Path(__file__).resolve().parents[2]
-agent = Path(sys.argv[1]) if len(sys.argv) > 1 else root.parent / 'cors/geodetic/agent_universal.py'
+agent = Path(sys.argv[1]) if len(sys.argv) > 1 else root.parent / 'agent_universal.py'
 names = {'EllipPara', 'RTCMDatum', '_rtcm_getbitu', '_rtcm_getbits', '_decode_type1021',
          '_decode_type1023', '_decode_type1025', '_llh_rad_to_ecef', '_ecef_to_llh_rad',
          '_blh_to_xyh', '_xy_to_blh', '_vn2000_blh_to_local_wgs84_llh', '_transform_itrf_to_vn2000_neh_and_llh'}
