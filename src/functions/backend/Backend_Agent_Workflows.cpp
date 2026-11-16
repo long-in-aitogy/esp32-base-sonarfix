@@ -1395,10 +1395,11 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
     setAgentState("auto_setup_wait_fix");
     setWorkflowProgress("wait_fix", 2, 4);
     auto cancelled = false;
-    const uint32_t waitFixTimeout = autoNearest ? std::min<uint32_t>(timeoutSeconds, 180UL) : timeoutSeconds;
+    const bool fallbackOnTimeout = autoNearest && (!payload.containsKey("timeout") || payload["timeout"].as<uint32_t>() >= 180UL);
+    const uint32_t waitFixTimeout = (autoNearest && !payload.containsKey("timeout")) ? 180UL : timeoutSeconds;
     if (!waitForAutoBaseFix(waitFixTimeout, fixedStreakRequired, cancelled, failureReason, sourceMountpoint))
     {
-        if (autoNearest && failureReason == "RTK fix timeout" && !cancelled && !workflowCancelRequested_)
+        if (fallbackOnTimeout && failureReason == "RTK fix timeout" && !cancelled && !workflowCancelRequested_)
         {
             Serial.println("[AUTO BASE][FALLBACK] AutoNearest khong the RTK Fix trong 180s; tu dong fallback sang Survey-In.");
             stopNtripRoverLocked();
