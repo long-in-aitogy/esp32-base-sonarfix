@@ -33,6 +33,49 @@ namespace
         }
         return value.is<double>() ? value.as<double>() : double(NAN);
     }
+
+    GnssCmdBuilder::GnssOptions parseStartupOptions(JsonObjectConst base, bool restoreFixed)
+    {
+        using namespace GnssCmdBuilder;
+        GnssOptions options;
+        options.ports = {"UART1"};
+        const JsonObjectConst output = base["gnss_options"].as<JsonObjectConst>();
+        options.outputMode = restoreFixed || String(output["output_mode"] | "rtcm_only") == "rtcm_only"
+                                 ? OutputMode::RtcmOnly
+                                 : OutputMode::DiagnosticsRtcm;
+        const String defaultLevel = restoreFixed ? "4" : "both";
+        if (const String level = output["msm_level"].isNull() ? defaultLevel : output["msm_level"].as<String>(); level == "7")
+            options.msmLevel = MsmLevel::Msm7;
+        else if (level == "both" || (!restoreFixed && level != "4"))
+            options.msmLevel = MsmLevel::Both;
+        else
+            options.msmLevel = MsmLevel::Msm4;
+        const JsonObjectConst systems = output["constellations"].as<JsonObjectConst>();
+        options.gps = systems["gps"] | true;
+        options.glo = systems["glo"] | true;
+        options.gal = systems["gal"] | true;
+        options.bds = systems["bds"] | true;
+        options.qzss = systems["qzss"] | !restoreFixed;
+        options.sbas = systems["sbas"] | !restoreFixed;
+        return options;
+    }
+
+    bool parseFixedLlaCoords(JsonObjectConst base, double &lat, double &lon, double &alt, String &error)
+    {
+        JsonObjectConst coords = base["coords"].as<JsonObjectConst>();
+        if (coords.isNull())
+            coords = base;
+        lat = configNumber(coords["lat"], NAN);
+        lon = configNumber(coords["lon"], NAN);
+        alt = configNumber(coords["alt"], NAN);
+        if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(alt)
+            || std::abs(lat) > 90 || std::abs(lon) > 180 || alt < -12000 || alt > 100000)
+        {
+            error = "Saved Fixed LLA coordinates or accuracy are invalid";
+            return false;
+        }
+        return true;
+    }
 }
 
 bool BackendAgent::buildStartupCommands(JsonObjectConst base,
@@ -43,26 +86,7 @@ bool BackendAgent::buildStartupCommands(JsonObjectConst base,
                                         String &error)
 {
     using namespace GnssCmdBuilder;
-    GnssOptions options;
-    options.ports = {"UART1"};
-    const JsonObjectConst output = base["gnss_options"].as<JsonObjectConst>();
-    options.outputMode = restoreFixed || String(output["output_mode"] | "rtcm_only") == "rtcm_only"
-                             ? OutputMode::RtcmOnly
-                             : OutputMode::DiagnosticsRtcm;
-    const String defaultLevel = restoreFixed ? "4" : "both";
-    if (const String level = output["msm_level"].isNull() ? defaultLevel : output["msm_level"].as<String>(); level == "7")
-        options.msmLevel = MsmLevel::Msm7;
-    else if (level == "both" || (!restoreFixed && level != "4"))
-        options.msmLevel = MsmLevel::Both;
-    else
-        options.msmLevel = MsmLevel::Msm4;
-    const JsonObjectConst systems = output["constellations"].as<JsonObjectConst>();
-    options.gps = systems["gps"] | true;
-    options.glo = systems["glo"] | true;
-    options.gal = systems["gal"] | true;
-    options.bds = systems["bds"] | true;
-    options.qzss = systems["qzss"] | !restoreFixed;
-    options.sbas = systems["sbas"] | !restoreFixed;
+    const GnssOptions options = parseStartupOptions(base, restoreFixed);
     position.ellipsoid = detected == GnssSensorType::Ublox;
     if (!restoreFixed)
     {
@@ -81,18 +105,12 @@ bool BackendAgent::buildStartupCommands(JsonObjectConst base,
         return true;
     }
 
-    JsonObjectConst coords = base["coords"].as<JsonObjectConst>();
-    if (coords.isNull())
-        coords = base;
-    const auto lat = configNumber(coords["lat"], NAN);
-    const auto lon = configNumber(coords["lon"], NAN);
-    const auto alt = configNumber(coords["alt"], NAN);
-    const auto accuracy = GnssCmdBuilder::BASE_ACCURACY_METERS;
-    if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(alt) || std::abs(lat) > 90 || std::abs(lon) > 180 || alt < -12000 || alt > 100000)
-    {
-        error = "Saved Fixed LLA coordinates or accuracy are invalid";
+    double lat = 0.0;
+    double lon = 0.0;
+    double alt = 0.0;
+    if (!parseFixedLlaCoords(base, lat, lon, alt, error))
         return false;
-    }
+
     position.latitude = lat;
     position.longitude = lon;
     position.altitude = alt;
@@ -111,6 +129,7 @@ bool BackendAgent::buildStartupCommands(JsonObjectConst base,
             commands.emplace_back(zero.begin(), zero.end());
         }
     }
+    const auto accuracy = GnssCmdBuilder::BASE_ACCURACY_METERS;
     const CommandList fixed = buildBaseFixedLlaCommand(lat, lon, alt, accuracy, detected, options);
     commands.insert(commands.end(), fixed.begin(), fixed.end());
     return true;

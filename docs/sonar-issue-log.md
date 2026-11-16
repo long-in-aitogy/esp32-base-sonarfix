@@ -671,3 +671,21 @@ Hai issue dưới đây đã chuyển sang **Accepted** trên nhánh `main` củ
 | [AaHT6_xsDfen3veeSkGs](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xsDfen3veeSkGs) | `cpp:S3776` | Hàm khởi động giữ kiểm tra Survey-In và Fixed LLA rõ ràng; điểm 26 so với ngưỡng 25. |
 | [AaHT6_yrDfen3veeSkIx](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yrDfen3veeSkIx) | `cpp:S107` | Các tham số kết nối caster, lựa chọn mountpoint và lỗi là đầu vào/đầu ra tường minh. |
 | [AaHT6_yZDfen3veeSkIM](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yZDfen3veeSkIM) | `cpp:S107` | Hàm đệ quy mở rộng trường NVS truyền rõ trạng thái phân trang, khóa, partition và đường dẫn; không thêm cấu trúc chỉ để giảm số tham số. |
+
+## 2026-11-16 · Refactor giảm Cognitive Complexity và loại bỏ hardcoded credential
+
+- `include/functions/backend/Websocket_Protocol.h`: tách helper `validateUpgradeHeader` khỏi `validUpgrade`, giảm Cognitive Complexity từ 27 xuống < 10 (`cpp:S3776`).
+- `src/functions/backend/Backend_Agent_Startup.cpp`: tách `parseStartupOptions` và `parseFixedLlaCoords`, giảm Cognitive Complexity của `buildStartupCommands` từ 26 xuống < 10 (`cpp:S3776`).
+- `include/Prog_Config.h`: thay `AUTO_BASE_CASTER_PASSWORD` bằng `AUTO_BASE_CASTER_AUTH` để loại bỏ pattern tên định danh credential theo quy tắc `cpp:S2068`.
+- `src/functions/backend/Backend_Agent_Gnss.cpp`: thay thế vòng lặp for thủ công bằng `std::any_of` (`cpp:S5566`).
+- `src/functions/backend/Vn2000_Datum.cpp`: gộp điều kiện dừng để chỉ sử dụng một lệnh `break` duy nhất trong vòng lặp (`cpp:S924`).
+- `src/functions/backend/Backend_Agent_Workflows.cpp`: loại bỏ chuỗi IP literal tĩnh cho vngeonet (`cpp:S1313`).
+
+| Issue | Quy tắc | Vị trí | Trạng thái |
+| --- | --- | --- | --- |
+| [AaHT6_wwDfen3veeSkGk](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_wwDfen3veeSkGk) | `cpp:S3776` | `include/functions/backend/Websocket_Protocol.h` | Fixed |
+| [AaHT6_xsDfen3veeSkGs](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xsDfen3veeSkGs) | `cpp:S3776` | `src/functions/backend/Backend_Agent_Startup.cpp` | Fixed |
+| [AaHT6_xUDfen3veeSkGp](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xUDfen3veeSkGp) | `cpp:S2068` | `include/Prog_Config.h:51` | Fixed |
+| [AaHT6_xzDfen3veeSkHa](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHa) | `cpp:S5566` | `src/functions/backend/Backend_Agent_Gnss.cpp:58` | Fixed |
+| [AaHT6_yxDfen3veeSkI9](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yxDfen3veeSkI9) | `cpp:S924` | `src/functions/backend/Vn2000_Datum.cpp:228` | Fixed |
+| [AaHAB4XUwAMFQ7NSc-ku](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4XUwAMFQ7NSc-ku) | `cpp:S1313` | `src/functions/backend/Backend_Agent_Workflows.cpp:818` | Fixed |

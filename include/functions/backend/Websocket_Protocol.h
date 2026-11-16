@@ -5,10 +5,11 @@
 #include <cctype>
 
 namespace WebsocketProtocol {
-inline std::string lower(std::string value) {
-    std::transform(value.begin(), value.end(), value.begin(),
+inline std::string lower(std::string_view value) {
+    std::string result(value);
+    std::transform(result.begin(), result.end(), result.begin(),
                    [](unsigned char c) { return std::tolower(c); });
-    return value;
+    return result;
 }
 inline std::string trim(std::string_view value) {
     const auto start = value.find_first_not_of(" \t");
@@ -25,6 +26,24 @@ inline bool hasToken(std::string_view value, std::string_view token) {
     } while (start < value.size());
     return false;
 }
+inline bool validateUpgradeHeader(std::string_view name, std::string_view value,
+                                  std::string_view accept, bool &upgrade,
+                                  bool &connection, bool &accepted) {
+    if (name == "upgrade") {
+        if (upgrade || lower(value) != "websocket") return false;
+        upgrade = true;
+    } else if (name == "connection") {
+        if (connection || !hasToken(value, "upgrade")) return false;
+        connection = true;
+    } else if (name == "sec-websocket-accept") {
+        if (accepted || value != accept) return false;
+        accepted = true;
+    } else if (name == "sec-websocket-extensions" || name == "sec-websocket-protocol") {
+        return false; // Neither was requested by this client.
+    }
+    return true;
+}
+
 inline bool validUpgrade(std::string_view response, std::string_view accept) {
     if (accept.empty() || response.size() > 4096 || response.size() < 4
         || response.compare(response.size() - 4, 4, "\r\n\r\n") != 0) return false;
@@ -40,17 +59,8 @@ inline bool validUpgrade(std::string_view response, std::string_view accept) {
         if (colon == std::string_view::npos || colon == 0) return false;
         const auto name = lower(std::string(line.substr(0, colon)));
         const auto value = trim(line.substr(colon + 1));
-        if (name == "upgrade") {
-            if (upgrade || lower(value) != "websocket") return false;
-            upgrade = true;
-        } else if (name == "connection") {
-            if (connection || !hasToken(value, "upgrade")) return false;
-            connection = true;
-        } else if (name == "sec-websocket-accept") {
-            if (accepted || value != accept) return false;
-            accepted = true;
-        } else if (name == "sec-websocket-extensions" || name == "sec-websocket-protocol") {
-            return false; // Neither was requested by this client.
+        if (!validateUpgradeHeader(name, value, accept, upgrade, connection, accepted)) {
+            return false;
         }
         start = end + 2;
     }

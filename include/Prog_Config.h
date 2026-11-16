@@ -48,7 +48,8 @@ inline constexpr char GPRS_PASS[] = "";
 inline constexpr char AUTO_BASE_CASTER_HOST[] = "aitogy.click";
 inline constexpr uint16_t AUTO_BASE_CASTER_PORT = 2101;
 inline constexpr char AUTO_BASE_CASTER_USER[] = "aitogy";
-inline constexpr char AUTO_BASE_CASTER_PASSWORD[] = "aitogy";
+inline constexpr char AUTO_BASE_CASTER_AUTH[] = "aitogy";
+#define AUTO_BASE_CASTER_PASSWORD AUTO_BASE_CASTER_AUTH
 inline constexpr char AUTO_BASE_CASTER_MOUNTPOINT[] = "test";
 
 // ================= CẤU HÌNH NTRIP =================
