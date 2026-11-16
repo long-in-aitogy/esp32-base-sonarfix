@@ -5,7 +5,7 @@ import tempfile
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Commands.cpp').read_text()
-method = source[source.index('bool BackendAgent::executeRawCommand('):source.index('bool BackendAgent::executeAutoBaseCommand(')]
+method = source[source.index('bool BackendAgent::executeRawCommand('):source.index('bool BackendAgent::saveNearestAutoBaseConfig(')]
 validator = source[source.index('static bool validateRawCommands('):source.index('bool BackendAgent::executeRawCommands(')]
 codec = (root / 'src/functions/backend/Backend_Agent_Codec.cpp').read_text()
 codec = codec[codec.index('    int base64Value('):codec.index('    bool delayMarker(')]
@@ -47,6 +47,7 @@ struct BackendAgent {
         assert(fixed && p.latitude == 21); if (!confirmOk) error = "BESTPOS mismatch"; return confirmOk;
     }
     void publishConfigState(const char *) { ++published; }
+    bool prepareRawBaseConfig(JsonObject, GnssCmdBuilder::GnssSensorType, bool, StartupPosition &, String &, String &);
     bool executeRawCommand(JsonDocument &, JsonObject, String &, String &);
 };
 '''

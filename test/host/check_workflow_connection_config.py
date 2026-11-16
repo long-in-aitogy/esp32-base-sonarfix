@@ -13,7 +13,7 @@ for name in ('prepareAutoBaseConfig', 'prepareReferenceCheckConfig'):
 start = source.index('String BackendAgent::buildReferenceCheckResult(')
 end = source.index('\nbool BackendAgent::runReferenceCheckWorkflow(', start)
 methods.append(source[start:end])
-number = source[source.index('    double coordinateNumber('):source.index('    bool acceptAutoBaseLocationReply(')]
+number = source[source.index('    double coordinateNumber('):source.index('    void appendAutoBaseDatumReport(')]
 harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>

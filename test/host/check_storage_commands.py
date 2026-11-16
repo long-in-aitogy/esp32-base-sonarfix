@@ -8,6 +8,7 @@ source = (root / 'src/functions/backend/Backend_Agent_Commands.cpp').read_text()
 begin = source.index('    else if (command == "CHECK_STORAGE_STATUS")', source.index('void BackendAgent::executeCommand('))
 end = source.index('    else if (command == "REBOOT_DEVICE")', begin)
 branch = source[begin:end].replace('    else if (command == "CHECK_STORAGE_STATUS")', '    if (command == "CHECK_STORAGE_STATUS")', 1)
+helpers = source[source.index('bool BackendAgent::executeStorageStatus('):source.index('void BackendAgent::finishCommand(')].replace('BackendAgent::', 'Agent::')
 harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -23,6 +24,8 @@ struct Agent {
     String nvsInventory_, gnssVerification_="old", autoBaseProgress_="previous"; uint32_t nvsInventoryMs_=0;
     bool active=false, surveyInMonitoring_=false, surveyInReadbackReady_=false;
     bool workflowActive() { return active; }
+    bool executeStorageStatus(JsonObject, const String &, String &);
+    bool executeNvsCleanup(JsonObject, String &, String &);
     bool run(String command, JsonObject payload) {
         String error, detail, commandId="test"; bool success=true;
 '''
@@ -30,6 +33,7 @@ checks = r'''
         return success;
     }
 };
+''' + helpers + r'''
 int main() {
     DynamicJsonDocument request(512); auto payload=request.to<JsonObject>(); Agent agent;
     payload["inspect"]=true; payload["offset"]=8193;

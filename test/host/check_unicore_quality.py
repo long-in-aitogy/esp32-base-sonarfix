@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/gnss/Unicore_Readback.cpp').read_text()
-method = source[source.index('    bool readBestPosition('):source.index('    const char *modeKind(')]
+method = source[source.index('    namespace\n    {\n        bool parseBestNavFields('):source.index('    const char *modeKind(')]
 shim = (root / 'test/host/Arduino.h').read_text().replace('#pragma once', '')
 shim = shim.replace('    void trim()', '''    int indexOf(char value, int start) const { auto p = find(value, start); return p == npos ? -1 : int(p); }
     String substring(unsigned start, unsigned end) const { return substr(start, end - start); }

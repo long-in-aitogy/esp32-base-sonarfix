@@ -7,6 +7,6 @@
 
 // ================= HÀM CẤU HÌNH WI-FI =================
 
-bool setupWiFi(const std::function<bool()> &validateConnection = nullptr);
+bool setupWiFi(bool (*validateConnection)() = nullptr);
 
 #endif

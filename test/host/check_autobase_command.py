@@ -5,9 +5,10 @@ import tempfile
 from host_coverage import compile_cpp, mapped, run_cpp
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Commands.cpp').read_text()
+helper = source[source.index('bool BackendAgent::saveNearestAutoBaseConfig('):source.index('bool BackendAgent::executeAutoBaseCommand(')]
 begin = source.index('bool BackendAgent::executeAutoBaseCommand(')
 end = source.index('\nbool BackendAgent::', begin + 5)
-method = mapped(root / 'src/functions/backend/Backend_Agent_Commands.cpp', source[begin:end])
+method = mapped(root / 'src/functions/backend/Backend_Agent_Commands.cpp', helper + source[begin:end])
 reference_begin = source.index('bool BackendAgent::executeReferenceCheckCommand(')
 reference_end = source.index('\nbool BackendAgent::', reference_begin + 5)
 method += mapped(root / 'src/functions/backend/Backend_Agent_Commands.cpp', source[reference_begin:reference_end])
@@ -39,6 +40,7 @@ struct BackendAgent {
     bool startWorkflow(const char *, const String &) { ++started; if (startImmediately) { agentState_="running"; autoBaseProgress_="running"; baseStartupState_="running"; } return startOk; }
     void setAgentState(const String &state) { agentState_ = state; }
     void setWorkflowProgress(const char *, int, int, const String &value) { progress = value; autoBaseProgress_ = value; }
+    bool saveNearestAutoBaseConfig(JsonObject, bool, String &);
     bool executeAutoBaseCommand(JsonObject, String &, String &);
     bool executeReferenceCheckCommand(JsonObject, String &, String &);
 };
@@ -69,7 +71,11 @@ int main() {
     assert(progress["note"] == "Collect RTK Fixed LLH and apply Base coordinates after quality checks.");
     DynamicJsonDocument pending(1024); pending["source_mode"]="nearest"; pending["auto_apply"]=true;
     BackendAgent local;
+    local.baseConfig_ = R"({"auto_base_started_boot_id":"old","auto_base_started_request_id":"old","auto_base_previous_config":{}})";
     assert(local.executeAutoBaseCommand(pending.as<JsonObject>(), error, detail));
+    DynamicJsonDocument pendingSaved(1024); assert(!deserializeJson(pendingSaved, local.baseConfig_));
+    assert(!pendingSaved.containsKey("auto_base_started_boot_id") && !pendingSaved.containsKey("auto_base_started_request_id"));
+    assert(!pendingSaved.containsKey("auto_base_previous_config"));
     assert(local.baseStartupState_=="awaiting_auto_base" && local.started==0);
     saved.clear(); assert(!deserializeJson(saved,local.baseConfig_));
     assert(saved["base_setup_method"]=="AUTO_CORS" && saved["auto_cors_source_mode"]=="nearest");

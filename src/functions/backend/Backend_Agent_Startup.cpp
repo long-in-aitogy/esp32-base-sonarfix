@@ -16,6 +16,7 @@ using namespace BackendAgentInternal;
 namespace
 {
     constexpr uint32_t AUTO_SURVEY_IN_SECONDS = 120;
+    static_assert(GnssCmdBuilder::BASE_ACCURACY_METERS == 5.0f, "Base accuracy must remain 5 m");
 
     double configNumber(JsonVariantConst value, double fallback)
     {
@@ -68,7 +69,7 @@ bool BackendAgent::buildStartupCommands(JsonObjectConst base,
         const double duration = configNumber(base["survey_in_duration"], AUTO_SURVEY_IN_SECONDS);
         const auto accuracy = GnssCmdBuilder::BASE_ACCURACY_METERS;
         if (const auto maxDuration = detected == GnssSensorType::Unicore ? 3600U : 604800U;
-            !std::isfinite(duration) || std::floor(duration) != duration || duration < 1 || duration > maxDuration || !std::isfinite(accuracy) || accuracy < 0.001 || accuracy > 10000)
+            !std::isfinite(duration) || std::floor(duration) != duration || duration < 1 || duration > maxDuration)
         {
             error = "Saved Survey-In parameters are invalid";
             return false;
@@ -87,7 +88,7 @@ bool BackendAgent::buildStartupCommands(JsonObjectConst base,
     const auto lon = configNumber(coords["lon"], NAN);
     const auto alt = configNumber(coords["alt"], NAN);
     const auto accuracy = GnssCmdBuilder::BASE_ACCURACY_METERS;
-    if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(alt) || std::abs(lat) > 90 || std::abs(lon) > 180 || alt < -12000 || alt > 100000 || !std::isfinite(accuracy) || accuracy < 0.0001 || accuracy > 10000)
+    if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(alt) || std::abs(lat) > 90 || std::abs(lon) > 180 || alt < -12000 || alt > 100000)
     {
         error = "Saved Fixed LLA coordinates or accuracy are invalid";
         return false;

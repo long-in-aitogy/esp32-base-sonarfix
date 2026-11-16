@@ -7,10 +7,12 @@ root = Path(__file__).resolve().parents[2]
 agent = (root / 'src/functions/backend/Backend_Agent.cpp').read_text()
 json_bool = agent[agent.index('    bool jsonBool('):agent.index('    String jsonString(')]
 workflow = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_text()
+datum_report = workflow[workflow.index('    void appendAutoBaseDatumReport('):workflow.index('    bool acceptAutoBaseLocationReply(')]
+location_method = workflow[workflow.index('bool BackendAgent::resolveAutoBaseLocation('):workflow.index('bool BackendAgent::waitForAutoBaseFix(')]
 begin = workflow.index('bool BackendAgent::completeAutoBaseSetup(')
-end = workflow.index('    setAgentState("auto_setup_base");', begin)
+end = workflow.index('    return applyAutoBasePosition(', begin)
 method = workflow[begin:end] + '    reachedWrite = true;\n    (void)resultJson;\n    return true;\n}\n'
-full_end = workflow.index('\nbool BackendAgent::runAutoBaseWorkflow(', begin)
+full_end = workflow.index('\nnamespace\n{\n    bool missingAutoNearestPosition(', begin)
 full_method = workflow[begin:full_end]
 run_end = workflow.index('\nbool BackendAgent::prepareReferenceCheckConfig(', full_end)
 run_method = workflow[full_end:run_end]
@@ -106,6 +108,9 @@ struct BackendAgent {
     bool stopNtripRoverLocked() { return stopOk; }
     void setWorkflowProgress(const char *value, int, int, const String &details = String()) { phase = value; phaseDetails = details; }
     struct ProjectedPosition { double latitude, longitude, altitude; double northing = 0, easting = 0; };
+    bool transformAutoBasePosition(JsonObject, Vn2000Datum &, JsonDocument &, ProjectedPosition &, double &, const char *&, String &);
+    void appendAutoBaseReport(JsonDocument &, JsonObject, const ProjectedPosition &, double, double, double, const String &);
+    bool applyAutoBasePosition(JsonDocument &, const ProjectedPosition &, size_t, const char *, const String &, const String &, String &);
     bool reachedWrite = false, failFinalResult = false;
     bool receiverOk = true, saveOk = true, restartOk = true;
     String sensorType_ = "Ublox";
@@ -143,10 +148,16 @@ struct BackendAgent {
         return buildRealAutoBaseResult(lat, lon, alt, rawLat, rawLon, rawAlt, transformed, restarted,
                                        count, source, code, name, meridian, scale, report);
     }
+    bool resolveAutoBaseLocation(double, double, double, JsonDocument &, String &);
     bool completeAutoBaseSetup(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &, String &, const String &);
     bool completeAutoBaseSetupFull(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &, String &, const String &);
     bool waitForAutoBaseFix(uint32_t, uint8_t, bool &, String &, const String &);
     bool collectAutoBaseSamples(int, std::vector<double> &, std::vector<double> &, std::vector<double> &, bool &, String &, const String &);
+    bool restoreAutoBaseAfterReview(JsonDocument &);
+    bool prepareAutoBaseSnapshot(JsonDocument &);
+    bool waitForAutoNearestPosition(uint32_t);
+    bool startSurveyInFallback(JsonObject, JsonDocument &, const String &, const String &, String &);
+    void finishAutoBaseWorkflow(JsonDocument &, bool, const String &, bool, bool, const String &);
     bool runAutoBaseWorkflow(JsonObject);
     bool waitForReferenceFix(uint32_t, String &);
     bool collectReferenceSamples(uint16_t, std::vector<double> &, std::vector<double> &, std::vector<double> &, String &);
@@ -474,9 +485,9 @@ with tempfile.TemporaryDirectory(prefix='auto-base-transform-') as directory:
     path = Path(directory)
     agent_path = root / 'src/functions/backend/Backend_Agent.cpp'
     workflow_path = root / 'src/functions/backend/Backend_Agent_Workflows.cpp'
-    (path / 'check.cpp').write_text(harness + mapped(agent_path, json_bool) +
+    (path / 'check.cpp').write_text(harness + mapped(workflow_path, datum_report) + mapped(agent_path, json_bool) +
                                     '#define buildAutoBaseResult buildRealAutoBaseResult\n' + mapped(workflow_path, result_method) +
-                                    '#undef buildAutoBaseResult\n' + method +
+                                    '#undef buildAutoBaseResult\n' + mapped(workflow_path, location_method) + method +
                                     '#define completeAutoBaseSetup completeAutoBaseSetupFull\n' + mapped(workflow_path, full_method) +
                                     '#undef completeAutoBaseSetup\n' + mapped(workflow_path, auto_config) +
                                     mapped(workflow_path, sampling) + '#define completeAutoBaseSetup completeAutoBaseSetupFull\n' +

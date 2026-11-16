@@ -6,7 +6,7 @@ root = Path(__file__).resolve().parents[2]
 source = (root / 'src/functions/backend/Backend_Agent_Workflows.cpp').read_text()
 start = source.index('bool BackendAgent::runAutoBaseWorkflow(')
 end = source.index('\nbool BackendAgent::', start + 5)
-method = source[start:end]
+method = source[source.index('namespace\n{\n    bool missingAutoNearestPosition('):start] + source[start:end]
 sampling = source[source.index('bool BackendAgent::waitForAutoBaseFix('):source.index('String BackendAgent::buildAutoBaseResult(')]
 harness = r'''
 #include <Arduino.h>
@@ -65,6 +65,11 @@ struct BackendAgent {
     bool waitForAutoBaseFix(uint32_t, uint8_t, bool &, String &, const String &);
     bool collectAutoBaseSamples(int, std::vector<double> &, std::vector<double> &, std::vector<double> &, bool &, String &, const String &);
     bool completeAutoBaseSetup(JsonObject, const std::vector<double> &lat, const std::vector<double> &lon, const std::vector<double> &alt, String &result, String &, const String &) { assert(lat.size() == 60 && lon.size() == 60 && alt.size() == 60); result="{}"; return true; }
+    bool restoreAutoBaseAfterReview(JsonDocument &);
+    bool prepareAutoBaseSnapshot(JsonDocument &);
+    bool waitForAutoNearestPosition(uint32_t);
+    bool startSurveyInFallback(JsonObject, JsonDocument &, const String &, const String &, String &);
+    void finishAutoBaseWorkflow(JsonDocument &, bool, const String &, bool, bool, const String &);
     bool runAutoBaseWorkflow(JsonObject);
 };
 '''

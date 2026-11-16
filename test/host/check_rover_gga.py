@@ -5,7 +5,7 @@ import tempfile
 
 root = Path(__file__).resolve().parents[2]
 source = (root / "src/functions/ntrip/ntrip_rover.cpp").read_text()
-sender = source.split("void sendRoverGgaIfAvailable(", 1)[1].split("/** @brief Implements startNtripRover. */", 1)[0]
+sender = source.split("void sendRoverGgaIfAvailable(", 1)[1].split("String buildNtripRoverRequest(", 1)[0]
 harness = r'''
 #include <cassert>
 #include <cstdint>

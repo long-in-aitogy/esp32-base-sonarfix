@@ -5,7 +5,7 @@ import tempfile
 
 root = Path(__file__).resolve().parents[2]
 source = (root/'src/functions/backend/Backend_Agent_Status.cpp').read_text()
-method = source[source.index('void BackendAgent::appendGnssStatus('):source.index('\nvoid BackendAgent::appendNtripStatus(')]
+method = source[source.index('namespace {\nvoid appendNmeaHealth('):source.index('\nvoid BackendAgent::appendNtripStatus(')]
 harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
