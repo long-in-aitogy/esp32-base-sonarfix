@@ -140,7 +140,7 @@ Hệ thống nhận NMEA GGA/GSA/GSV/GST để theo dõi GNSS. ESP32 không mặ
 
 ## 7. Danh mục lệnh ATG
 
-ATG dùng để cấu hình kết nối và hỗ trợ kỹ thuật. Ưu tiên CORS để cấu hình base và đọc kết quả lệnh theo từng thiết bị. Từ khóa dùng đúng chữ hoa; mỗi dòng kết thúc bằng LF. Lệnh SET thường lưu cấu hình, cần khởi động lại để kết nối đọc lại giá trị mới.
+ATG dùng để cấu hình kết nối và hỗ trợ kỹ thuật. Ưu tiên CORS để cấu hình base và đọc kết quả lệnh theo từng thiết bị. Tiền tố, nhóm lệnh và tên tham số dùng chữ hoa; mỗi dòng kết thúc bằng LF. Ở nhóm GNSS, message, cổng, trạng thái `ON/OFF` và `W_DIAG` được chuẩn hóa không phân biệt hoa thường. Lệnh SET thường lưu cấu hình, cần khởi động lại để kết nối đọc lại giá trị mới.
 
 ### 7.1 ESP và mạng
 
@@ -162,13 +162,13 @@ ATG dùng để cấu hình kết nối và hỗ trợ kỹ thuật. Ưu tiên C
 | Cú pháp | Tác dụng |
 | --- | --- |
 | `ATG MQTT SET SERVER <host>` | Lưu broker MQTT. |
-| `ATG MQTT SET PORT <port>` | Lưu cổng MQTT; nhập số hợp lệ 1-65535. |
+| `ATG MQTT SET PORT <port>` | Lưu cổng MQTT; firmware chưa kiểm tra miền trước khi ép sang `uint16_t`, vì vậy chỉ gửi số 1-65535. |
 | `ATG MQTT SET USER <user>` | Lưu tên đăng nhập broker. |
 | `ATG MQTT SET PASS <password>` | Lưu mật khẩu broker. |
 | `ATG MQTT SET PUBTPCHEALTH <topic>` | Lưu topic health kiểu cũ. |
 | `ATG MQTT SET SUBTPCCMD <topic>` | Lưu topic subscribe ATG kiểu cũ; thay topic cần kỹ thuật kiểm tra callback thực nhận. |
 | `ATG NTRIP SET CSTRADDR <host>` | Lưu caster mặc định/dự phòng. |
-| `ATG NTRIP SET CSTRPORT <port>` | Lưu cổng caster; nhập số hợp lệ 1-65535. |
+| `ATG NTRIP SET CSTRPORT <port>` | Lưu cổng caster; firmware chưa kiểm tra miền trước khi ép sang `uint16_t`, vì vậy chỉ gửi số 1-65535. |
 | `ATG NTRIP SET MNTPNT <mountpoint>` | Lưu mountpoint mặc định. |
 | `ATG NTRIP SET CSTRAUTH <password>` | Lưu mật khẩu source nguyên văn; không nhập base64 của username:password. |
 
