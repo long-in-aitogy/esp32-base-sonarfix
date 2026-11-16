@@ -472,10 +472,10 @@ String BackendAgent::buildStatusPayload()
         versionReadbackError_.clear();
         receiverInfoMs_ = 0;
     }
-    DynamicJsonDocument doc(STATUS_DOCUMENT_SIZE + 1024
-                            + (baseConfig_.length() > 2 ? std::min<size_t>(baseConfig_.length() + 256, CONFIG_DOCUMENT_SIZE) : 0)
-                            + (serviceConfig_.length() > 2 ? std::min<size_t>(serviceConfig_.length() + 256, CONFIG_DOCUMENT_SIZE) : 0)
-                            + (autoBaseProgress_.length() > 2 ? std::min<size_t>(autoBaseProgress_.length() + 256, PROGRESS_DOCUMENT_SIZE) : 0)
+    DynamicJsonDocument doc(STATUS_DOCUMENT_SIZE + 4096
+                            + (baseConfig_.length() > 2 ? std::min<size_t>(baseConfig_.length() * 2 + 512, CONFIG_DOCUMENT_SIZE) : 0)
+                            + (serviceConfig_.length() > 2 ? std::min<size_t>(serviceConfig_.length() * 2 + 512, CONFIG_DOCUMENT_SIZE) : 0)
+                            + (autoBaseProgress_.length() > 2 ? std::min<size_t>(autoBaseProgress_.length() * 2 + 1024, PROGRESS_DOCUMENT_SIZE) : 0)
                             + (nvsInventory_.isEmpty() ? 0 : nvsInventory_.length() + 256)
                             + (gnssVerification_.isEmpty() ? 0 : std::min<size_t>(gnssVerification_.length() + 256, VERIFICATION_DOCUMENT_SIZE))
                             + (satelliteReadback_.isEmpty() ? 0 : satelliteReadback_.length() + 256)
@@ -498,10 +498,27 @@ String BackendAgent::buildStatusPayload()
     appendGnssStatus(doc, gnss, nowMs);
     appendNtripStatus(doc, service, server1Active, server2Active);
     appendTransportStatus(doc, gnss, nowMs, signal);
+    if (doc.capacity() == 0)
+    {
+        Serial.printf("[BACKEND][ERROR] Status doc malloc failed (free=%u)\n",
+                      ESP.getFreeHeap());
+        return String();
+    }
     if (doc.overflowed())
+    {
+        Serial.printf("[BACKEND][ERROR] Status doc overflowed (usage=%u, cap=%u)\n",
+                      doc.memoryUsage(), doc.capacity());
         return String();
+    }
+    const size_t expected = measureJson(doc);
     String payload;
-    if (serializeJson(doc, payload) != measureJson(doc))
+    payload.reserve(expected + 8);
+    const size_t written = serializeJson(doc, payload);
+    if (written != expected)
+    {
+        Serial.printf("[BACKEND][ERROR] Status serialize mismatch (written=%u, expected=%u)\n",
+                      written, expected);
         return String();
+    }
     return payload;
 }
