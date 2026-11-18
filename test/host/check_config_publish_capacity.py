@@ -23,7 +23,7 @@ struct Mqtt {
 } mqtt;
 struct BackendAgent {
     String serialNumber_ = "station", baseConfig_, serviceConfig_;
-    void publishConfigState(const char *);
+    void publishConfigState(const char *) const;
 };
 '''
 checks = r'''

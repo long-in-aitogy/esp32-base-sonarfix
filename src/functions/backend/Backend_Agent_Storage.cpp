@@ -272,7 +272,7 @@ void BackendAgent::ensureDefaultServiceConfig()
                   saveStatePreferences() ? "da luu" : "LOI luu");
 }
 
-bool BackendAgent::saveStatePreferences()
+bool BackendAgent::saveStatePreferences() const
 {
     if (serialNumber_.isEmpty())
     {

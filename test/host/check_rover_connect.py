@@ -163,8 +163,8 @@ bool startNtripRover(const String &, uint16_t, const String &, const String &, c
 const char *ntripRoverLastError() { return "ERROR - NO STATION WITHIN 20 KM"; }
 struct BackendAgent {
     String serialNumber_ = "esp-test";
-    bool startAutoBaseRover(const String &, uint16_t, const String &, const String &, const String &, uint8_t, String &, String * = nullptr);
-    bool startReferenceRover(const String &, uint16_t, const String &, const String &, const String &, String &);
+    bool startAutoBaseRover(const String &, uint16_t, const String &, const String &, const String &, uint8_t, String &, String * = nullptr) const;
+    bool startReferenceRover(const String &, uint16_t, const String &, const String &, const String &, String &) const;
 };
 '''
 wrapper_checks = r'''

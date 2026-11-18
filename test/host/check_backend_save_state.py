@@ -38,7 +38,7 @@ struct BackendAgent {
     String baseConfig_ = "base", serviceConfig_ = "service", licenseToken_ = "token";
     String lastCommandResult_ = "command", autoBaseProgress_ = "progress", surveyInResult_ = "survey";
     bool provisioned_ = true; struct { bool all = true; uint8_t servers = 2; } stationLock_;
-    bool saveStatePreferences();
+    bool saveStatePreferences() const;
 };
 '''
 checks = r'''

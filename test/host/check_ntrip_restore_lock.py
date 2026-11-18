@@ -15,7 +15,7 @@ void xSemaphoreGive(int) { assert(held); held=false; ++gives; }
 void stopNtripRover() { assert(held); ++stops; }
 void setupNTRIP() { assert(held); ++setups; }
 void connectNTRIP() { assert(held); ++connects; }
-struct BackendAgent { bool restartConfiguredNtrip(bool transportLocked=false); };
+struct BackendAgent { bool restartConfiguredNtrip(bool transportLocked=false) const; };
 '''
 checks = r'''
 int main() {

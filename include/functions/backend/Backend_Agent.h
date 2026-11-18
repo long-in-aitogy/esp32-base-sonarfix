@@ -143,7 +143,7 @@ private:
     String workflowPayload_;
 
     void loadPreferences();
-    bool saveStatePreferences();
+    bool saveStatePreferences() const;
     void saveDetectedChip(const char *chipType);
     bool probeUnicore(Stream &stream, String &identityLine) const;
     bool probeUblox(Stream &stream) const;
@@ -165,7 +165,7 @@ private:
     bool waitForUnicoreReply(UnicoreReply &reply, bool written) const;
     void handleUnicoreAck(const UnicoreReply &reply, const uint8_t *data, size_t length);
     bool exchangeUbloxRoverCommand(const GnssCmdBuilder::Command &command, bool poll) const;
-    bool configureUbloxRover();
+    bool configureUbloxRover() const;
     bool waitForRoverGga(uint32_t startedMs) const;
     void setWorkflowProgress(const String &phase, uint8_t step, uint8_t total,
                              const String &details = String());
@@ -176,7 +176,7 @@ private:
                                uint8_t &fixedStreakRequired) const;
     bool startAutoBaseRover(const String &host, uint16_t port, const String &username,
                             const String &password, const String &mountpoint,
-                            uint8_t ntripVersion, String &error, String *selectedMountpoint = nullptr);
+                            uint8_t ntripVersion, String &error, String *selectedMountpoint = nullptr) const;
     bool waitForAutoBaseFix(uint32_t timeoutSeconds, uint8_t fixedStreakRequired,
                             bool &cancelled, String &failureReason, const String &sourceMountpoint);
     bool collectAutoBaseSamples(int configuredSamples, std::vector<double> &latitudes,
@@ -213,7 +213,7 @@ private:
                                      String &password, String &mountpoint,
                                      uint32_t &timeoutSeconds, uint16_t &requestedSamples);
     bool startReferenceRover(const String &host, uint16_t port, const String &username,
-                                    const String &password, const String &mountpoint, String &error);
+                                    const String &password, const String &mountpoint, String &error) const;
     bool waitForReferenceFix(uint32_t timeoutSeconds, String &failureReason);
     bool collectReferenceSamples(uint16_t requestedSamples, std::vector<double> &latitudes,
                                  std::vector<double> &longitudes,
@@ -221,9 +221,9 @@ private:
     String buildReferenceCheckResult(JsonObject reference, double measuredLatitude,
                                      double measuredLongitude, double measuredAltitude,
                                      size_t sampleCount) const;
-    bool restartConfiguredNtrip(bool transportLocked = false);
-    int loopNtripRoverLocked();
-    bool stopNtripRoverLocked();
+    bool restartConfiguredNtrip(bool transportLocked = false) const;
+    int loopNtripRoverLocked() const;
+    bool stopNtripRoverLocked() const;
     bool restoreWorkflowBase(JsonObjectConst base);
     bool restoreSurveyInBase(JsonObjectConst base, GnssCmdBuilder::GnssSensorType chip, String &error);
     void reconcileBaseStartupReadback();
@@ -327,7 +327,7 @@ private:
     void recordCommandResult(const String &command, const String &source,
                              const String &status, const String &detail,
                              const String &commandId);
-    void publishConfigState(const char *kind);
+    void publishConfigState(const char *kind) const;
     bool applyServiceStreamCommand(JsonObject payload, String &error);
     bool executeRawCommands(JsonArray commands, String &error, const String &sensorType = String());
 

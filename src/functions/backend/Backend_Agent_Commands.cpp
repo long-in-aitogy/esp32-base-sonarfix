@@ -159,7 +159,7 @@ void BackendAgent::recordCommandResult(const String &command, const String &sour
                   command.c_str(), commandId.c_str(), source.c_str(), status.c_str(), saveResult);
 }
 
-void BackendAgent::publishConfigState(const char *kind)
+void BackendAgent::publishConfigState(const char *kind) const
 {
     if (!mqttConnected())
         return;

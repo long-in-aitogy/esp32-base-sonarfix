@@ -177,7 +177,7 @@ void BackendAgent::workflowTaskThunk(void *parameter)
     vTaskDelete(nullptr);
 }
 
-bool BackendAgent::restartConfiguredNtrip(bool transportLocked)
+bool BackendAgent::restartConfiguredNtrip(bool transportLocked) const
 {
     if (!transportLocked && (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS * 4)) != pdTRUE))
     {
@@ -191,7 +191,7 @@ bool BackendAgent::restartConfiguredNtrip(bool transportLocked)
     return true;
 }
 
-int BackendAgent::loopNtripRoverLocked()
+int BackendAgent::loopNtripRoverLocked() const
 {
     if (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
     {
@@ -204,7 +204,7 @@ int BackendAgent::loopNtripRoverLocked()
     return result;
 }
 
-bool BackendAgent::stopNtripRoverLocked()
+bool BackendAgent::stopNtripRoverLocked() const
 {
     if (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS * 4)) != pdTRUE)
     {
@@ -375,7 +375,7 @@ bool BackendAgent::waitForRoverGga(const uint32_t startedMs) const
     return !workflowCancelRequested_;
 }
 
-bool BackendAgent::configureUbloxRover()
+bool BackendAgent::configureUbloxRover() const
 {
     if (!rtcmBufferMutex || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
         return false;
@@ -555,7 +555,7 @@ bool BackendAgent::prepareAutoBaseConfig(JsonObject payload, String &host, uint1
 bool BackendAgent::startAutoBaseRover(const String &host, const uint16_t port,
                                       const String &username, const String &password,
                                       const String &mountpoint, const uint8_t ntripVersion, String &error,
-                                      String *selectedMountpoint)
+                                      String *selectedMountpoint) const
 {
     if (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
     {
@@ -1498,7 +1498,7 @@ bool BackendAgent::prepareReferenceCheckConfig(
 
 bool BackendAgent::startReferenceRover(const String &host, const uint16_t port,
                                               const String &username, const String &password,
-                                              const String &mountpoint, String &error)
+                                              const String &mountpoint, String &error) const
 {
     if (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
     {
