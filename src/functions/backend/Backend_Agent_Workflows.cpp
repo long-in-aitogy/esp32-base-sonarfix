@@ -302,16 +302,14 @@ bool BackendAgent::writeGnssCommands(const GnssCmdBuilder::CommandList &commands
         return false;
     for (const auto &command : commands)
     {
-        uint32_t delayMs = 0;
-        if (delayMarker(command.data(), command.size(), delayMs))
+        if (uint32_t delayMs = 0; delayMarker(command.data(), command.size(), delayMs))
         {
             delay(delayMs);
             continue;
         }
         if (sensorType_ == "Unicorecomm")
         {
-            String error;
-            if (!writeUnicoreCommand(command.data(), command.size(), error))
+        if (String error; !writeUnicoreCommand(command.data(), command.size(), error))
                 return false;
             continue;
         }
@@ -1396,8 +1394,8 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
     setWorkflowProgress("wait_fix", 2, 4);
     auto cancelled = false;
     const bool fallbackOnTimeout = autoNearest && (!payload.containsKey("timeout") || payload["timeout"].as<uint32_t>() >= 180UL);
-    const uint32_t waitFixTimeout = (autoNearest && !payload.containsKey("timeout")) ? 180UL : timeoutSeconds;
-    if (!waitForAutoBaseFix(waitFixTimeout, fixedStreakRequired, cancelled, failureReason, sourceMountpoint))
+    if (const uint32_t waitFixTimeout = (autoNearest && !payload.containsKey("timeout")) ? 180UL : timeoutSeconds;
+        !waitForAutoBaseFix(waitFixTimeout, fixedStreakRequired, cancelled, failureReason, sourceMountpoint))
     {
         if (fallbackOnTimeout && failureReason == "RTK fix timeout" && !cancelled && !workflowCancelRequested_)
         {

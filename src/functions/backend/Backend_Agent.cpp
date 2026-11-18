@@ -61,8 +61,7 @@ namespace BackendAgentInternal
 
     String epochString()
     {
-        const time_t now = time(nullptr);
-        if (now > 1700000000)
+    if (const time_t now = time(nullptr); now > 1700000000)
         {
             return String(static_cast<unsigned long>(now));
         }
@@ -246,8 +245,7 @@ bool BackendAgent::probePassiveUblox(Stream &stream)
     {
         while (stream.available())
         {
-            const auto b = static_cast<uint8_t>(stream.read());
-            if (b >= 32 && b <= 126)
+        if (const auto b = static_cast<uint8_t>(stream.read()); b >= 32 && b <= 126)
                 passiveStr += static_cast<char>(b);
             if (passiveStr.length() >= 512)
                 break;

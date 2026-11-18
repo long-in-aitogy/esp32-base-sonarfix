@@ -167,8 +167,8 @@ void BackendAgent::publishConfigState(const char *kind)
     doc["serial"] = serialNumber_;
     doc["timestamp"] = epochString().toInt();
     doc["type"] = kind;
-    const String &config = strcmp(kind, "base_config_state") == 0 ? baseConfig_ : serviceConfig_;
-    if (!copyJsonObject(doc, "config", config) || doc.overflowed())
+    if (const String &config = strcmp(kind, "base_config_state") == 0 ? baseConfig_ : serviceConfig_;
+        !copyJsonObject(doc, "config", config) || doc.overflowed())
     {
         Serial.printf("[BACKEND][ERROR] Cannot publish %s: invalid configuration or insufficient memory\n", kind);
         return;
@@ -304,8 +304,7 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
     {
         const auto encoded = item.as<String>();
         auto length = decodeBase64(encoded, decoded.data(), decoded.size());
-        uint32_t delayMs = 0;
-        if (delayMarker(decoded.data(), length, delayMs))
+        if (uint32_t delayMs = 0; delayMarker(decoded.data(), length, delayMs))
         {
             delay(delayMs);
             continue;

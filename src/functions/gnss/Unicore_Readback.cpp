@@ -198,8 +198,7 @@ namespace UnicoreReadback
             return false;
         }
         mode = response.substring(separator + 1);
-        const auto checksum = mode.indexOf('*');
-        if (checksum >= 0)
+        if (const auto checksum = mode.indexOf('*'); checksum >= 0)
             mode.remove(checksum);
         mode.trim();
         if (mode.endsWith(","))
@@ -277,8 +276,7 @@ namespace UnicoreReadback
             return false;
         }
         auto payload = response.substring(separator + 1);
-        const auto checksum = payload.indexOf('*');
-        if (checksum >= 0)
+        if (const auto checksum = payload.indexOf('*'); checksum >= 0)
             payload.remove(checksum);
         std::array<String, 10> fields;
         if (!parseBestNavFields(payload, fields))
