@@ -676,7 +676,7 @@ Hai issue dưới đây đã chuyển sang **Accepted** trên nhánh `main` củ
 
 - `include/functions/backend/Websocket_Protocol.h`: tách helper `validateUpgradeHeader` khỏi `validUpgrade`, giảm Cognitive Complexity từ 27 xuống < 10 (`cpp:S3776`).
 - `src/functions/backend/Backend_Agent_Startup.cpp`: tách `parseStartupOptions` và `parseFixedLlaCoords`, giảm Cognitive Complexity của `buildStartupCommands` từ 26 xuống < 10 (`cpp:S3776`).
-- `include/Prog_Config.h`: thay `AUTO_BASE_CASTER_PASSWORD` bằng `AUTO_BASE_CASTER_AUTH` để loại bỏ pattern tên định danh credential theo quy tắc `cpp:S2068`.
+- `include/Prog_Config.h`: đổi tên credential không loại bỏ mật khẩu hardcoded. Đã khôi phục tên rõ nghĩa; cần chuyển sang cấu hình được cấp riêng trước khi coi issue được sửa.
 - `src/functions/backend/Backend_Agent_Gnss.cpp`: thử thay vòng lặp bằng `std::any_of`, nhưng đã khôi phục vòng lặp vì iterator ArduinoJson 6 không tương thích toolchain ESP32.
 - `src/functions/backend/Vn2000_Datum.cpp`: gộp điều kiện dừng để chỉ sử dụng một lệnh `break` duy nhất trong vòng lặp (`cpp:S924`).
 - `src/functions/backend/Backend_Agent_Workflows.cpp`: loại bỏ chuỗi IP literal tĩnh cho vngeonet (`cpp:S1313`).
@@ -685,7 +685,18 @@ Hai issue dưới đây đã chuyển sang **Accepted** trên nhánh `main` củ
 | --- | --- | --- | --- |
 | [AaHT6_wwDfen3veeSkGk](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_wwDfen3veeSkGk) | `cpp:S3776` | `include/functions/backend/Websocket_Protocol.h` | Fixed |
 | [AaHT6_xsDfen3veeSkGs](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xsDfen3veeSkGs) | `cpp:S3776` | `src/functions/backend/Backend_Agent_Startup.cpp` | Fixed |
-| [AaHT6_xUDfen3veeSkGp](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xUDfen3veeSkGp) | `cpp:S2068` | `include/Prog_Config.h:51` | Fixed |
+| [AaHT6_xUDfen3veeSkGp](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xUDfen3veeSkGp) | `cpp:S2068` | `include/Prog_Config.h:51` | Chưa sửa; credential vẫn được hardcode |
 | [AaHT6_xzDfen3veeSkHa](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_xzDfen3veeSkHa) | `cpp:S5566` | `src/functions/backend/Backend_Agent_Gnss.cpp:58` | Accepted; vòng lặp cần thiết cho ArduinoJson 6 |
 | [AaHT6_yxDfen3veeSkI9](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHT6_yxDfen3veeSkI9) | `cpp:S924` | `src/functions/backend/Vn2000_Datum.cpp:228` | Fixed |
 | [AaHAB4XUwAMFQ7NSc-ku](https://sonarcloud.io/project/issues?id=tundzai001_esp32-base-sonarfix&open=AaHAB4XUwAMFQ7NSc-ku) | `cpp:S1313` | `src/functions/backend/Backend_Agent_Workflows.cpp:818` | Fixed |
+
+## 2026-11-18 · Rà soát lại kết quả Accepted trên main
+
+Ảnh chụp Sonar ngày 13-11 có 246 issue Accepted: 197 cảnh báo API ArduinoJson, 19 biến toàn cục và 30 cảnh báo còn lại. Đây là trạng thái của bản phân tích cũ, không phải kết quả của mã hiện tại. Workflow trước đó phân tích bằng AutoConfig, nhắm sang project khác và loại trừ backend; nay workflow trỏ đúng project và dùng compilation database của firmware. Chờ phân tích CI để xác định các issue còn thực sự tồn tại.
+
+- `cpp:S1874`: kiểm tra lại theo ArduinoJson 6 được PlatformIO cài; không nâng thư viện chỉ để xóa cảnh báo, vì dung lượng JSON và việc cấp phát cần được kiểm chứng riêng.
+- `cpp:S3776`, `cpp:S924`, `cpp:S1313` và `cpp:S5205`: mã hiện tại đã thay đổi sau lần phân tích cũ; trạng thái Fixed phải được xác nhận bằng kết quả Sonar mới.
+- `cpp:S5421`: trạng thái kết nối, bộ đệm và đối tượng Preferences được thay đổi khi chạy; không thêm `const` nếu làm hỏng chức năng.
+- `cpp:S5008`: callback FreeRTOS sử dụng chữ ký `void *` do API yêu cầu. `cpp:S5566`: iterator ArduinoJson 6 không dùng được với `std::any_of` trong toolchain hiện tại.
+- `cpp:S2068`: credential AutoNearest vẫn nằm trong firmware. Đổi tên biến không phải sửa bảo mật; cần phương án cấp và di chuyển credential trước khi loại bỏ giá trị mặc định.
+- Các cảnh báo số tham số, kích thước lớp và `std::byte` cần được đánh giá theo hành vi, tài nguyên ESP32 và giao diện giao thức; không coi là đã sửa chỉ bằng việc chuyển trạng thái.
