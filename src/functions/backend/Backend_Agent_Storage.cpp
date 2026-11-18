@@ -281,10 +281,9 @@ bool BackendAgent::saveStatePreferences()
     }
     // Persist the state snapshot with native NVS calls and one commit.
     nvs_handle_t handle;
-    const esp_err_t opened = useDedicatedBackendPrefs
+    if (const esp_err_t opened = useDedicatedBackendPrefs
                                  ? nvs_open_from_partition(BACKEND_PREFS_PARTITION, BACKEND_PREFS_NAMESPACE, NVS_READWRITE, &handle)
-                                 : nvs_open("myPrefs", NVS_READWRITE, &handle);
-    if (opened != ESP_OK)
+                                 : nvs_open("myPrefs", NVS_READWRITE, &handle); opened != ESP_OK)
     {
         Serial.printf("[BACKEND][NVS] Open failed: %s (0x%x)\n", esp_err_to_name(opened), opened);
         return false;

@@ -1085,8 +1085,7 @@ bool BackendAgent::applyAutoBasePosition(JsonDocument &report, const ProjectedPo
         failureReason = "could not save automatically applied Fixed LLA";
         return false;
     }
-    const auto transportRestored = restartConfiguredNtrip();
-    if (!transportRestored)
+    if (const auto transportRestored = restartConfiguredNtrip(); !transportRestored)
     {
         baseConfig_ = previousConfig;
         failureReason = saveStatePreferences()
@@ -1585,8 +1584,8 @@ bool BackendAgent::collectReferenceSamples(const uint16_t requestedSamples,
         {
             nextSecondMs = now + 1000UL;
             const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-            const auto usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus.data());
-            if (usable && snapshot.lastGgaMs != lastSampleGgaMs && std::isfinite(snapshot.latitude) && std::isfinite(snapshot.longitude) && std::isfinite(snapshot.altitude) && snapshot.latitude >= -90.0 && snapshot.latitude <= 90.0 && snapshot.longitude >= -180.0 && snapshot.longitude <= 180.0)
+            if (const auto usable = freshRtkSample(now, snapshot.lastGgaMs, snapshot.fixStatus.data());
+                usable && snapshot.lastGgaMs != lastSampleGgaMs && std::isfinite(snapshot.latitude) && std::isfinite(snapshot.longitude) && std::isfinite(snapshot.altitude) && snapshot.latitude >= -90.0 && snapshot.latitude <= 90.0 && snapshot.longitude >= -180.0 && snapshot.longitude <= 180.0)
             {
                 lastSampleGgaMs = snapshot.lastGgaMs;
                 latitudes.push_back(snapshot.latitude);

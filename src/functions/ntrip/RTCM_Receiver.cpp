@@ -313,8 +313,7 @@ namespace
 
     void updateNmeaMeasurements(const NmeaMeasurements &measurements)
     {
-        const auto &gga = measurements.gga;
-        if (gga.hasPosition)
+        if (const auto &gga = measurements.gga; gga.hasPosition)
         {
             telemetry.latitude = gga.latitude;
             telemetry.longitude = gga.longitude;
@@ -358,9 +357,9 @@ namespace
 
     void publishNmeaHealthSentence(const String &rawSentence, const char *type)
     {
-        const auto backendSentence = strcmp(type, "GGA") == 0 || strcmp(type, "GSA") == 0 ||
-                                     strcmp(type, "GSV") == 0 || strcmp(type, "GST") == 0;
-        if (!backendSentence)
+        if (const auto backendSentence = strcmp(type, "GGA") == 0 || strcmp(type, "GSA") == 0 ||
+                                         strcmp(type, "GSV") == 0 || strcmp(type, "GST") == 0;
+            !backendSentence)
             return;
 
         auto outbound = rawSentence;

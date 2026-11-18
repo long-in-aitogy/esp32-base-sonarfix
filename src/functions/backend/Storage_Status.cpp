@@ -264,8 +264,9 @@ void appendPartitionEntries(JsonArray entries, uint32_t offset, uint32_t &total,
          iterator = nvs_entry_next(iterator)) {
         nvs_entry_info_t entry;
         nvs_entry_info(iterator, &entry);
-        const bool wifi = configurationNamespace(entry) && !strncmp(entry.key, "WIFI_", 5);
-        const int entryPriority = wifi ? 0 : configurationNamespace(entry) ? 1 : 2;
+        int entryPriority = 2;
+        if (configurationNamespace(entry))
+            entryPriority = !strncmp(entry.key, "WIFI_", 5) ? 0 : 1;
         if (entryPriority != priority) continue;
         if (appendSavedConfiguration(entries, offset, total, partition, entry)) continue;
         if (total >= offset && entries.size() < 6)

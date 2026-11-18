@@ -537,8 +537,7 @@ bool BackendAgent::refreshUnicoreReadback(String &error)
             surveyInMonitoring_ = false;
         }
         JsonObject bestPosition = readbackDoc["bestpos"].to<JsonObject>();
-        String positionError;
-        if (!UnicoreReadback::readBestPosition(bestPosition, positionError))
+        if (String positionError; !UnicoreReadback::readBestPosition(bestPosition, positionError))
         {
             surveyInReadbackHasPosition_ = false;
             bestPosition["state"] = "unavailable";
