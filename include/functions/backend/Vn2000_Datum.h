@@ -4,13 +4,16 @@
 #include <cstdint>
 
 // Parameters are populated only by CRC-valid frames in the current CORS session.
-struct Vn2000Datum {
+struct Vn2000MessageStatus {
     bool has1021 = false;
     bool has1023 = false;
     bool has1025 = false;
     uint32_t count1021 = 0;
     uint32_t count1023 = 0;
     uint32_t count1025 = 0;
+};
+
+struct Vn2000Helmert {
     double dX = 0;
     double dY = 0;
     double dZ = 0;
@@ -18,21 +21,34 @@ struct Vn2000Datum {
     double rY = 0;
     double rZ = 0;
     double kT = 1;
+};
+
+struct Vn2000Residuals {
     double resB = 0;
     double resL = 0;
     double resH = 0;
     double resN = 0;
     double resE = 0;
     double resHS = 0;
+};
+
+struct Vn2000Projection {
     double centralMeridianDeg = 0;
     double scale = 0;
     double falseEasting = 500000;
     double falseNorthing = 0;
-    uint8_t projectionType = 0;
-    int64_t projectionLongitudeRaw = 0;
-    uint32_t projectionScaleRaw = 0;
-    uint16_t projectionFrameBytes = 0;
-    std::array<char, 65> projectionFrameHex{};
+    uint8_t type = 0;
+    int64_t longitudeRaw = 0;
+    uint32_t scaleRaw = 0;
+    uint16_t frameBytes = 0;
+    std::array<char, 65> frameHex{};
+};
+
+struct Vn2000Datum {
+    Vn2000MessageStatus messages;
+    Vn2000Helmert helmert;
+    Vn2000Residuals residuals;
+    Vn2000Projection projection;
 };
 
 class Vn2000Session {

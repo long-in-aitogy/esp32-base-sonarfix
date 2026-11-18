@@ -46,42 +46,42 @@ namespace
             snprintf(text.data(), text.size(), "%.17g", number);
             return String(text.data());
         };
-        if (transformed && std::abs(datum.scale - 0.9999) < 1e-9)
+        if (transformed && std::abs(datum.projection.scale - 0.9999) < 1e-9)
             report["zone_width_deg"] = 3;
-        else if (transformed && std::abs(datum.scale - 0.9996) < 1e-9)
+        else if (transformed && std::abs(datum.projection.scale - 0.9996) < 1e-9)
             report["zone_width_deg"] = 6;
-        report["rtcm1025_used"] = transformed && datum.has1025;
-        if (datum.has1025)
+        report["rtcm1025_used"] = transformed && datum.messages.has1025;
+        if (datum.messages.has1025)
         {
             JsonObject projection = report.createNestedObject("rtcm1025");
-            projection["raw_l0"] = String(static_cast<long long>(datum.projectionLongitudeRaw));
-            projection["raw_k0"] = datum.projectionScaleRaw;
-            projection["projection_type"] = datum.projectionType;
-            projection["l0_deg"] = numberText(datum.centralMeridianDeg);
-            projection["k0"] = numberText(datum.scale);
-            projection["false_easting"] = numberText(datum.falseEasting);
-            projection["false_northing"] = numberText(datum.falseNorthing);
-            projection["frame_hex"] = datum.projectionFrameHex.data();
-            projection["frame_bytes"] = datum.projectionFrameBytes;
-            projection["frame_truncated"] = datum.projectionFrameBytes > 32;
+            projection["raw_l0"] = String(static_cast<long long>(datum.projection.longitudeRaw));
+            projection["raw_k0"] = datum.projection.scaleRaw;
+            projection["projection_type"] = datum.projection.type;
+            projection["l0_deg"] = numberText(datum.projection.centralMeridianDeg);
+            projection["k0"] = numberText(datum.projection.scale);
+            projection["false_easting"] = numberText(datum.projection.falseEasting);
+            projection["false_northing"] = numberText(datum.projection.falseNorthing);
+            projection["frame_hex"] = datum.projection.frameHex.data();
+            projection["frame_bytes"] = datum.projection.frameBytes;
+            projection["frame_truncated"] = datum.projection.frameBytes > 32;
         }
-        if (datum.count1021) report["received_messages"]["1021"] = datum.count1021;
-        if (datum.count1023) report["received_messages"]["1023"] = datum.count1023;
-        if (datum.count1025) report["received_messages"]["1025"] = datum.count1025;
+        if (datum.messages.count1021) report["received_messages"]["1021"] = datum.messages.count1021;
+        if (datum.messages.count1023) report["received_messages"]["1023"] = datum.messages.count1023;
+        if (datum.messages.count1025) report["received_messages"]["1025"] = datum.messages.count1025;
         if (vngeonet && transformed)
         {
             report["zone_width_source"] = "inferred_from_k0";
             report["parameter_source"] = "rtcm1021";
-            report["residual_source"] = datum.has1023 ? "rtcm1023" : "none";
+            report["residual_source"] = datum.messages.has1023 ? "rtcm1023" : "none";
             report["projected_coord"]["north"] = numberText(northing);
             report["projected_coord"]["east"] = numberText(easting);
             report["projected_coord"]["h"] = numberText(projectedHeight);
             JsonObject parameters = report.createNestedObject("parameters");
-            parameters["dX"] = numberText(datum.dX); parameters["dY"] = numberText(datum.dY); parameters["dZ"] = numberText(datum.dZ);
-            parameters["rX"] = numberText(datum.rX); parameters["rY"] = numberText(datum.rY); parameters["rZ"] = numberText(datum.rZ);
-            parameters["kT"] = numberText(datum.kT);
-            parameters["resB"] = numberText(datum.resB); parameters["resL"] = numberText(datum.resL); parameters["resH"] = numberText(datum.resH);
-            parameters["resN"] = numberText(datum.resN); parameters["resE"] = numberText(datum.resE); parameters["resHS"] = numberText(datum.resHS);
+            parameters["dX"] = numberText(datum.helmert.dX); parameters["dY"] = numberText(datum.helmert.dY); parameters["dZ"] = numberText(datum.helmert.dZ);
+            parameters["rX"] = numberText(datum.helmert.rX); parameters["rY"] = numberText(datum.helmert.rY); parameters["rZ"] = numberText(datum.helmert.rZ);
+            parameters["kT"] = numberText(datum.helmert.kT);
+            parameters["resB"] = numberText(datum.residuals.resB); parameters["resL"] = numberText(datum.residuals.resL); parameters["resH"] = numberText(datum.residuals.resH);
+            parameters["resN"] = numberText(datum.residuals.resN); parameters["resE"] = numberText(datum.residuals.resE); parameters["resHS"] = numberText(datum.residuals.resHS);
         }
         else
             report["parameter_source"] = "not_used";
@@ -833,8 +833,8 @@ bool BackendAgent::completeAutoBaseSetup(
             provinceCode = location["province_code"] | String();
             provinceName = location["province_name"] | String();
         }
-        centralMeridianDeg = datum.centralMeridianDeg;
-        scale = datum.scale;
+        centralMeridianDeg = datum.projection.centralMeridianDeg;
+        scale = datum.projection.scale;
         transformed = true;
     }
     if (!std::isfinite(result.latitude) || !std::isfinite(result.longitude) || !std::isfinite(result.altitude)
@@ -1094,36 +1094,36 @@ bool BackendAgent::transformAutoBasePosition(JsonObject payload, Vn2000Datum &da
                                               double &projectedHeight, const char *&projectionSource,
                                               String &failureReason)
 {
-    if (!datum.has1021)
+    if (!datum.messages.has1021)
     {
         failureReason = "missing RTCM 1021 from this CORS session";
         return false;
     }
-    if (datum.has1025)
+    if (datum.messages.has1025)
         projectionSource = "rtcm1025";
     else if (!payload["l0_deg"].isNull() && !payload["k0"].isNull())
     {
-        datum.centralMeridianDeg = coordinateNumber(payload["l0_deg"]);
-        datum.scale = coordinateNumber(payload["k0"]);
+        datum.projection.centralMeridianDeg = coordinateNumber(payload["l0_deg"]);
+        datum.projection.scale = coordinateNumber(payload["k0"]);
         projectionSource = "manual";
     }
     else
     {
         if (!resolveAutoBaseLocation(result.latitude, result.longitude, result.altitude, location, failureReason))
             return false;
-        datum.centralMeridianDeg = coordinateNumber(location["l0_deg"]);
-        datum.scale = coordinateNumber(location["k0"]);
-        if (!std::isfinite(datum.centralMeridianDeg) || !std::isfinite(datum.scale))
+        datum.projection.centralMeridianDeg = coordinateNumber(location["l0_deg"]);
+        datum.projection.scale = coordinateNumber(location["k0"]);
+        if (!std::isfinite(datum.projection.centralMeridianDeg) || !std::isfinite(datum.projection.scale))
         {
             failureReason = "province projection unresolved; RTCM 1025 or a unique server region is required";
             return false;
         }
         projectionSource = "server_catalog";
     }
-    datum.resN = payload["resN"].isNull() ? 0 : coordinateNumber(payload["resN"]);
-    datum.resE = payload["resE"].isNull() ? 0 : coordinateNumber(payload["resE"]);
-    datum.resHS = payload["resHS"].isNull() ? 0 : coordinateNumber(payload["resHS"]);
-    if (!std::isfinite(datum.resN) || !std::isfinite(datum.resE) || !std::isfinite(datum.resHS))
+    datum.residuals.resN = payload["resN"].isNull() ? 0 : coordinateNumber(payload["resN"]);
+    datum.residuals.resE = payload["resE"].isNull() ? 0 : coordinateNumber(payload["resE"]);
+    datum.residuals.resHS = payload["resHS"].isNull() ? 0 : coordinateNumber(payload["resHS"]);
+    if (!std::isfinite(datum.residuals.resN) || !std::isfinite(datum.residuals.resE) || !std::isfinite(datum.residuals.resHS))
     {
         failureReason = "invalid CORS shift";
         return false;

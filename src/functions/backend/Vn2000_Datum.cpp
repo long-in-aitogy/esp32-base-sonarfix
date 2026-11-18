@@ -125,35 +125,35 @@ void utmToBlh(const UtmProjection &projection, double northing,
 bool transformItrfToVn2000(double latitudeDeg, double longitudeDeg, double height,
                            const Vn2000Datum &datum, Vn2000Result &result) {
     const EcefCoordinate source = llhToEcef(latitudeDeg, longitudeDeg, height);
-    const double omega = datum.rX * ARCSEC_TO_RAD;
-    const double phi = datum.rY * ARCSEC_TO_RAD;
-    const double epsilon = datum.rZ * ARCSEC_TO_RAD;
-    const double k = datum.kT;
+    const double omega = datum.helmert.rX * ARCSEC_TO_RAD;
+    const double phi = datum.helmert.rY * ARCSEC_TO_RAD;
+    const double epsilon = datum.helmert.rZ * ARCSEC_TO_RAD;
+    const double k = datum.helmert.kT;
     const EcefCoordinate transformed = {
-        datum.dX + k * (source.x + epsilon * source.y - phi * source.z),
-        datum.dY + k * (-epsilon * source.x + source.y + omega * source.z),
-        datum.dZ + k * (phi * source.x - omega * source.y + source.z),
+        datum.helmert.dX + k * (source.x + epsilon * source.y - phi * source.z),
+        datum.helmert.dY + k * (-epsilon * source.x + source.y + omega * source.z),
+        datum.helmert.dZ + k * (phi * source.x - omega * source.y + source.z),
     };
 
     double latitudeRad = 0.0;
     double longitudeRad = 0.0;
     double transformedHeight = 0.0;
     ecefToLlh(transformed, latitudeRad, longitudeRad, transformedHeight);
-    if (datum.has1023) {
-        latitudeRad += datum.resB;
-        longitudeRad += datum.resL;
-        transformedHeight += datum.resH;
+    if (datum.messages.has1023) {
+        latitudeRad += datum.residuals.resB;
+        longitudeRad += datum.residuals.resL;
+        transformedHeight += datum.residuals.resH;
     }
     const UtmProjection projection{
-        datum.centralMeridianDeg * 3.14159265358979323846 / 180.0,
-        datum.scale,
-        datum.falseEasting,
-        datum.falseNorthing,
+        datum.projection.centralMeridianDeg * 3.14159265358979323846 / 180.0,
+        datum.projection.scale,
+        datum.projection.falseEasting,
+        datum.projection.falseNorthing,
     };
     blhToUtm(projection, latitudeRad, longitudeRad, result.north, result.east);
-    result.north += datum.resN;
-    result.east += datum.resE;
-    transformedHeight += datum.resHS;
+    result.north += datum.residuals.resN;
+    result.east += datum.residuals.resE;
+    transformedHeight += datum.residuals.resHS;
     result.h = transformedHeight;
     utmToBlh(projection, result.north, result.east, latitudeRad, longitudeRad);
 
@@ -182,11 +182,11 @@ bool transformItrfToVn2000(double latitudeDeg, double longitudeDeg, double heigh
 
 bool transformVn2000(double latitude, double longitude, double altitude,
                      const Vn2000Datum &datum, Vn2000Result &result) {
-    if (!datum.has1021 || !std::isfinite(latitude) || !std::isfinite(longitude) || !std::isfinite(altitude)
+    if (!datum.messages.has1021 || !std::isfinite(latitude) || !std::isfinite(longitude) || !std::isfinite(altitude)
         || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180
-        || !std::isfinite(datum.centralMeridianDeg) || datum.centralMeridianDeg < 100 || datum.centralMeridianDeg > 112
-        || !std::isfinite(datum.scale) || datum.scale < 0.999 || datum.scale > 1.001
-        || !std::isfinite(datum.resN) || !std::isfinite(datum.resE) || !std::isfinite(datum.resHS)) return false;
+        || !std::isfinite(datum.projection.centralMeridianDeg) || datum.projection.centralMeridianDeg < 100 || datum.projection.centralMeridianDeg > 112
+        || !std::isfinite(datum.projection.scale) || datum.projection.scale < 0.999 || datum.projection.scale > 1.001
+        || !std::isfinite(datum.residuals.resN) || !std::isfinite(datum.residuals.resE) || !std::isfinite(datum.residuals.resHS)) return false;
     return transformItrfToVn2000(latitude, longitude, altitude, datum, result)
         && std::isfinite(result.north) && std::isfinite(result.east) && std::isfinite(result.h)
         && result.altitude >= -1000 && result.altitude <= 100000;
@@ -261,20 +261,20 @@ void Vn2000Session::decode(size_t length) {
     Bits bits{frame_.data(), (length - 3) * 8};
     Vn2000Datum next = datum_;
     if (message == 1021) {
-        ++datum_.count1021;
+        ++datum_.messages.count1021;
         const auto sourceName = static_cast<size_t>(bits.u(5)); bits.skip(8 * sourceName);
         const auto targetName = static_cast<size_t>(bits.u(5)); bits.skip(8 * targetName);
         bits.skip(8 + 10 + 5 + 4 + 2 + 19 + 20 + 14 + 14);
-        next.dX = double(bits.s(23)) * 0.001;
-        next.dY = double(bits.s(23)) * 0.001;
-        next.dZ = double(bits.s(23)) * 0.001;
-        next.rX = double(bits.s(32)) * 0.00002;
-        next.rY = double(bits.s(32)) * 0.00002;
-        next.rZ = double(bits.s(32)) * 0.00002;
-        next.kT = 1.0 + double(bits.s(25)) * 1e-11;
-        next.has1021 = bits.ok;
+        next.helmert.dX = double(bits.s(23)) * 0.001;
+        next.helmert.dY = double(bits.s(23)) * 0.001;
+        next.helmert.dZ = double(bits.s(23)) * 0.001;
+        next.helmert.rX = double(bits.s(32)) * 0.00002;
+        next.helmert.rY = double(bits.s(32)) * 0.00002;
+        next.helmert.rZ = double(bits.s(32)) * 0.00002;
+        next.helmert.kT = 1.0 + double(bits.s(25)) * 1e-11;
+        next.messages.has1021 = bits.ok;
     } else if (message == 1023) {
-        ++datum_.count1023;
+        ++datum_.messages.count1023;
         bits.skip(8 + 1 + 1 + 21 + 22 + 12 + 12);
         const double meanB = double(bits.s(8)) * 0.001;
         const double meanL = double(bits.s(8)) * 0.001;
@@ -289,31 +289,31 @@ void Vn2000Session::decode(size_t length) {
             const auto dh = static_cast<double>(bits.s(9));
             if (i == 5 || i == 6 || i == 9 || i == 10) { b += db; l += dl; h += dh; }
         }
-        next.resB = (meanB + b * 0.00003 / 4.0) * ARCSEC_TO_RAD;
-        next.resL = (meanL + l * 0.00003 / 4.0) * ARCSEC_TO_RAD;
-        next.resH = -(meanH + h * 0.001 / 4.0);
-        next.has1023 = bits.ok;
+        next.residuals.resB = (meanB + b * 0.00003 / 4.0) * ARCSEC_TO_RAD;
+        next.residuals.resL = (meanL + l * 0.00003 / 4.0) * ARCSEC_TO_RAD;
+        next.residuals.resH = -(meanH + h * 0.001 / 4.0);
+        next.messages.has1023 = bits.ok;
     } else if (message == 1025) {
-        ++datum_.count1025;
+        ++datum_.messages.count1025;
         bits.skip(8);
-        next.projectionType = static_cast<uint8_t>(bits.u(6));
+        next.projection.type = static_cast<uint8_t>(bits.u(6));
         const int64_t originLatitude = bits.s(34);
-        next.projectionLongitudeRaw = bits.s(35);
-        next.projectionScaleRaw = static_cast<uint32_t>(bits.u(30));
-        next.centralMeridianDeg = double(next.projectionLongitudeRaw) * 1.1e-8;
-        next.scale = (double(next.projectionScaleRaw) * 0.00001 + 993000.0) * 0.000001;
-        next.falseEasting = double(bits.u(36)) * 0.001;
-        next.falseNorthing = double(bits.s(35)) * 0.001;
-        if (originLatitude != 0 || next.centralMeridianDeg < 100 || next.centralMeridianDeg > 112
-            || next.scale < 0.999 || next.scale > 1.001) return;
-        next.has1025 = bits.ok;
-        next.projectionFrameBytes = static_cast<uint16_t>(length);
+        next.projection.longitudeRaw = bits.s(35);
+        next.projection.scaleRaw = static_cast<uint32_t>(bits.u(30));
+        next.projection.centralMeridianDeg = double(next.projection.longitudeRaw) * 1.1e-8;
+        next.projection.scale = (double(next.projection.scaleRaw) * 0.00001 + 993000.0) * 0.000001;
+        next.projection.falseEasting = double(bits.u(36)) * 0.001;
+        next.projection.falseNorthing = double(bits.s(35)) * 0.001;
+        if (originLatitude != 0 || next.projection.centralMeridianDeg < 100 || next.projection.centralMeridianDeg > 112
+            || next.projection.scale < 0.999 || next.projection.scale > 1.001) return;
+        next.messages.has1025 = bits.ok;
+        next.projection.frameBytes = static_cast<uint16_t>(length);
         for (size_t i = 0; i < length && i < 32; ++i)
-            snprintf(next.projectionFrameHex.data() + i * 2, 3, "%02x", frame_[i]);
+            snprintf(next.projection.frameHex.data() + i * 2, 3, "%02x", frame_[i]);
     } else return;
     if (!bits.ok) return;
-    next.count1021 = datum_.count1021;
-    next.count1023 = datum_.count1023;
-    next.count1025 = datum_.count1025;
+    next.messages.count1021 = datum_.messages.count1021;
+    next.messages.count1023 = datum_.messages.count1023;
+    next.messages.count1025 = datum_.messages.count1025;
     datum_ = next;
 }

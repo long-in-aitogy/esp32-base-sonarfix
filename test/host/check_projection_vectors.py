@@ -40,12 +40,12 @@ void check(const std::vector<uint8_t> &packet, uint32_t scale, double expectedSc
     Vn2000Session session;
     session.feed(packet.data(), packet.size());
     const auto &datum = session.datum();
-    assert(datum.has1025 && datum.projectionType == 1);
-    assert(datum.projectionScaleRaw == scale && std::abs(datum.scale - expectedScale) < 1e-12);
-    assert(datum.projectionLongitudeRaw == 9545454545LL);
-    assert(datum.projectionFrameBytes == packet.size() && std::string(datum.projectionFrameHex.data()) == hex);
+    assert(datum.messages.has1025 && datum.projection.type == 1);
+    assert(datum.projection.scaleRaw == scale && std::abs(datum.projection.scale - expectedScale) < 1e-12);
+    assert(datum.projection.longitudeRaw == 9545454545LL);
+    assert(datum.projection.frameBytes == packet.size() && std::string(datum.projection.frameHex.data()) == hex);
     auto corrupt=packet; corrupt.back() ^= 1; session.reset(); session.feed(corrupt.data(),corrupt.size());
-    assert(!session.datum().has1025);
+    assert(!session.datum().messages.has1025);
 }
 int main() {
 CASES
