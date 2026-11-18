@@ -1415,8 +1415,8 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
     String failureReason;
     Serial.printf("[AUTO BASE][CASTER] Connecting %s:%u/%s; AutoNearest=%s.\n",
                   host.c_str(), static_cast<unsigned>(port), mountpoint.c_str(), autoNearest ? "YES" : "NO");
-    String *const selectedTarget = autoNearest ? &selectedMountpoint : nullptr;
-    if (!startAutoBaseRover(host, port, username, password, mountpoint, ntripVersion, failureReason, selectedTarget))
+    if (!startAutoBaseRover(host, port, username, password, mountpoint, ntripVersion, failureReason,
+                            autoNearest ? &selectedMountpoint : nullptr))
     {
         Serial.printf("[AUTO BASE][CASTER][FAILED] %s\n", failureReason.c_str());
         if (canFallbackNoNearbyStation(autoNearest, failureReason, workflowCancelRequested_))

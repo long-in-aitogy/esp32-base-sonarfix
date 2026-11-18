@@ -119,11 +119,13 @@ namespace BackendAgentInternal
 
 namespace
 {
+#if BACKEND_WEBSOCKET_ENABLED
     WiFiClient &backendWebsocketWifiClient()
     {
         static WiFiClient client;
         return client;
     }
+#endif
     TinyGsmClient &backendWebsocketGsmClient()
     {
         static TinyGsmClient client(getModem(), 3);
