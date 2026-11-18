@@ -11,20 +11,20 @@ enum class ConnectionType : uint8_t
 
 // Active transport. Loaded from CONNECTION_TYPE at boot; a temporary Wi-Fi
 // fallback changes this value without overwriting the saved SIM preference.
-extern ConnectionType connectionType;
+ConnectionType &activeConnectionType();
 
 void loadConnectionTypeFromPrefs();
 
 /** @brief Implements isWifiConnection. */
 inline bool isWifiConnection()
 {
-    return connectionType == ConnectionType::WIFI;
+    return activeConnectionType() == ConnectionType::WIFI;
 }
 
 /** @brief Implements isGsmConnection. */
 inline bool isGsmConnection()
 {
-    return connectionType == ConnectionType::GSM;
+    return activeConnectionType() == ConnectionType::GSM;
 }
 
 #endif

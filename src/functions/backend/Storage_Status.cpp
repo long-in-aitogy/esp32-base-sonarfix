@@ -146,28 +146,35 @@ bool secretField(String path) {
         || path.indexOf("credential") >= 0;
 }
 
-void appendConfigurationFields(JsonArray entries, uint32_t offset, uint32_t &total,
-                               const char *partition, const nvs_entry_info_t &entry,
-                               JsonVariantConst value, const String &path, bool secret = false) {
+struct ConfigurationFieldTarget {
+    JsonArray entries;
+    uint32_t offset;
+    uint32_t &total;
+    const char *partition;
+    const nvs_entry_info_t &entry;
+};
+
+void appendConfigurationFields(ConfigurationFieldTarget &target, JsonVariantConst value,
+                               const String &path, bool secret = false) {
     secret = secret || secretField(path);
     if (value.is<JsonObjectConst>() && value.size()) {
         for (JsonPairConst field : value.as<JsonObjectConst>())
-            appendConfigurationFields(entries, offset, total, partition, entry, field.value(),
+            appendConfigurationFields(target, field.value(),
                                       path.isEmpty() ? String(field.key().c_str()) : path + "." + field.key().c_str(), secret);
         return;
     }
     if (value.is<JsonArrayConst>() && value.size()) {
         size_t index = 0;
         for (JsonVariantConst item : value.as<JsonArrayConst>())
-            appendConfigurationFields(entries, offset, total, partition, entry, item,
+            appendConfigurationFields(target, item,
                                       path + "[" + String(index++) + "]", secret);
         return;
     }
-    if (total++ < offset || entries.size() >= 6) return;
-    JsonObject row = entries.createNestedObject();
-    row["partition"] = String(partition);
-    row["namespace"] = String(entry.namespace_name);
-    row["key"] = String(entry.key);
+    if (target.total++ < target.offset || target.entries.size() >= 6) return;
+    JsonObject row = target.entries.createNestedObject();
+    row["partition"] = String(target.partition);
+    row["namespace"] = String(target.entry.namespace_name);
+    row["key"] = String(target.entry.key);
     row["field"] = path;
     row["type"] = "JSON";
     row["bytes"] = measureJson(value);
@@ -251,8 +258,8 @@ bool appendSavedConfiguration(JsonArray entries, uint32_t offset, uint32_t &tota
         && deserializeJson(config, text.get()) == DeserializationError::Ok;
     nvs_close(handle);
     if (!parsed) return false;
-    appendConfigurationFields(entries, offset, total, partition, entry,
-                              config.as<JsonVariantConst>(), String());
+    ConfigurationFieldTarget target{entries, offset, total, partition, entry};
+    appendConfigurationFields(target, config.as<JsonVariantConst>(), String());
     return true;
 }
 

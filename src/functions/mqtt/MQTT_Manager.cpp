@@ -97,7 +97,11 @@ namespace
     return serverHost;
   }
 
-  uint32_t lastMqttConnectAttemptMs = 0;
+  uint32_t &lastMqttConnectAttemptMs()
+  {
+    static uint32_t ms = 0;
+    return ms;
+  }
 }
 
 Client &activeMqttClient()
@@ -201,11 +205,11 @@ int connectMQTT()
 {
   if (!mqttClient().connected())
   {
-    if (lastMqttConnectAttemptMs != 0 && millis() - lastMqttConnectAttemptMs < 5000UL)
+    if (lastMqttConnectAttemptMs() != 0 && millis() - lastMqttConnectAttemptMs() < 5000UL)
     {
       return -1;
     }
-    lastMqttConnectAttemptMs = millis();
+    lastMqttConnectAttemptMs() = millis();
     Serial.println("\n[MQTT] Dang ket noi Broker...");
     auto clientId = "agent-" + backendAgent().serial() + "-" + String(random(0xffff), HEX);
     appPrefs().begin("myPrefs", false);

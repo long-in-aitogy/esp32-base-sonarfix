@@ -16,33 +16,56 @@ namespace
     constexpr size_t MAX_NMEA_LENGTH = 512;
     constexpr size_t MAX_RTCM_FRAME_LENGTH = 1029; // 3-byte header + 1023 + CRC
 
-    String nmeaBuffer;
-    String pendingRtcmData;
-    std::array<uint8_t, MAX_RTCM_FRAME_LENGTH> rtcmFrame = {};
-    size_t rtcmLength = 0;
-    size_t rtcmExpectedLength = 0;
-    std::array<uint8_t, 6> ubxHeader = {};
-    size_t ubxHeaderLength = 0;
-    size_t ubxBytesRemaining = 0;
+    struct RtcmParserState
+    {
+        String nmeaBuffer;
+        String pendingRtcmData;
+        std::array<uint8_t, MAX_RTCM_FRAME_LENGTH> rtcmFrame = {};
+        size_t rtcmLength = 0;
+        size_t rtcmExpectedLength = 0;
+        std::array<uint8_t, 6> ubxHeader = {};
+        size_t ubxHeaderLength = 0;
+        size_t ubxBytesRemaining = 0;
+    };
 
-    GnssTelemetrySnapshot telemetry;
+    struct InputRateState
+    {
+        uint32_t windowStartedMs = 0;
+        uint32_t windowBytes = 0;
+        uint32_t bytesPerSecond = 0;
+    };
+
+    RtcmParserState &parserState()
+    {
+        static RtcmParserState state;
+        return state;
+    }
+
+    GnssTelemetrySnapshot &telemetryState()
+    {
+        static GnssTelemetrySnapshot state;
+        return state;
+    }
+
     portMUX_TYPE &telemetryMux()
     {
         static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
         return mux;
     }
 
-    uint32_t inputWindowStartedMs = 0;
-    uint32_t inputWindowBytes = 0;
-    uint32_t inputBytesPerSecond = 0;
+    InputRateState &inputRateState()
+    {
+        static InputRateState state;
+        return state;
+    }
 
 /** @brief Implements noteInputBytes. */
     void noteInputBytes(size_t count)
     {
         portENTER_CRITICAL(&telemetryMux());
-        telemetry.traffic.bytesRead += count;
-        telemetry.hasData = true;
-        telemetry.lastDataMs = millis();
+        telemetryState().traffic.bytesRead += count;
+        telemetryState().hasData = true;
+        telemetryState().lastDataMs = millis();
         portEXIT_CRITICAL(&telemetryMux());
     }
 
@@ -51,17 +74,17 @@ namespace
     {
         const uint32_t now = millis();
         portENTER_CRITICAL(&telemetryMux());
-        if (inputWindowStartedMs == 0)
-            inputWindowStartedMs = now;
-        inputWindowBytes += static_cast<uint32_t>(count);
-        if (now - inputWindowStartedMs >= 1000UL)
+        if (inputRateState().windowStartedMs == 0)
+            inputRateState().windowStartedMs = now;
+        inputRateState().windowBytes += static_cast<uint32_t>(count);
+        if (now - inputRateState().windowStartedMs >= 1000UL)
         {
-            const uint32_t elapsed = now - inputWindowStartedMs;
-            inputBytesPerSecond = elapsed > 0
-                                      ? static_cast<uint32_t>((static_cast<uint64_t>(inputWindowBytes) * 1000ULL) / elapsed)
-                                      : inputWindowBytes;
-            inputWindowStartedMs = now;
-            inputWindowBytes = 0;
+            const uint32_t elapsed = now - inputRateState().windowStartedMs;
+            inputRateState().bytesPerSecond = elapsed > 0
+                                      ? static_cast<uint32_t>((static_cast<uint64_t>(inputRateState().windowBytes) * 1000ULL) / elapsed)
+                                      : inputRateState().windowBytes;
+            inputRateState().windowStartedMs = now;
+            inputRateState().windowBytes = 0;
         }
         portEXIT_CRITICAL(&telemetryMux());
     }
@@ -285,33 +308,33 @@ namespace
 
     void updateNmeaCounters(const char *type)
     {
-        ++telemetry.traffic.nmeaSentences;
+        ++telemetryState().traffic.nmeaSentences;
         if (strcmp(type, "GGA") == 0)
-            ++telemetry.traffic.ggaCount;
+            ++telemetryState().traffic.ggaCount;
         else if (strcmp(type, "GSA") == 0)
-            ++telemetry.traffic.gsaCount;
+            ++telemetryState().traffic.gsaCount;
         else if (strcmp(type, "GSV") == 0)
-            ++telemetry.traffic.gsvCount;
+            ++telemetryState().traffic.gsvCount;
         else if (strcmp(type, "GST") == 0)
-            ++telemetry.traffic.gstCount;
+            ++telemetryState().traffic.gstCount;
     }
 
     void updateGgaTelemetry(const String &sentence, const char *type,
                             const GgaReading &gga)
     {
         if (gga.hasFixQuality)
-            setFixStatus(telemetry.fixStatus, gga.fixQuality);
+            setFixStatus(telemetryState().fixStatus, gga.fixQuality);
         if (strcmp(type, "GGA") != 0)
             return;
 
-        snprintf(telemetry.lastGga.data(), telemetry.lastGga.size(), "%s", sentence.c_str());
-        telemetry.lastGga[telemetry.lastGga.size() - 1] = '\0';
-        telemetry.lastGgaMs = millis();
+        snprintf(telemetryState().lastGga.data(), telemetryState().lastGga.size(), "%s", sentence.c_str());
+        telemetryState().lastGga[telemetryState().lastGga.size() - 1] = '\0';
+        telemetryState().lastGgaMs = millis();
         if (!gga.hasPosition)
         {
-            telemetry.latitude = NAN;
-            telemetry.longitude = NAN;
-            telemetry.altitude = NAN;
+            telemetryState().latitude = NAN;
+            telemetryState().longitude = NAN;
+            telemetryState().altitude = NAN;
         }
     }
 
@@ -319,31 +342,31 @@ namespace
     {
         if (const auto &gga = measurements.gga; gga.hasPosition)
         {
-            telemetry.latitude = gga.latitude;
-            telemetry.longitude = gga.longitude;
-            telemetry.altitude = gga.altitude;
-            telemetry.hdop = gga.hdop;
-            telemetry.satellites = gga.satellites;
+            telemetryState().latitude = gga.latitude;
+            telemetryState().longitude = gga.longitude;
+            telemetryState().altitude = gga.altitude;
+            telemetryState().hdop = gga.hdop;
+            telemetryState().satellites = gga.satellites;
         }
         if (measurements.updateSnr)
         {
-            const uint32_t oldSamples = telemetry.snrSamples;
-            telemetry.snrSamples += measurements.snrCount;
-            telemetry.latestGsvSamples = measurements.snrCount;
-            telemetry.lastGsvMs = millis();
-            telemetry.latestAverageSnr = measurements.snrSum /
+            const uint32_t oldSamples = telemetryState().snrSamples;
+            telemetryState().snrSamples += measurements.snrCount;
+            telemetryState().latestGsvSamples = measurements.snrCount;
+            telemetryState().lastGsvMs = millis();
+            telemetryState().latestAverageSnr = measurements.snrSum /
                                          static_cast<float>(measurements.snrCount);
-            telemetry.averageSnr = oldSamples == 0
+            telemetryState().averageSnr = oldSamples == 0
                                        ? measurements.snrSum / static_cast<float>(measurements.snrCount)
-                                       : ((telemetry.averageSnr * static_cast<float>(oldSamples)) + measurements.snrSum) /
-                                             static_cast<float>(telemetry.snrSamples);
+                                       : ((telemetryState().averageSnr * static_cast<float>(oldSamples)) + measurements.snrSum) /
+                                             static_cast<float>(telemetryState().snrSamples);
         }
         if (measurements.updateGst)
         {
-            telemetry.gstSemiMajor = measurements.gstSemiMajor;
-            telemetry.gstSemiMinor = measurements.gstSemiMinor;
-            telemetry.gstHacc = measurements.gstHacc;
-            telemetry.lastGstMs = millis();
+            telemetryState().gstSemiMajor = measurements.gstSemiMajor;
+            telemetryState().gstSemiMinor = measurements.gstSemiMinor;
+            telemetryState().gstHacc = measurements.gstHacc;
+            telemetryState().lastGstMs = millis();
         }
     }
 
@@ -351,8 +374,8 @@ namespace
                              const NmeaMeasurements &measurements)
     {
         portENTER_CRITICAL(&telemetryMux());
-        telemetry.hasData = true;
-        telemetry.lastDataMs = millis();
+        telemetryState().hasData = true;
+        telemetryState().lastDataMs = millis();
         updateNmeaCounters(type);
         updateGgaTelemetry(sentence, type, measurements.gga);
         updateNmeaMeasurements(measurements);
@@ -399,47 +422,47 @@ namespace
 /** @brief Implements resetRtcmParser. */
     void resetRtcmParser()
     {
-        rtcmLength = 0;
-        rtcmExpectedLength = 0;
+        parserState().rtcmLength = 0;
+        parserState().rtcmExpectedLength = 0;
     }
 
 /** @brief Implements processRtcmByte. */
     bool processRtcmByte(uint8_t value, String &rtcmOutput)
     {
-        if (rtcmLength == 1 && (std::byte{value} & std::byte{0xFC}) != std::byte{})
+        if (parserState().rtcmLength == 1 && (std::byte{value} & std::byte{0xFC}) != std::byte{})
         {
             resetRtcmParser();
             return false;
         }
-        if (rtcmLength >= rtcmFrame.size())
+        if (parserState().rtcmLength >= parserState().rtcmFrame.size())
         {
             resetRtcmParser();
             return true;
         }
 
-        rtcmFrame[rtcmLength++] = value;
-        if (rtcmLength == 3)
+        parserState().rtcmFrame[parserState().rtcmLength++] = value;
+        if (parserState().rtcmLength == 3)
         {
             const uint16_t payloadLength =
-                (static_cast<uint16_t>(rtcmFrame[1]) & 0x03U) * 256U + rtcmFrame[2];
-            rtcmExpectedLength = static_cast<size_t>(payloadLength) + 6U;
-            if (rtcmExpectedLength > rtcmFrame.size())
+                (static_cast<uint16_t>(parserState().rtcmFrame[1]) & 0x03U) * 256U + parserState().rtcmFrame[2];
+            parserState().rtcmExpectedLength = static_cast<size_t>(payloadLength) + 6U;
+            if (parserState().rtcmExpectedLength > parserState().rtcmFrame.size())
             {
                 resetRtcmParser();
                 return true;
             }
         }
-        if (rtcmExpectedLength == 0 || rtcmLength != rtcmExpectedLength)
+        if (parserState().rtcmExpectedLength == 0 || parserState().rtcmLength != parserState().rtcmExpectedLength)
             return true;
 
         // Forward the complete RTCM frame without validating its CRC or decoding its type.
-        rtcmOutput.concat(reinterpret_cast<const char *>(rtcmFrame.data()), rtcmLength);
-        backendAgent().enqueueRtcm(rtcmFrame.data(), rtcmLength);
-        noteRtcmBytes(rtcmLength);
+        rtcmOutput.concat(reinterpret_cast<const char *>(parserState().rtcmFrame.data()), parserState().rtcmLength);
+        backendAgent().enqueueRtcm(parserState().rtcmFrame.data(), parserState().rtcmLength);
+        noteRtcmBytes(parserState().rtcmLength);
         portENTER_CRITICAL(&telemetryMux());
-        ++telemetry.traffic.rtcmFrames;
-        telemetry.hasData = true;
-        telemetry.lastDataMs = millis();
+        ++telemetryState().traffic.rtcmFrames;
+        telemetryState().hasData = true;
+        telemetryState().lastDataMs = millis();
         portEXIT_CRITICAL(&telemetryMux());
         resetRtcmParser();
         return true;
@@ -448,20 +471,20 @@ namespace
 /** @brief Implements processUbxHeaderByte. */
     bool processUbxHeaderByte(uint8_t value)
     {
-        if (ubxHeaderLength == 1 && value != 0x62)
+        if (parserState().ubxHeaderLength == 1 && value != 0x62)
         {
-            ubxHeaderLength = 0;
+            parserState().ubxHeaderLength = 0;
             return false;
         }
 
-        ubxHeader[ubxHeaderLength++] = value;
-        if (ubxHeaderLength != ubxHeader.size())
+        parserState().ubxHeader[parserState().ubxHeaderLength++] = value;
+        if (parserState().ubxHeaderLength != parserState().ubxHeader.size())
             return true;
 
-        const auto payloadLength = size_t(ubxHeader[4]) | (size_t(ubxHeader[5]) << 8);
-        ubxHeaderLength = 0;
+        const auto payloadLength = size_t(parserState().ubxHeader[4]) | (size_t(parserState().ubxHeader[5]) << 8);
+        parserState().ubxHeaderLength = 0;
         if (payloadLength <= 8192)
-            ubxBytesRemaining = payloadLength + 2;
+            parserState().ubxBytesRemaining = payloadLength + 2;
         return true;
     }
 
@@ -470,60 +493,60 @@ namespace
     {
         // UBX payload is binary and may contain '$', LF or 0xD3. Skip the whole
         // frame before looking for NMEA/RTCM, including across UART read chunks.
-        if (ubxBytesRemaining > 0)
+        if (parserState().ubxBytesRemaining > 0)
         {
-            --ubxBytesRemaining;
+            --parserState().ubxBytesRemaining;
             return;
         }
-        if (ubxHeaderLength > 0 && processUbxHeaderByte(value))
+        if (parserState().ubxHeaderLength > 0 && processUbxHeaderByte(value))
             return;
-        if (rtcmLength > 0 && processRtcmByte(value, rtcmOutput))
+        if (parserState().rtcmLength > 0 && processRtcmByte(value, rtcmOutput))
             return;
 
-        if (!nmeaBuffer.isEmpty())
+        if (!parserState().nmeaBuffer.isEmpty())
         {
             if (value == '\n')
             {
-                nmeaBuffer += static_cast<char>(value);
-                parseNmeaSentence(nmeaBuffer);
-                nmeaBuffer = "";
+                parserState().nmeaBuffer += static_cast<char>(value);
+                parseNmeaSentence(parserState().nmeaBuffer);
+                parserState().nmeaBuffer = "";
             }
             else if (value == '$')
             {
                 // A malformed/incomplete line should not swallow the next valid
                 // sentence when the GNSS stream recovers.
-                nmeaBuffer = "$";
+                parserState().nmeaBuffer = "$";
             }
             else if ((value < 0x20 && value != '\r') || value > 0x7E)
             {
-                nmeaBuffer = "";
+                parserState().nmeaBuffer = "";
                 consumeByte(value, rtcmOutput);
             }
-            else if (nmeaBuffer.length() < MAX_NMEA_LENGTH - 1)
+            else if (parserState().nmeaBuffer.length() < MAX_NMEA_LENGTH - 1)
             {
-                nmeaBuffer += static_cast<char>(value);
+                parserState().nmeaBuffer += static_cast<char>(value);
             }
             else
             {
-                nmeaBuffer = "";
+                parserState().nmeaBuffer = "";
             }
             return;
         }
 
         if (value == 0xB5)
         {
-            ubxHeader[0] = value;
-            ubxHeaderLength = 1;
+            parserState().ubxHeader[0] = value;
+            parserState().ubxHeaderLength = 1;
         }
         else if (value == 0xD3)
         {
-            rtcmFrame[0] = value;
-            rtcmLength = 1;
-            rtcmExpectedLength = 0;
+            parserState().rtcmFrame[0] = value;
+            parserState().rtcmLength = 1;
+            parserState().rtcmExpectedLength = 0;
         }
         else if (value == '$')
         {
-            nmeaBuffer = "$";
+            parserState().nmeaBuffer = "$";
         }
     }
 
@@ -533,7 +556,7 @@ namespace
 void bufferGnssQueryByte(uint8_t value)
 {
     noteInputBytes(1);
-    consumeByte(value, pendingRtcmData);
+    consumeByte(value, parserState().pendingRtcmData);
 }
 
 /** @brief Implements receiveRtcmFromGnss. */
@@ -549,10 +572,10 @@ String receiveRtcmFromGnss()
         return rtcmData;
     }
 
-    if (!pendingRtcmData.isEmpty())
+    if (!parserState().pendingRtcmData.isEmpty())
     {
-        rtcmData = pendingRtcmData;
-        pendingRtcmData = "";
+        rtcmData = parserState().pendingRtcmData;
+        parserState().pendingRtcmData = "";
     }
 
     while (Serial1.available() > 0)
@@ -609,7 +632,7 @@ GnssTelemetrySnapshot getGnssTelemetrySnapshot()
 {
     GnssTelemetrySnapshot copy;
     portENTER_CRITICAL(&telemetryMux());
-    copy = telemetry;
+    copy = telemetryState();
     portEXIT_CRITICAL(&telemetryMux());
     if (copy.lastGgaMs == 0 || millis() - copy.lastGgaMs > 15000UL)
     {
@@ -623,16 +646,16 @@ uint32_t getRtcmInputBps()
 {
     const uint32_t now = millis();
     portENTER_CRITICAL(&telemetryMux());
-    if (inputWindowStartedMs > 0 && now - inputWindowStartedMs >= 1000UL)
+    if (inputRateState().windowStartedMs > 0 && now - inputRateState().windowStartedMs >= 1000UL)
     {
-        const uint32_t elapsed = now - inputWindowStartedMs;
-        inputBytesPerSecond = elapsed > 0
-                                  ? static_cast<uint32_t>((static_cast<uint64_t>(inputWindowBytes) * 1000ULL) / elapsed)
-                                  : inputWindowBytes;
-        inputWindowStartedMs = now;
-        inputWindowBytes = 0;
+        const uint32_t elapsed = now - inputRateState().windowStartedMs;
+        inputRateState().bytesPerSecond = elapsed > 0
+                                  ? static_cast<uint32_t>((static_cast<uint64_t>(inputRateState().windowBytes) * 1000ULL) / elapsed)
+                                  : inputRateState().windowBytes;
+        inputRateState().windowStartedMs = now;
+        inputRateState().windowBytes = 0;
     }
-    const uint32_t result = inputBytesPerSecond;
+    const uint32_t result = inputRateState().bytesPerSecond;
     portEXIT_CRITICAL(&telemetryMux());
     return result;
 }

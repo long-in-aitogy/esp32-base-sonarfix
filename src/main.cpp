@@ -63,9 +63,21 @@ static void checkSimInternetFallback();
 static void checkSimRecovery();
 static void activateNetwork(ConnectionType type, bool protocolsRunning);
 static void logNetworkStatus(bool force = false);
-static bool wifiFallbackActive = false;
-static uint32_t lastSimProbeMs = 0;
-static uint8_t simRecoverySuccesses = 0;
+static bool &wifiFallbackActive()
+{
+    static bool active = false;
+    return active;
+}
+static uint32_t &lastSimProbeMs()
+{
+    static uint32_t ms = 0;
+    return ms;
+}
+static uint8_t &simRecoverySuccesses()
+{
+    static uint8_t count = 0;
+    return count;
+}
 
 __attribute__((noreturn)) void taskNtrip([[maybe_unused]] void *parameter);
 __attribute__((noreturn)) void healthCheckTask(void *parameter);
@@ -422,9 +434,9 @@ static bool tryWifiFallback(bool protocolsRunning)
         return false;
     }
     activateNetwork(ConnectionType::WIFI, protocolsRunning);
-    wifiFallbackActive = true;
-    lastSimProbeMs = millis();
-    simRecoverySuccesses = 0;
+    wifiFallbackActive() = true;
+    lastSimProbeMs() = millis();
+    simRecoverySuccesses() = 0;
     Serial.println("[NETWORK] Da chuyen sang Wi-Fi du phong; giu nguyen tuy chon SIM da luu.");
     logNetworkStatus(true);
     return true;
@@ -440,7 +452,7 @@ static void activateNetwork(ConnectionType type, bool protocolsRunning)
         mqttClient().disconnect();
         stopNtrip();
     }
-    connectionType = type;
+    activeConnectionType() = type;
     backendAgent().onNetworkChanged();
     if (protocolsRunning)
     {
@@ -455,27 +467,27 @@ static void activateNetwork(ConnectionType type, bool protocolsRunning)
 /** @brief Implements checkSimRecovery. */
 static void checkSimRecovery()
 {
-    if (!wifiFallbackActive || !isWifiConnection())
+    if (!wifiFallbackActive() || !isWifiConnection())
         return;
     const auto wifiConnected = WiFiClass::status() == WL_CONNECTED;
     const uint32_t now = millis();
     if (const uint32_t interval = wifiConnected ? 60000UL : 15000UL;
-        now - lastSimProbeMs < interval)
+        now - lastSimProbeMs() < interval)
         return;
-    lastSimProbeMs = now;
+    lastSimProbeMs() = now;
     // Avoid a blocking registration wait while healthy Wi-Fi carries traffic.
     if (const auto reachable = getModem().isNetworkConnected() && (getModem().isGprsConnected() || connectGSM(1)) && probeMqttTransport(true); !reachable)
     {
-        simRecoverySuccesses = 0;
+        simRecoverySuccesses() = 0;
         return;
     }
     // Two successful broker handshakes a minute apart avoid switching on a blip.
-    if (++simRecoverySuccesses < 2 && wifiConnected)
+    if (++simRecoverySuccesses() < 2 && wifiConnected)
         return;
     Serial.println("[NETWORK] SIM da truy cap lai MQTT broker; chuyen ve SIM.");
     activateNetwork(ConnectionType::GSM, true);
-    wifiFallbackActive = false;
-    simRecoverySuccesses = 0;
+    wifiFallbackActive() = false;
+    simRecoverySuccesses() = 0;
     WiFi.disconnect();
     logNetworkStatus(true);
 }
@@ -489,7 +501,7 @@ static void logNetworkStatus(bool force)
         return;
     lastLogMs = now;
     Serial.printf("[NETWORK][ACTIVE] transport=%s; fallback=%s; MQTT=%s; NTRIP=%s\n",
-                  isWifiConnection() ? "WIFI" : "SIM/4G", wifiFallbackActive ? "YES" : "NO",
+                  isWifiConnection() ? "WIFI" : "SIM/4G", wifiFallbackActive() ? "YES" : "NO",
                   mqttClient().connected() ? "UP" : "DOWN", isNtripConnected() ? "UP" : "DOWN");
     if (isWifiConnection())
         Serial.printf("[NETWORK][WIFI] connected=%s; SSID=%s; IP=%s; RSSI=%d dBm\n",

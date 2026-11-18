@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <cinttypes>
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
 
@@ -204,7 +205,7 @@ void describeTmode(JsonObject object, const uint8_t *raw) {
     if (raw[2] == 2) mode = "Fixed";
     else if (raw[2] == 1) mode = "Survey-In";
     object["mode"] = mode;
-    object["coordinate_type"] = raw[3] & 1 ? "LLA" : "ECEF";
+    object["coordinate_type"] = (std::byte{raw[3]} & std::byte{1}) != std::byte{} ? "LLA" : "ECEF";
     object["accuracy_m"] = UbxBaseStatus::u32(raw + 20) * 0.0001;
     UbxBaseStatus status;
     if (status.tmode(raw, 40) && status.hasPosition) {

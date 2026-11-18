@@ -96,7 +96,7 @@ int main() {
 '''
 with tempfile.TemporaryDirectory(prefix='esp-gga-') as directory:
     path = Path(directory)
-    (path / 'check.cpp').write_text(shim + harness + telemetry + '\nGnssTelemetrySnapshot telemetry;\n' + functions + checks)
+    (path / 'check.cpp').write_text(shim + harness + telemetry + '\nGnssTelemetrySnapshot telemetry;\nGnssTelemetrySnapshot &telemetryState() { return telemetry; }\n' + functions + checks)
     subprocess.run(['c++', '-std=c++17', '-fsanitize=address,undefined',
                     '-I' + str(root / 'include'), str(path / 'check.cpp'), '-o', str(path / 'check')], check=True)
     subprocess.run([str(path / 'check')], check=True)

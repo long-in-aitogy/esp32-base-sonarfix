@@ -169,14 +169,52 @@ private:
     bool waitForRoverGga(uint32_t startedMs) const;
     void setWorkflowProgress(const String &phase, uint8_t step, uint8_t total,
                              const String &details = String());
+    struct AutoBaseConfig {
+        String host;
+        uint16_t port = 0;
+        String username;
+        String password;
+        String mountpoint;
+        uint8_t ntripVersion = 0;
+        uint32_t timeoutSeconds = 0;
+        uint8_t fixedStreakRequired = 0;
+    };
+    struct AutoBaseResultInput {
+        double finalLatitude = 0;
+        double finalLongitude = 0;
+        double finalAltitude = 0;
+        double rawLatitude = 0;
+        double rawLongitude = 0;
+        double rawAltitude = 0;
+        bool transformed = false;
+        bool transportRestored = false;
+        size_t sampleCount = 0;
+        const char *projectionSource = "";
+        const char *provinceCode = "";
+        const char *provinceName = "";
+        double centralMeridianDeg = 0;
+        double scale = 0;
+    };
+    struct ReferenceCheckConfig {
+        JsonObject reference;
+        double referenceLatitude = 0;
+        double referenceLongitude = 0;
+        double referenceAltitude = 0;
+        double restoreLatitude = 0;
+        double restoreLongitude = 0;
+        double restoreAltitude = 0;
+        String host;
+        uint16_t port = 0;
+        String username;
+        String password;
+        String mountpoint;
+        uint32_t timeoutSeconds = 0;
+        uint16_t requestedSamples = 0;
+    };
     bool runAutoBaseWorkflow(JsonObject payload);
-    bool prepareAutoBaseConfig(JsonObject payload, String &host, uint16_t &port,
-                               String &username, String &password, String &mountpoint,
-                               uint8_t &ntripVersion, uint32_t &timeoutSeconds,
-                               uint8_t &fixedStreakRequired) const;
-    bool startAutoBaseRover(const String &host, uint16_t port, const String &username,
-                            const String &password, const String &mountpoint,
-                            uint8_t ntripVersion, String &error, String *selectedMountpoint = nullptr) const;
+    bool prepareAutoBaseConfig(JsonObject payload, AutoBaseConfig &config) const;
+    bool startAutoBaseRover(const AutoBaseConfig &config, String &error,
+                            String *selectedMountpoint = nullptr) const;
     bool waitForAutoBaseFix(uint32_t timeoutSeconds, uint8_t fixedStreakRequired,
                             bool &cancelled, String &failureReason, const String &sourceMountpoint);
     bool collectAutoBaseSamples(int configuredSamples, std::vector<double> &latitudes,
@@ -187,13 +225,7 @@ private:
                                const std::vector<double> &longitudes,
                                const std::vector<double> &altitudes,
                                String &resultJson, String &failureReason, const String &sourceMountpoint);
-    String buildAutoBaseResult(double finalLatitude, double finalLongitude,
-                               double finalAltitude, double rawLatitude,
-                               double rawLongitude, double rawAltitude,
-                               bool transformed, bool transportRestored,
-                               size_t sampleCount, const String &projectionSource,
-                               const String &provinceCode, const String &provinceName,
-                               double centralMeridianDeg, double scale, JsonObjectConst report) const;
+    String buildAutoBaseResult(const AutoBaseResultInput &input, JsonObjectConst report) const;
     bool resolveAutoBaseLocation(double latitude, double longitude, double altitude,
                                  JsonDocument &location, String &failureReason);
     bool restoreAutoBaseAfterReview(JsonDocument &previousBase);
@@ -205,13 +237,7 @@ private:
                                 const String &selectedMountpoint, bool success,
                                 bool cancelled, const String &reason);
     bool runReferenceCheckWorkflow(JsonObject payload);
-    bool prepareReferenceCheckConfig(JsonObject payload, JsonObject &reference,
-                                     double &referenceLatitude, double &referenceLongitude,
-                                     double &referenceAltitude, double &restoreLatitude,
-                                     double &restoreLongitude, double &restoreAltitude,
-                                     String &host, uint16_t &port, String &username,
-                                     String &password, String &mountpoint,
-                                     uint32_t &timeoutSeconds, uint16_t &requestedSamples);
+    bool prepareReferenceCheckConfig(JsonObject payload, ReferenceCheckConfig &config);
     bool startReferenceRover(const String &host, uint16_t port, const String &username,
                                     const String &password, const String &mountpoint, String &error) const;
     bool waitForReferenceFix(uint32_t timeoutSeconds, String &failureReason);

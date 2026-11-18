@@ -17,7 +17,11 @@ namespace BackendAgentInternal
         static Preferences store;
         return store;
     }
-    bool useDedicatedBackendPrefs = false;
+    bool &useDedicatedBackendPrefs()
+    {
+        static bool enabled = false;
+        return enabled;
+    }
 
     String restoreWorkflowProgress(const String &saved)
     {
@@ -56,17 +60,17 @@ namespace BackendAgentInternal
 
     const char *backendPreferencesPartition()
     {
-        return useDedicatedBackendPrefs ? BACKEND_PREFS_PARTITION : "nvs";
+        return useDedicatedBackendPrefs() ? BACKEND_PREFS_PARTITION : "nvs";
     }
 
     Preferences &backendPreferences()
     {
-        return useDedicatedBackendPrefs ? backendPrefs() : appPrefs();
+        return useDedicatedBackendPrefs() ? backendPrefs() : appPrefs();
     }
 
     bool beginBackendPreferences(bool readOnly)
     {
-        return useDedicatedBackendPrefs
+        return useDedicatedBackendPrefs()
                    ? backendPrefs().begin(BACKEND_PREFS_NAMESPACE, readOnly, BACKEND_PREFS_PARTITION)
                    : appPrefs().begin("myPrefs", readOnly);
     }
@@ -141,10 +145,10 @@ namespace BackendAgentInternal
 
 void BackendAgent::loadPreferences()
 {
-    useDedicatedBackendPrefs = migrateBackendPreferences();
+    useDedicatedBackendPrefs() = migrateBackendPreferences();
     if (!beginBackendPreferences(true))
     {
-        useDedicatedBackendPrefs = false;
+        useDedicatedBackendPrefs() = false;
         appPrefs().begin("myPrefs", true);
         Serial.println("[BACKEND][NVS] Khong mo duoc agent_state; dung NVS cu.");
     }
@@ -284,7 +288,7 @@ bool BackendAgent::saveStatePreferences() const
     }
     // Persist the state snapshot with native NVS calls and one commit.
     nvs_handle_t handle;
-    if (const esp_err_t opened = useDedicatedBackendPrefs
+    if (const esp_err_t opened = useDedicatedBackendPrefs()
                                  ? nvs_open_from_partition(BACKEND_PREFS_PARTITION, BACKEND_PREFS_NAMESPACE, NVS_READWRITE, &handle)
                                  : nvs_open("myPrefs", NVS_READWRITE, &handle); opened != ESP_OK)
     {

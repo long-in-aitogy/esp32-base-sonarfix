@@ -122,14 +122,31 @@ struct BackendAgent {
     bool restartConfiguredNtrip() { return restartOk; }
     bool applyRoverMode() { return roverModeOk; }
     int loopNtripRoverLocked() { return disconnectAt && now >= disconnectAt ? 504 : 200; }
-    bool prepareAutoBaseConfig(JsonObject, String &, uint16_t &, String &, String &, String &, uint8_t &, uint32_t &, uint8_t &) const;
-    bool startAutoBaseRover(const String &, uint16_t, const String &, const String &, const String &, uint8_t, String &error, String *selected) {
+    struct AutoBaseConfig {
+        String host; uint16_t port = 0; String username, password, mountpoint;
+        uint8_t ntripVersion = 0; uint32_t timeoutSeconds = 0; uint8_t fixedStreakRequired = 0;
+    };
+    struct AutoBaseResultInput {
+        double finalLatitude = 0, finalLongitude = 0, finalAltitude = 0;
+        double rawLatitude = 0, rawLongitude = 0, rawAltitude = 0;
+        bool transformed = false, transportRestored = false; size_t sampleCount = 0;
+        const char *projectionSource = "", *provinceCode = "", *provinceName = "";
+        double centralMeridianDeg = 0, scale = 0;
+    };
+    struct ReferenceCheckConfig {
+        JsonObject reference;
+        double referenceLatitude = 0, referenceLongitude = 0, referenceAltitude = 0;
+        double restoreLatitude = 0, restoreLongitude = 0, restoreAltitude = 0;
+        String host; uint16_t port = 0; String username, password, mountpoint;
+        uint32_t timeoutSeconds = 0; uint16_t requestedSamples = 0;
+    };
+    bool prepareAutoBaseConfig(JsonObject, AutoBaseConfig &) const;
+    bool startAutoBaseRover(const AutoBaseConfig &, String &error, String *selected) {
         if (!sourceAvailable) { error = sourceError; return false; }
         if (selected) *selected = "station";
         return true;
     }
-    bool prepareReferenceCheckConfig(JsonObject, JsonObject &, double &, double &, double &, double &, double &, double &,
-                                     String &, uint16_t &, String &, String &, String &, uint32_t &, uint16_t &);
+    bool prepareReferenceCheckConfig(JsonObject, ReferenceCheckConfig &);
     bool startReferenceRover(const String &, uint16_t, const String &, const String &, const String &, String &error) {
         if (!referenceRoverOk) error = "caster unavailable";
         return referenceRoverOk;
@@ -138,15 +155,11 @@ struct BackendAgent {
     String normalAgentState() { return "online"; }
     void publishConfigState(const char *) {}
     bool applyCandidate(String &);
-    String buildRealAutoBaseResult(double, double, double, double, double, double, bool, bool, size_t,
-                                   const String &, const String &, const String &, double, double, JsonObjectConst) const;
-    String buildAutoBaseResult(double lat, double lon, double alt, double rawLat, double rawLon, double rawAlt,
-                               bool transformed, bool restarted, size_t count, const String &source,
-                               const String &code, const String &name, double meridian, double scale, JsonObjectConst report) {
-        if (restarted && failFinalResult) return String();
+    String buildRealAutoBaseResult(const AutoBaseResultInput &, JsonObjectConst) const;
+    String buildAutoBaseResult(const AutoBaseResultInput &input, JsonObjectConst report) {
+        if (input.transportRestored && failFinalResult) return String();
         reportJson.clear(); serializeJson(report, reportJson);
-        return buildRealAutoBaseResult(lat, lon, alt, rawLat, rawLon, rawAlt, transformed, restarted,
-                                       count, source, code, name, meridian, scale, report);
+        return buildRealAutoBaseResult(input, report);
     }
     bool resolveAutoBaseLocation(double, double, double, JsonDocument &, String &);
     bool completeAutoBaseSetup(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &, String &, const String &);

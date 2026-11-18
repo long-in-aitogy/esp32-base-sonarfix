@@ -52,9 +52,15 @@ void ecefToLlh(const EcefCoordinate &coordinate, double &latitudeRad,
     height = p / cos(latitudeRad) - radius;
 }
 
-void blhToUtm(double centralMeridianRad, double scale, double latitudeRad,
-              double longitudeRad, double height, double &northing,
-              double &easting, double falseEasting, double falseNorthing) {
+struct UtmProjection {
+    double centralMeridianRad = 0.0;
+    double scale = 1.0;
+    double falseEasting = 0.0;
+    double falseNorthing = 0.0;
+};
+
+void blhToUtm(const UtmProjection &projection, double latitudeRad,
+              double longitudeRad, double &northing, double &easting) {
     const double ep2 = WGS84_E2 / (1.0 - WGS84_E2);
     const double sinLatitude = sin(latitudeRad);
     const double cosLatitude = cos(latitudeRad);
@@ -62,7 +68,7 @@ void blhToUtm(double centralMeridianRad, double scale, double latitudeRad,
     const double radius = WGS84_A / sqrt(1.0 - WGS84_E2 * sinLatitude * sinLatitude);
     const double t = tangent * tangent;
     const double c = ep2 * cosLatitude * cosLatitude;
-    const double a = (longitudeRad - centralMeridianRad) * cosLatitude;
+    const double a = (longitudeRad - projection.centralMeridianRad) * cosLatitude;
     const double e4 = WGS84_E2 * WGS84_E2;
     const double e6 = e4 * WGS84_E2;
     const double meridian = WGS84_A * (
@@ -70,22 +76,20 @@ void blhToUtm(double centralMeridianRad, double scale, double latitudeRad,
         - (3.0 * WGS84_E2 / 8.0 + 3.0 * e4 / 32.0 + 45.0 * e6 / 1024.0) * sin(2.0 * latitudeRad)
         + (15.0 * e4 / 256.0 + 45.0 * e6 / 1024.0) * sin(4.0 * latitudeRad)
         - (35.0 * e6 / 3072.0) * sin(6.0 * latitudeRad));
-    northing = falseNorthing + scale * (meridian + radius * tangent * (
+    northing = projection.falseNorthing + projection.scale * (meridian + radius * tangent * (
         a * a / 2.0
         + (5.0 - t + 9.0 * c + 4.0 * c * c) * pow(a, 4) / 24.0
         + (61.0 - 58.0 * t + t * t + 600.0 * c - 330.0 * ep2) * pow(a, 6) / 720.0));
-    easting = falseEasting + scale * radius * (
+    easting = projection.falseEasting + projection.scale * radius * (
         a + (1.0 - t + c) * pow(a, 3) / 6.0
         + (5.0 - 18.0 * t + t * t + 72.0 * c - 58.0 * ep2) * pow(a, 5) / 120.0);
-    (void)height;
 }
 
-void utmToBlh(double centralMeridianRad, double scale, double northing,
-              double easting, double height, double &latitudeRad,
-              double &longitudeRad, double falseEasting, double falseNorthing) {
+void utmToBlh(const UtmProjection &projection, double northing,
+              double easting, double &latitudeRad, double &longitudeRad) {
     const double ep2 = WGS84_E2 / (1.0 - WGS84_E2);
-    const double x = (northing - falseNorthing) / scale;
-    const double y = (easting - falseEasting) / scale;
+    const double x = (northing - projection.falseNorthing) / projection.scale;
+    const double y = (easting - projection.falseEasting) / projection.scale;
     const double e4 = WGS84_E2 * WGS84_E2;
     const double e6 = e4 * WGS84_E2;
     const double mu = x / (WGS84_A * (1.0 - WGS84_E2 / 4.0
@@ -112,18 +116,14 @@ void utmToBlh(double centralMeridianRad, double scale, double northing,
         - (5.0 + 3.0 * t1 + 10.0 * c1 - 4.0 * c1 * c1 - 9.0 * ep2) * pow(d, 4) / 24.0
         + (61.0 + 90.0 * t1 + 298.0 * c1 + 45.0 * t1 * t1
            - 252.0 * ep2 - 3.0 * c1 * c1) * pow(d, 6) / 720.0);
-    longitudeRad = centralMeridianRad + (
+    longitudeRad = projection.centralMeridianRad + (
         d - (1.0 + 2.0 * t1 + c1) * pow(d, 3) / 6.0
         + (5.0 - 2.0 * c1 + 28.0 * t1 - 3.0 * c1 * c1
            + 8.0 * ep2 + 24.0 * t1 * t1) * pow(d, 5) / 120.0) / cosFootpoint;
-    (void)height;
 }
 
 bool transformItrfToVn2000(double latitudeDeg, double longitudeDeg, double height,
-                           double centralMeridianDeg, double scale,
-                           double &localLatitude, double &localLongitude,
-                           double &localAltitude, double &northing,
-                           double &easting, double &vnHeight, const Vn2000Datum &datum) {
+                           const Vn2000Datum &datum, Vn2000Result &result) {
     const EcefCoordinate source = llhToEcef(latitudeDeg, longitudeDeg, height);
     const double omega = datum.rX * ARCSEC_TO_RAD;
     const double phi = datum.rY * ARCSEC_TO_RAD;
@@ -144,16 +144,18 @@ bool transformItrfToVn2000(double latitudeDeg, double longitudeDeg, double heigh
         longitudeRad += datum.resL;
         transformedHeight += datum.resH;
     }
-    vnHeight = transformedHeight;
-    const double centralMeridianRad = centralMeridianDeg * 3.14159265358979323846 / 180.0;
-    blhToUtm(centralMeridianRad, scale, latitudeRad, longitudeRad,
-             transformedHeight, northing, easting, datum.falseEasting, datum.falseNorthing);
-    northing += datum.resN;
-    easting += datum.resE;
+    const UtmProjection projection{
+        datum.centralMeridianDeg * 3.14159265358979323846 / 180.0,
+        datum.scale,
+        datum.falseEasting,
+        datum.falseNorthing,
+    };
+    blhToUtm(projection, latitudeRad, longitudeRad, result.north, result.east);
+    result.north += datum.resN;
+    result.east += datum.resE;
     transformedHeight += datum.resHS;
-    vnHeight = transformedHeight;
-    utmToBlh(centralMeridianRad, scale, northing, easting, transformedHeight,
-             latitudeRad, longitudeRad, datum.falseEasting, datum.falseNorthing);
+    result.h = transformedHeight;
+    utmToBlh(projection, result.north, result.east, latitudeRad, longitudeRad);
 
     const EcefCoordinate vn2000 = llhToEcef(
         latitudeRad * 180.0 / 3.14159265358979323846,
@@ -168,12 +170,12 @@ bool transformItrfToVn2000(double latitudeDeg, double longitudeDeg, double heigh
         -39.30318279 + reverseK * (-reverseEpsilon * vn2000.x + vn2000.y + reverseOmega * vn2000.z),
         -111.45032835 + reverseK * (reversePhi * vn2000.x - reverseOmega * vn2000.y + vn2000.z),
     };
-    ecefToLlh(local, latitudeRad, longitudeRad, localAltitude);
-    localLatitude = latitudeRad * 180.0 / 3.14159265358979323846;
-    localLongitude = longitudeRad * 180.0 / 3.14159265358979323846;
-    return std::isfinite(localLatitude) && std::isfinite(localLongitude) && std::isfinite(localAltitude)
-        && -90.0 <= localLatitude && localLatitude <= 90.0
-        && -180.0 <= localLongitude && localLongitude <= 180.0;
+    ecefToLlh(local, latitudeRad, longitudeRad, result.altitude);
+    result.latitude = latitudeRad * 180.0 / 3.14159265358979323846;
+    result.longitude = longitudeRad * 180.0 / 3.14159265358979323846;
+    return std::isfinite(result.latitude) && std::isfinite(result.longitude) && std::isfinite(result.altitude)
+        && -90.0 <= result.latitude && result.latitude <= 90.0
+        && -180.0 <= result.longitude && result.longitude <= 180.0;
 }
 
 } // namespace
@@ -185,8 +187,7 @@ bool transformVn2000(double latitude, double longitude, double altitude,
         || !std::isfinite(datum.centralMeridianDeg) || datum.centralMeridianDeg < 100 || datum.centralMeridianDeg > 112
         || !std::isfinite(datum.scale) || datum.scale < 0.999 || datum.scale > 1.001
         || !std::isfinite(datum.resN) || !std::isfinite(datum.resE) || !std::isfinite(datum.resHS)) return false;
-    return transformItrfToVn2000(latitude, longitude, altitude, datum.centralMeridianDeg, datum.scale,
-        result.latitude, result.longitude, result.altitude, result.north, result.east, result.h, datum)
+    return transformItrfToVn2000(latitude, longitude, altitude, datum, result)
         && std::isfinite(result.north) && std::isfinite(result.east) && std::isfinite(result.h)
         && result.altitude >= -1000 && result.altitude <= 100000;
 }
@@ -200,7 +201,10 @@ struct Bits {
     uint64_t u(size_t width) {
         if (width > 63 || pos + width > limit) { ok = false; return 0; }
         uint64_t value = 0;
-        for (size_t i = 0; i < width; ++i, ++pos) value = (value << 1) | ((data[pos / 8] >> (7 - pos % 8)) & 1);
+        for (size_t i = 0; i < width; ++i, ++pos) {
+            const auto bit = std::to_integer<uint64_t>((std::byte{data[pos / 8]} >> (7 - pos % 8)) & std::byte{1});
+            value = (value << 1) | bit;
+        }
         return value;
     }
     int64_t s(size_t width) {
@@ -230,12 +234,10 @@ void Vn2000Session::feed(const uint8_t *data, size_t length) {
                 memmove(frame_.data(), frame_.data() + 1, --size_);
                 continue;
             }
-            if (size_ < 3) {
-                break;
-            }
-            const auto lengthHigh = std::to_integer<size_t>(std::byte{frame_[1]} & std::byte{0x03});
-            const size_t expected = ((lengthHigh << 8) | frame_[2]) + 6;
-            if (expected < 8) {
+            const size_t expected = size_ >= 3
+                ? ((std::to_integer<size_t>(std::byte{frame_[1]} & std::byte{0x03}) << 8) | frame_[2]) + 6
+                : 3;
+            if (size_ >= 3 && expected < 8) {
                 memmove(frame_.data(), frame_.data() + 1, --size_);
                 continue;
             }
@@ -255,7 +257,7 @@ void Vn2000Session::feed(const uint8_t *data, size_t length) {
 }
 
 void Vn2000Session::decode(size_t length) {
-    const unsigned message = (unsigned(frame_[3]) << 4) | (frame_[4] >> 4);
+    const unsigned message = (unsigned(frame_[3]) << 4) | std::to_integer<unsigned>(std::byte{frame_[4]} >> 4);
     Bits bits{frame_.data(), (length - 3) * 8};
     Vn2000Datum next = datum_;
     if (message == 1021) {

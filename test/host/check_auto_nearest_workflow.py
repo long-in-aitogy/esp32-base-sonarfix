@@ -35,8 +35,13 @@ struct BackendAgent {
     bool workflowCancelRequested_ = false, connectOk = true, saveOk = true, restoreOk = true;
     bool selectedRequested = false; int connections = 0, restores = 0, restarts = 0;
     String error = "ERROR - NO STATION WITHIN 20 KM", stage, details, fixSource, sampleSource;
-    bool prepareAutoBaseConfig(JsonObject, String &host, uint16_t &port, String &user, String &password, String &mount, uint8_t &version, uint32_t &timeout, uint8_t &streak) {
-        host="host"; port=2101; user="user"; password="secret"; mount="nearest"; version=1; timeout=30; streak=5; return true;
+    struct AutoBaseConfig {
+        String host; uint16_t port = 0; String username, password, mountpoint;
+        uint8_t ntripVersion = 0; uint32_t timeoutSeconds = 0; uint8_t fixedStreakRequired = 0;
+    };
+    bool prepareAutoBaseConfig(JsonObject, AutoBaseConfig &config) {
+        config.host="host"; config.port=2101; config.username="user"; config.password="secret";
+        config.mountpoint="nearest"; config.ntripVersion=1; config.timeoutSeconds=30; config.fixedStreakRequired=5; return true;
     }
     bool stopNtripRoverLocked() { return true; }
     bool restoreWorkflowBase(JsonObjectConst config) { ++restores; return restoreOk && !config.isNull(); }
@@ -54,7 +59,7 @@ struct BackendAgent {
     }
     void publishConfigState(const char *) {}
     bool applyRoverMode() { return true; }
-    bool startAutoBaseRover(const String &, uint16_t, const String &, const String &, const String &, uint8_t, String &failure, String *selected) {
+    bool startAutoBaseRover(const AutoBaseConfig &, String &failure, String *selected) {
         assert(stage == "connect_caster");
         ++connections; selectedRequested = selected != nullptr;
         if (!connectOk) { failure = error; return false; }

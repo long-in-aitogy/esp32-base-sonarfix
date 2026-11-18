@@ -19,19 +19,19 @@ struct Preferences {
     String getString(const char *, const char *fallback) { return hasValue ? value : String(fallback); }
 } prefs;
 Preferences &appPrefs() { return prefs; }
-ConnectionType connectionType = ConnectionType::GSM;
+ConnectionType &activeConnectionType() { static ConnectionType type = ConnectionType::GSM; return type; }
 '''
 checks = r'''
 int main() {
-    loadConnectionTypeFromPrefs(); assert(connectionType == ConnectionType::GSM);
+    loadConnectionTypeFromPrefs(); assert(activeConnectionType() == ConnectionType::GSM);
     CONNECTION_PREFERENCE = "WIFI";
-    loadConnectionTypeFromPrefs(); assert(connectionType == ConnectionType::WIFI);
+    loadConnectionTypeFromPrefs(); assert(activeConnectionType() == ConnectionType::WIFI);
     prefs.hasValue = true; prefs.value = "4G";
-    loadConnectionTypeFromPrefs(); assert(connectionType == ConnectionType::GSM);
+    loadConnectionTypeFromPrefs(); assert(activeConnectionType() == ConnectionType::GSM);
     prefs.value = "wifi";
-    loadConnectionTypeFromPrefs(); assert(connectionType == ConnectionType::WIFI);
+    loadConnectionTypeFromPrefs(); assert(activeConnectionType() == ConnectionType::WIFI);
     prefs.value = "invalid";
-    loadConnectionTypeFromPrefs(); assert(connectionType == ConnectionType::GSM);
+    loadConnectionTypeFromPrefs(); assert(activeConnectionType() == ConnectionType::GSM);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='esp-connection-default-') as directory:

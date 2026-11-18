@@ -22,10 +22,14 @@ struct String : std::string {
     void concat(const char *data, size_t length) { append(data, length); }
 };
 constexpr size_t MAX_NMEA_LENGTH = 512;
-String nmeaBuffer;
-std::array<uint8_t, 1029> rtcmFrame{};
-std::array<uint8_t, 6> ubxHeader{};
-size_t rtcmLength = 0, rtcmExpectedLength = 0, ubxHeaderLength = 0, ubxBytesRemaining = 0;
+struct RtcmParserState {
+    String nmeaBuffer;
+    std::array<uint8_t, 1029> rtcmFrame{};
+    size_t rtcmLength = 0, rtcmExpectedLength = 0;
+    std::array<uint8_t, 6> ubxHeader{};
+    size_t ubxHeaderLength = 0, ubxBytesRemaining = 0;
+} parser;
+RtcmParserState &parserState() { return parser; }
 unsigned sentences = 0;
 void parseNmeaSentence(const String &line) {
     assert(line.find("$GNGGA,real") == 0);
@@ -35,6 +39,7 @@ int &telemetryMux() { static int mux = 0; return mux; }
 #define portENTER_CRITICAL(x) ((void)0)
 #define portEXIT_CRITICAL(x) ((void)0)
 struct { struct { unsigned rtcmFrames = 0; } traffic; bool hasData = false; unsigned lastDataMs = 0; } telemetry;
+auto &telemetryState() { return telemetry; }
 unsigned millis() { return 1; }
 void noteRtcmBytes(size_t) {}
 struct {

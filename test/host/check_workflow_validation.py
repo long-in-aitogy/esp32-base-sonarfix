@@ -23,6 +23,8 @@ struct Snapshot { uint32_t lastGgaMs; double latitude, longitude; };
 Snapshot getGnssTelemetrySnapshot() { return {}; }
 double coordinateNumber(JsonVariantConst value) { return value.isNull() ? NAN : value.as<double>(); }
 struct BackendAgent {
+    struct AutoBaseConfig {};
+    struct ReferenceCheckConfig {};
     String baseStartupState_;
     void markStatusDirty() {}
     String baseConfig_ = R"({"base_setup_method":"SURVEY_IN","survey_in_duration":1800})";

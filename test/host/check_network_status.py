@@ -14,7 +14,8 @@ harness = r'''
 #include <cstring>
 #include <string>
 uint32_t now = 0; uint32_t millis() { return now; }
-bool wifi = false, wifiFallbackActive = false;
+bool wifi = false;
+bool &wifiFallbackActive() { static bool active = false; return active; }
 bool isWifiConnection() { return wifi; }
 bool isNtripConnected() { return true; }
 struct { bool connected() { return true; } } mqtt;
@@ -37,7 +38,7 @@ int main() {
     logNetworkStatus(true); assert(Serial.active == 1 && Serial.wifi == 0);
     now = 29999; logNetworkStatus(false); assert(Serial.active == 1);
     now = 30000; logNetworkStatus(false); assert(Serial.active == 2);
-    wifi = true; wifiFallbackActive = true;
+    wifi = true; wifiFallbackActive() = true;
     logNetworkStatus(true); assert(Serial.active == 3 && Serial.wifi == 1);
     now = 59999; logNetworkStatus(false); assert(Serial.active == 3);
     now = 60000; logNetworkStatus(false); assert(Serial.active == 4 && Serial.wifi == 2);
