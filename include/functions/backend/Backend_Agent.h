@@ -193,7 +193,7 @@ private:
                                bool transformed, bool transportRestored,
                                size_t sampleCount, const String &projectionSource,
                                const String &provinceCode, const String &provinceName,
-                               double centralMeridianDeg, double scale, JsonObjectConst report);
+                               double centralMeridianDeg, double scale, JsonObjectConst report) const;
     bool resolveAutoBaseLocation(double latitude, double longitude, double altitude,
                                  JsonDocument &location, String &failureReason);
     bool restoreAutoBaseAfterReview(JsonDocument &previousBase);
@@ -258,7 +258,7 @@ private:
     };
     void appendAutoBaseReport(JsonDocument &report, JsonObject payload, const ProjectedPosition &result,
                               double rawLatitude, double rawLongitude, double rawAltitude,
-                              const String &sourceMountpoint);
+                              const String &sourceMountpoint) const;
     bool applyAutoBasePosition(JsonDocument &report, const ProjectedPosition &result, size_t sampleCount,
                                const char *projectionSource, const String &provinceCode,
                                const String &provinceName, String &failureReason);

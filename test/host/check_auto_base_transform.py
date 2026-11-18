@@ -109,7 +109,7 @@ struct BackendAgent {
     void setWorkflowProgress(const char *value, int, int, const String &details = String()) { phase = value; phaseDetails = details; }
     struct ProjectedPosition { double latitude, longitude, altitude; double northing = 0, easting = 0; };
     bool transformAutoBasePosition(JsonObject, Vn2000Datum &, JsonDocument &, ProjectedPosition &, double &, const char *&, String &);
-    void appendAutoBaseReport(JsonDocument &, JsonObject, const ProjectedPosition &, double, double, double, const String &);
+    void appendAutoBaseReport(JsonDocument &, JsonObject, const ProjectedPosition &, double, double, double, const String &) const;
     bool applyAutoBasePosition(JsonDocument &, const ProjectedPosition &, size_t, const char *, const String &, const String &, String &);
     bool reachedWrite = false, failFinalResult = false;
     bool receiverOk = true, saveOk = true, restartOk = true;
@@ -139,7 +139,7 @@ struct BackendAgent {
     void publishConfigState(const char *) {}
     bool applyCandidate(String &);
     String buildRealAutoBaseResult(double, double, double, double, double, double, bool, bool, size_t,
-                                   const String &, const String &, const String &, double, double, JsonObjectConst);
+                                   const String &, const String &, const String &, double, double, JsonObjectConst) const;
     String buildAutoBaseResult(double lat, double lon, double alt, double rawLat, double rawLon, double rawAlt,
                                bool transformed, bool restarted, size_t count, const String &source,
                                const String &code, const String &name, double meridian, double scale, JsonObjectConst report) {

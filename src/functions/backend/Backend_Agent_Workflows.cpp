@@ -736,7 +736,7 @@ String BackendAgent::buildAutoBaseResult(
     const double rawLatitude, const double rawLongitude, const double rawAltitude,
     const bool transformed, const bool transportRestored, const size_t sampleCount,
     const String &projectionSource, const String &provinceCode, const String &provinceName,
-    const double centralMeridianDeg, const double scale, JsonObjectConst report)
+    const double centralMeridianDeg, const double scale, JsonObjectConst report) const
 {
     const String mountpoint = report["source"]["mountpoint"] | String();
     String serialized;
@@ -926,7 +926,7 @@ bool BackendAgent::completeAutoBaseSetup(
 void BackendAgent::appendAutoBaseReport(JsonDocument &report, JsonObject payload,
                                         const ProjectedPosition &result, double rawLatitude,
                                         double rawLongitude, double rawAltitude,
-                                        const String &sourceMountpoint)
+                                        const String &sourceMountpoint) const
 {
     const auto numberText = [](double number)
     {

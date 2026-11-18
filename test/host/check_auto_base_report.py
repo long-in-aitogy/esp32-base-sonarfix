@@ -19,7 +19,7 @@ struct BackendAgent {
     void markStatusDirty() {}
     void setWorkflowProgress(const String &, uint8_t, uint8_t, const String &);
     String buildAutoBaseResult(double,double,double,double,double,double,bool,bool,size_t,
-                               const String &,const String &,const String &,double,double,JsonObjectConst);
+                               const String &,const String &,const String &,double,double,JsonObjectConst) const;
 };
 '''
 checks=r'''
