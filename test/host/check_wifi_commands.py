@@ -13,7 +13,7 @@ harness=r'''
 #include <cstdlib>
 #include <vector>
 #include "hardware/Wifi_Credentials.h"
-enum class cmd_action_t { CMD_ACTION_NONE };
+enum class cmd_action_t { CMD_ACTION_NONE, CMD_ACTION_HANDLED };
 String savedKey, savedValue; unsigned writes=0;
 namespace cmd_helper {
 struct PreferenceMapping { const char *command,*preferenceKey; };
