@@ -215,7 +215,7 @@ bool BackendAgent::stopNtripRoverLocked()
     return true;
 }
 
-bool BackendAgent::waitForUnicoreReply(UnicoreReply &reply, const bool written)
+bool BackendAgent::waitForUnicoreReply(UnicoreReply &reply, const bool written) const
 {
     const uint32_t started = millis();
     while (written && millis() - started < 8000UL)
@@ -324,7 +324,7 @@ bool BackendAgent::writeGnssCommands(const GnssCmdBuilder::CommandList &commands
 }
 
 bool BackendAgent::exchangeUbloxRoverCommand(const GnssCmdBuilder::Command &command,
-                                             const bool poll)
+                                             const bool poll) const
 {
     while (Serial1.available())
         Serial1.read();

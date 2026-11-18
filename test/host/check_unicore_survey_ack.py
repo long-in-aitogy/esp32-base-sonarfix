@@ -39,7 +39,7 @@ struct BackendAgent {
     bool surveyInMonitoring_ = false, surveyInResultPending_ = false;
     uint32_t surveyInStartedMs_ = 0, surveyInTargetSeconds_ = 0;
     void handleUnicoreAck(const UnicoreReply &, const uint8_t *, size_t);
-    bool waitForUnicoreReply(UnicoreReply &, bool);
+    bool waitForUnicoreReply(UnicoreReply &, bool) const;
     bool writeUnicoreCommand(const uint8_t *, size_t, String &);
 };
 '''

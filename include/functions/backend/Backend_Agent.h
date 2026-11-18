@@ -162,9 +162,9 @@ private:
     void requestWorkflowStop();
     bool writeGnssCommands(const GnssCmdBuilder::CommandList &commands);
     bool writeUnicoreCommand(const uint8_t *data, size_t length, String &error);
-    bool waitForUnicoreReply(UnicoreReply &reply, bool written);
+    bool waitForUnicoreReply(UnicoreReply &reply, bool written) const;
     void handleUnicoreAck(const UnicoreReply &reply, const uint8_t *data, size_t length);
-    bool exchangeUbloxRoverCommand(const GnssCmdBuilder::Command &command, bool poll);
+    bool exchangeUbloxRoverCommand(const GnssCmdBuilder::Command &command, bool poll) const;
     bool configureUbloxRover();
     bool waitForRoverGga(uint32_t startedMs) const;
     void setWorkflowProgress(const String &phase, uint8_t step, uint8_t total,
