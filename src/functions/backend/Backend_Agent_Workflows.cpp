@@ -1344,6 +1344,19 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
     {
         finishAutoBaseWorkflow(previousBase, hasSavedPrevious, selectedMountpoint, success, cancelled, reason);
     };
+    auto fallbackToSurvey = [&](bool timeout, String &reason)
+    {
+        if (timeout)
+        {
+            Serial.println("[AUTO BASE][FALLBACK] AutoNearest khong the RTK Fix trong 180s; tu dong fallback sang Survey-In.");
+            stopNtripRoverLocked();
+            payload["fallback_reason"] = "autonearest_rtk_fix_timeout";
+        }
+        if (startSurveyInFallback(payload, previousBase, startedBootId, startedRequestId, reason))
+            return true;
+        finish(false, false, reason);
+        return false;
+    };
 
     setAgentState("auto_setup_rover");
     setWorkflowProgress("set_rover", 1, 4);
@@ -1372,14 +1385,7 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
     {
         Serial.printf("[AUTO BASE][CASTER][FAILED] %s\n", failureReason.c_str());
         if (autoNearest && failureReason == "ERROR - NO STATION WITHIN 20 KM" && !workflowCancelRequested_)
-        {
-            if (!startSurveyInFallback(payload, previousBase, startedBootId, startedRequestId, failureReason))
-            {
-                finish(false, false, failureReason);
-                return false;
-            }
-            return true;
-        }
+            return fallbackToSurvey(false, failureReason);
         finish(false, workflowCancelRequested_, failureReason);
         return false;
     }
@@ -1393,17 +1399,7 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         !waitForAutoBaseFix(waitFixTimeout, fixedStreakRequired, cancelled, failureReason, sourceMountpoint))
     {
         if (fallbackOnTimeout && failureReason == "RTK fix timeout" && !cancelled && !workflowCancelRequested_)
-        {
-            Serial.println("[AUTO BASE][FALLBACK] AutoNearest khong the RTK Fix trong 180s; tu dong fallback sang Survey-In.");
-            stopNtripRoverLocked();
-            payload["fallback_reason"] = "autonearest_rtk_fix_timeout";
-            if (!startSurveyInFallback(payload, previousBase, startedBootId, startedRequestId, failureReason))
-            {
-                finish(false, false, failureReason);
-                return false;
-            }
-            return true;
-        }
+            return fallbackToSurvey(true, failureReason);
         finish(false, cancelled, failureReason);
         return false;
     }
