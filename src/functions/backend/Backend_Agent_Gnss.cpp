@@ -55,10 +55,11 @@ bool readUnicoreExpectations(JsonObjectConst payload, std::array<double, 3> &wan
     return true;
 }
 bool containsExpectedLog(JsonArrayConst expectedLogs, const char *name) {
-    return std::any_of(expectedLogs.begin(), expectedLogs.end(), [name](JsonVariantConst item) {
+    for (JsonVariantConst item : expectedLogs) {
         const char *itemName = item.as<const char *>();
-        return itemName && std::strcmp(itemName, name) == 0;
-    });
+        if (itemName && std::strcmp(itemName, name) == 0) return true;
+    }
+    return false;
 }
 void appendObservedUnicoreLogs(JsonArray observedLogs, const std::vector<UnicoreConfigVerification::Log> &logs) {
     for (const auto &log : logs) {
