@@ -1,6 +1,6 @@
 # Network and Base recovery
 
-Firmware version remains V2.3.5.
+Firmware version is v1.0.1; backend compatibility is v2.3.5.
 
 - SIM/GPRS association alone does not prove usable connectivity. If MQTT and NTRIP both remain disconnected for 30 seconds, try saved Wi-Fi credentials and check the configured MQTT destination before switching clients. A connected service prevents fallback. The saved SIM preference is preserved. Only fallback Wi-Fi is eligible for automatic return to SIM: require two successful MQTT handshakes 60 seconds apart while Wi-Fi is connected, or one successful handshake on a 15-second retry interval if Wi-Fi disconnects. Manual Wi-Fi remains selected. Probes have a separate client ID, no LWT, and no publish/subscribe. The modem remains powered for recovery checks; its LED is not an indicator of the active data transport.
 - MQTT writes on the modem are limited to 1024-byte chunks. A short write closes the socket; the packet prefix is never replayed on that connection.

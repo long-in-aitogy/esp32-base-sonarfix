@@ -31,7 +31,7 @@ bool startSIM()
 #endif
 
     auto modemInfo = modem.getModemInfo();
-    while (modemInfo.length() == 0)
+    while (modemInfo.isEmpty())
     {
         if (retrys > 10)
         {

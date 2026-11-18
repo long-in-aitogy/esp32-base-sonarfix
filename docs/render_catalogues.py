@@ -48,7 +48,7 @@ def fonts(directory=None):
         paths = [base / "Arial.ttf", base / "Arial Bold.ttf", base / "Arial Italic.ttf",
                  Path("/System/Library/Fonts/Menlo.ttc")]
     else:
-        base = Path("/usr/share/fonts/truetype/dejavu")
+        base = Path(r"C:\Windows\Fonts")
         paths = [base / name for name in (
             DEJAVU_SANS, DEJAVU_SANS_BOLD, DEJAVU_SANS_OBLIQUE, DEJAVU_SANS_MONO)]
     for name, path in zip(("Body", "BodyBold", "BodyItalic", "Mono"), paths):

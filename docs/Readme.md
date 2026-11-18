@@ -1,6 +1,6 @@
 # Tài liệu AITOGY-BASE-ESP
 
-Firmware **V2.3.5**, đối chiếu mã nguồn ngày **25/10/2026**. Chọn đúng receiver và đối tượng đọc:
+Firmware **v1.0.1**, tương thích backend **v2.3.5**, đối chiếu mã nguồn ngày **25/10/2026**. Chọn đúng receiver và đối tượng đọc:
 
 | Thiết bị | Khách hàng/vận hành | Kỹ thuật nội bộ |
 | --- | --- | --- |

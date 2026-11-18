@@ -1,12 +1,12 @@
 # AITOGY-GNSS-BASE-ESP-UBX
 
-**Hướng dẫn khách hàng | Firmware V2.3.5 | Cập nhật 25/10/2026**
+**Hướng dẫn khách hàng | Firmware v1.0.1 | Backend v2.3.5 | Cập nhật 25/10/2026**
 
 ## 1. Phạm vi và nguyên tắc vận hành
 
 Bộ AITOGY-BASE-ESP nhận dữ liệu từ receiver GNSS, chuyển tiếp RTCM lên caster bằng 4G hoặc Wi-Fi và nhận điều khiển từ hệ thống CORS. Anten base phải đứng yên khi phát cải chính. Sau khi di chuyển anten, cấu hình lại tọa độ base trước khi cho rover sử dụng.
 
-Tài liệu mô tả firmware **V2.3.5**, cập nhật **25/10/2026**. Kết quả biên dịch và kiểm tra phần mềm không thay thế nghiệm thu ngoài thực địa. Không cam kết thời gian khởi động cố định hay độ chính xác đo khi chưa kiểm tra receiver, anten, mạng cải chính và hệ tọa độ.
+Tài liệu mô tả firmware **v1.0.1**, tương thích với backend **v2.3.5**, cập nhật **25/10/2026**. Kết quả biên dịch và kiểm tra phần mềm không thay thế nghiệm thu ngoài thực địa. Không cam kết thời gian khởi động cố định hay độ chính xác đo khi chưa kiểm tra receiver, anten, mạng cải chính và hệ tọa độ.
 
 | Chế độ | Khi sử dụng | Điều kiện hoàn thành |
 | --- | --- | --- |
@@ -140,7 +140,7 @@ Hệ thống nhận NMEA GGA/GSA/GSV/GST để theo dõi GNSS. ESP32 không mặ
 
 ## 7. Danh mục lệnh ATG
 
-ATG dùng để cấu hình kết nối và hỗ trợ kỹ thuật. Ưu tiên CORS để cấu hình base và đọc kết quả lệnh theo từng thiết bị. Từ khóa dùng đúng chữ hoa; mỗi dòng kết thúc bằng LF. Lệnh SET thường lưu cấu hình, cần khởi động lại để kết nối đọc lại giá trị mới.
+ATG dùng để cấu hình kết nối và hỗ trợ kỹ thuật. Ưu tiên CORS để cấu hình base và đọc kết quả lệnh theo từng thiết bị. Tiền tố, nhóm lệnh và tên tham số dùng chữ hoa; mỗi dòng kết thúc bằng LF. Ở nhóm GNSS, message, cổng, trạng thái `ON/OFF` và `W_DIAG` được chuẩn hóa không phân biệt hoa thường. Lệnh SET thường lưu cấu hình, cần khởi động lại để kết nối đọc lại giá trị mới.
 
 ### 7.1 ESP và mạng
 
@@ -162,13 +162,13 @@ ATG dùng để cấu hình kết nối và hỗ trợ kỹ thuật. Ưu tiên C
 | Cú pháp | Tác dụng |
 | --- | --- |
 | `ATG MQTT SET SERVER <host>` | Lưu broker MQTT. |
-| `ATG MQTT SET PORT <port>` | Lưu cổng MQTT; nhập số hợp lệ 1-65535. |
+| `ATG MQTT SET PORT <port>` | Lưu cổng MQTT; firmware chưa kiểm tra miền trước khi ép sang `uint16_t`, vì vậy chỉ gửi số 1-65535. |
 | `ATG MQTT SET USER <user>` | Lưu tên đăng nhập broker. |
 | `ATG MQTT SET PASS <password>` | Lưu mật khẩu broker. |
 | `ATG MQTT SET PUBTPCHEALTH <topic>` | Lưu topic health kiểu cũ. |
 | `ATG MQTT SET SUBTPCCMD <topic>` | Lưu topic subscribe ATG kiểu cũ; thay topic cần kỹ thuật kiểm tra callback thực nhận. |
 | `ATG NTRIP SET CSTRADDR <host>` | Lưu caster mặc định/dự phòng. |
-| `ATG NTRIP SET CSTRPORT <port>` | Lưu cổng caster; nhập số hợp lệ 1-65535. |
+| `ATG NTRIP SET CSTRPORT <port>` | Lưu cổng caster; firmware chưa kiểm tra miền trước khi ép sang `uint16_t`, vì vậy chỉ gửi số 1-65535. |
 | `ATG NTRIP SET MNTPNT <mountpoint>` | Lưu mountpoint mặc định. |
 | `ATG NTRIP SET CSTRAUTH <password>` | Lưu mật khẩu source nguyên văn; không nhập base64 của username:password. |
 

@@ -83,9 +83,12 @@ không ghi lại cấu hình UM980 vô điều kiện ở mọi lần boot. Vớ
 tạo được chuyển sang cổng nối ESP32. Tọa độ và thời gian khảo sát giữ nguyên.
 
 Nếu GGA đã báo Base cố định mà UART vẫn không có RTCM, sau khi nạp firmware mới
-có thể thử `ATG GNSS BASE 1006 CURRENT ON` qua Serial Monitor. Lệnh này bật RTCM1006
-trên cổng nhận lệnh, không đổi tọa độ hoặc chạy lại khảo sát. Khi thấy frame RTCM
-tăng, dùng `ATG GNSS BASE ALL CURRENT ON` để bật toàn bộ danh sách RTCM hỗ trợ.
+có thể thử `ATG GNSS BASE 1006 CURRENT ON` qua Serial Monitor khi dùng Unicore.
+`CURRENT` là bí danh cổng chỉ được bộ tạo lệnh Unicore hỗ trợ; với u-blox phải
+dùng một trong `I2C`, `UART1`, `UART2`, `USB` hoặc `SPI`. Lệnh này bật RTCM1006
+trên cổng hiện hành của Unicore, không đổi tọa độ hoặc chạy lại khảo sát. Khi thấy
+frame RTCM tăng, dùng `ATG GNSS BASE ALL CURRENT ON` để bật toàn bộ danh sách RTCM
+hỗ trợ của Unicore.
 
 ## Đưa thiết bị lên CORS
 
@@ -111,6 +114,9 @@ tăng, dùng `ATG GNSS BASE ALL CURRENT ON` để bật toàn bộ danh sách RT
    ATG ESP SET CONNECTION 4G
    ```
 
+   ATG tách tham số theo dấu cách nên SSID, mật khẩu, host và topic không được
+   chứa khoảng trắng. `MQTT SET PORT` và `NTRIP SET CSTRPORT` chưa được firmware
+   kiểm tra miền trước khi ép sang `uint16_t`; chỉ gửi số trong khoảng 1-65535.
    Lệnh cuối khởi động lại để áp dụng. Kênh WebSocket hiện dùng `ws`, không hỗ
    trợ `wss`; MQTT vẫn là kênh quản lý khi không dùng được WebSocket. Host/port
    phải trỏ tới endpoint thiết bị thực tế của CORS, không phải URL trang web.
