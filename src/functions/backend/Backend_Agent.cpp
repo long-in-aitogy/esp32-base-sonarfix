@@ -267,8 +267,7 @@ bool BackendAgent::detectGnssChip(Stream &stream, bool force)
     while (stream.available())
         stream.read();
 
-    String identityLine;
-    if (probeUnicore(stream, identityLine))
+    if (String identityLine; probeUnicore(stream, identityLine))
     {
         saveDetectedChip("Unicorecomm");
         Serial.printf("[GNSS] => Phat hien chip: Unicorecomm (phan hoi: %s)\n",

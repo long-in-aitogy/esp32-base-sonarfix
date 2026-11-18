@@ -102,8 +102,8 @@ String buildNtripRoverRequest(const String &host, const uint16_t port, const Str
                          "Connection: close\r\n\r\n";
     }
 
-    const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-    if (snapshot.lastGga[0] != '\0' && snapshot.lastGgaMs != 0
+    if (const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
+        snapshot.lastGga[0] != '\0' && snapshot.lastGgaMs != 0
         && millis() - snapshot.lastGgaMs <= 3000UL)
     {
         String gga = snapshot.lastGga.data();

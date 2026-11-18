@@ -167,8 +167,7 @@ void BackendAgent::requestWorkflowStop()
 // FreeRTOS TaskFunction_t requires void*. startWorkflow passes this as the context.
 void BackendAgent::workflowTaskThunk(void *parameter)
 {
-    auto *agent = static_cast<BackendAgent *>(parameter);
-    if (agent)
+    if (auto *agent = static_cast<BackendAgent *>(parameter); agent)
     {
         agent->runWorkflow();
         agent->workflowPayload_ = String();
@@ -637,8 +636,7 @@ bool BackendAgent::waitForAutoBaseFix(const uint32_t timeoutSeconds,
             failureReason = ntripRoverLastError();
             return false;
         }
-        const uint32_t now = millis();
-        if (static_cast<int32_t>(now - nextSecondMs) >= 0)
+        if (const uint32_t now = millis(); static_cast<int32_t>(now - nextSecondMs) >= 0)
         {
             nextSecondMs = now + 1000UL;
             const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
@@ -692,8 +690,7 @@ bool BackendAgent::collectAutoBaseSamples(const int configuredSamples,
             failureReason = ntripRoverLastError();
             return false;
         }
-        const uint32_t now = millis();
-        if (static_cast<int32_t>(now - nextSecondMs) >= 0)
+        if (const uint32_t now = millis(); static_cast<int32_t>(now - nextSecondMs) >= 0)
         {
             nextSecondMs = now + 1000UL;
             const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
@@ -1539,8 +1536,7 @@ bool BackendAgent::waitForReferenceFix(const uint32_t timeoutSeconds, String &fa
             failureReason = ntripRoverLastError();
             return false;
         }
-        const uint32_t now = millis();
-        if (static_cast<int32_t>(now - nextSecondMs) >= 0)
+        if (const uint32_t now = millis(); static_cast<int32_t>(now - nextSecondMs) >= 0)
         {
             nextSecondMs = now + 1000UL;
             const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
@@ -1585,8 +1581,7 @@ bool BackendAgent::collectReferenceSamples(const uint16_t requestedSamples,
             failureReason = ntripRoverLastError();
             return false;
         }
-        const uint32_t now = millis();
-        if (static_cast<int32_t>(now - nextSecondMs) >= 0)
+        if (const uint32_t now = millis(); static_cast<int32_t>(now - nextSecondMs) >= 0)
         {
             nextSecondMs = now + 1000UL;
             const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();

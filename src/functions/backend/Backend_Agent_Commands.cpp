@@ -313,8 +313,7 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
             length = routeUnicoreOutput(decoded.data(), length, GNSS_UNICORE_PORT);
         else if (sensorType == "Ublox" || (sensorType.isEmpty() && sensorType_ == "Ublox"))
             GnssCmdBuilder::routeUbloxOutput(decoded.data(), length);
-        const auto unicore = sensorType == "Unicorecomm" || (sensorType.isEmpty() && sensorType_ == "Unicorecomm");
-        if (unicore)
+        if (const auto unicore = sensorType == "Unicorecomm" || (sensorType.isEmpty() && sensorType_ == "Unicorecomm"); unicore)
         {
             if (!writeUnicoreCommand(decoded.data(), length, error))
                 return false;

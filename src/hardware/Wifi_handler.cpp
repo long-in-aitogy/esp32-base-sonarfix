@@ -25,10 +25,8 @@ static bool connectWifi(const String &ssid, const String &password,
 static bool tryLegacyWifi(const std::function<bool()> &validateConnection) {
     // Upgrade only: select a working old profile before retiring the list.
     String profiles;
-    nvs_handle_t legacy;
-    if (nvs_open("wifi_config", NVS_READONLY, &legacy) == ESP_OK) {
-        size_t length = 0;
-        if (nvs_get_str(legacy, "profiles", nullptr, &length) == ESP_OK && length > 0 && length <= 3072) {
+    if (nvs_handle_t legacy; nvs_open("wifi_config", NVS_READONLY, &legacy) == ESP_OK) {
+        if (size_t length = 0; nvs_get_str(legacy, "profiles", nullptr, &length) == ESP_OK && length > 0 && length <= 3072) {
             auto value = std::make_unique<char[]>(length);
             if (nvs_get_str(legacy, "profiles", value.get(), &length) == ESP_OK) profiles = value.get();
         }

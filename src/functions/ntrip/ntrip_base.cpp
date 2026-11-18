@@ -214,8 +214,7 @@ bool connectEndpoint(uint8_t index)
     return false;
   }
 
-  String responseLine;
-  if (!waitForNtripResponse(client, &responseLine))
+  if (String responseLine; !waitForNtripResponse(client, &responseLine))
   {
     if (!endpoint.password.isEmpty())
       responseLine.replace(endpoint.password, "[redacted]");

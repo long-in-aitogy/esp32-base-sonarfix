@@ -312,7 +312,7 @@ __attribute__((noreturn)) void healthCheckTask(void *parameter)
     while (true)
     {
         const uint32_t started = millis();
-            if (const String payload = collectDeviceHealth(rtcmState); !payload.isEmpty())
+        if (const String payload = collectDeviceHealth(rtcmState); !payload.isEmpty())
             publishHealth(payload);
         const uint32_t elapsed = millis() - started;
         vTaskDelay(pdMS_TO_TICKS(elapsed < HEALTH_INTERVAL ? HEALTH_INTERVAL - elapsed : 1));
