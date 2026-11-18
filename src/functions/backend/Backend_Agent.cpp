@@ -657,8 +657,8 @@ void BackendAgent::handleControlAck(const String &source, const String &message,
     const int32_t sequence = doc["status_sequence"] | -1;
     if (sequence < 0)
         return;
-    const JsonObjectConst location = doc["auto_base_location"].as<JsonObjectConst>();
-    if (autoBaseLocationQueue_
+    if (const JsonObjectConst location = doc["auto_base_location"].as<JsonObjectConst>();
+        autoBaseLocationQueue_
         && workflowActive() && !location.isNull()
         && measureJson(location) < AutoBaseLocationReply::capacity)
     {

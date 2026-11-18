@@ -365,8 +365,8 @@ bool BackendAgent::waitForRoverGga(const uint32_t startedMs)
 {
     while (millis() - startedMs < 10000UL && !workflowCancelRequested_)
     {
-        const auto snapshot = getGnssTelemetrySnapshot();
-        if (snapshot.lastGgaMs != 0 && static_cast<int32_t>(snapshot.lastGgaMs - startedMs) > 0)
+        if (const auto snapshot = getGnssTelemetrySnapshot();
+            snapshot.lastGgaMs != 0 && static_cast<int32_t>(snapshot.lastGgaMs - startedMs) > 0)
         {
             Serial.printf("[AUTO BASE] Rover da xac nhan, GGA UART: %s\n", snapshot.lastGga.data());
             return true;
@@ -1277,8 +1277,8 @@ bool BackendAgent::waitForAutoNearestPosition(uint32_t timeoutSeconds)
     bool hasPosition = false;
     while (!workflowCancelRequested_ && millis() - started < timeoutSeconds * 1000UL)
     {
-        const auto position = getGnssTelemetrySnapshot();
-        if (position.lastGgaMs != 0 && millis() - position.lastGgaMs < 3000UL
+        if (const auto position = getGnssTelemetrySnapshot();
+            position.lastGgaMs != 0 && millis() - position.lastGgaMs < 3000UL
             && std::isfinite(position.latitude) && std::abs(position.latitude) <= 90
             && std::isfinite(position.longitude) && std::abs(position.longitude) <= 180
             && (position.latitude != 0 || position.longitude != 0))

@@ -583,14 +583,12 @@ void BackendAgent::pollGnssStatus()
 {
     if ((sensorType_ != "Unicorecomm" && sensorType_ != "Ublox") || workflowActive() || stationLock_.all)
         return;
-    const uint32_t now = millis();
-    if (lastReceiverPollMs_ == 0 ? now < 5000UL : now - lastReceiverPollMs_ < 30000UL)
+    if (const uint32_t now = millis(); lastReceiverPollMs_ == 0 ? now < 5000UL : now - lastReceiverPollMs_ < 30000UL)
         return;
     String error;
     refreshReceiverReadback(error);
     if (sensorType_ != "Ublox") return;
-    UbxNavigation navigation;
-    if (UbloxReadback::readNavigation(navigation, error))
+    if (UbxNavigation navigation; UbloxReadback::readNavigation(navigation, error))
     {
         navigation_ = navigation;
         navigationMs_ = millis();
@@ -605,8 +603,7 @@ void BackendAgent::pollGnssStatus()
         receiverInfoMs_ = millis();
         markStatusDirty();
     }
-    String satellites;
-    if (UbloxReadback::readSatellites(satellites, error))
+    if (String satellites; UbloxReadback::readSatellites(satellites, error))
     {
         satelliteReadback_ = satellites;
         satelliteReadbackMs_ = millis();

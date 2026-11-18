@@ -331,8 +331,7 @@ namespace ntrip_common
             const int end = response.indexOf('\r', start);
             if (end <= start)
                 break;
-            const int colon = response.indexOf(':', start);
-            if (colon > start && colon < end
+            if (const int colon = response.indexOf(':', start); colon > start && colon < end
                 && response.substring(start, colon).equalsIgnoreCase("X-NTRIP-Selected-Mountpoint"))
             {
                 if (found)

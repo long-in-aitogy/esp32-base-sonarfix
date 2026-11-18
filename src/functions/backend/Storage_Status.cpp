@@ -42,8 +42,7 @@ void appendStorageStatus(JsonObject system) {
     memory["minimum_free_heap_bytes"] = ESP.getMinFreeHeap();
     memory["largest_free_block_bytes"] = ESP.getMaxAllocHeap();
     JsonObject disk = system["disk"];
-    const esp_partition_t *app = esp_ota_get_running_partition();
-    if (app) disk["app_capacity_bytes"] = app->size;
+    if (const esp_partition_t *app = esp_ota_get_running_partition(); app) disk["app_capacity_bytes"] = app->size;
     // Physical flash also holds OTA/NVS/data partitions; it is not one free pool.
     disk["firmware_bytes"] = disk["used_bytes"];
     JsonObject nvs = system.createNestedObject("nvs");
@@ -288,8 +287,7 @@ bool readNvsInventory(uint32_t offset, const String &commandId, String &output, 
     for (int priority = 0; priority < 3; ++priority) {
         for (const char *partition : {"nvs", "agent_state"}) {
             nvs_stats_t stats{};
-            const esp_err_t status = nvs_get_stats(partition, &stats);
-            if (status == ESP_OK) {
+            if (const esp_err_t status = nvs_get_stats(partition, &stats); status == ESP_OK) {
                 appendPartitionEntries(entries, offset, total, partition, priority);
                 continue;
             }

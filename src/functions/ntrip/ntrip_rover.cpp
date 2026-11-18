@@ -133,8 +133,7 @@ bool sendNtripRoverRequest(Client &client, const String &request,
         return false;
     }
 
-    String responseLine;
-    if (!waitForNtripResponse(client, &responseLine, selectedMountpoint))
+    if (String responseLine; !waitForNtripResponse(client, &responseLine, selectedMountpoint))
     {
         for (const char *reason : {"ERROR - NO STATION WITHIN 20 KM",
                                    "ERROR - FIXED STATION IN RANGE UNAVAILABLE",
@@ -196,8 +195,8 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
     }
 
     const auto user = username.isEmpty() ? String("source") : username;
-    const auto request = buildNtripRoverRequest(host, port, user, password, mountpoint, options);
-    if (!sendNtripRoverRequest(client, request, options.selectedMountpoint))
+    if (const auto request = buildNtripRoverRequest(host, port, user, password, mountpoint, options);
+        !sendNtripRoverRequest(client, request, options.selectedMountpoint))
         return false;
     roverSession().authenticated = true;
     roverSession().lastError = "CORS rover connection lost";
@@ -242,8 +241,7 @@ int loopNtripRover()
     }
     const auto available = client.available();
     const auto bytesToRead = min(static_cast<size_t>(available), sizeof(buffer));
-    const auto bytesRead = client.read(buffer.data(), bytesToRead);
-    if (bytesRead > 0)
+    if (const auto bytesRead = client.read(buffer.data(), bytesToRead); bytesRead > 0)
     {
         roverSession().datum.feed(buffer.data(), static_cast<size_t>(bytesRead));
         const size_t written = Serial1.write(buffer.data(), static_cast<size_t>(bytesRead));
