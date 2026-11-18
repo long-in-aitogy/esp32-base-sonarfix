@@ -280,7 +280,7 @@ void BackendAgent::startBootAutoBaseWhenReady()
 {
     if (baseStartupState_ != "awaiting_auto_base" || stationLock_.all || !licenseValid_ || workflowActive())
         return;
-    if (isGsmConnection() ? !getModem().isGprsConnected() : WiFi.status() != WL_CONNECTED)
+    if (isGsmConnection() ? !getModem().isGprsConnected() : WiFiClass::status() != WL_CONNECTED)
         return;
     DynamicJsonDocument request(CONFIG_DOCUMENT_SIZE);
     request["source_mode"] = "nearest";

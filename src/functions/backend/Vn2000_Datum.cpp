@@ -230,15 +230,15 @@ void Vn2000Session::feed(const uint8_t *data, size_t length) {
                 memmove(frame_.data(), frame_.data() + 1, --size_);
                 continue;
             }
-            size_t expected = 0;
-            if (size_ >= 3) {
-                expected = ((size_t(frame_[1] & 3) << 8) | frame_[2]) + 6;
-                if (expected < 8) {
-                    memmove(frame_.data(), frame_.data() + 1, --size_);
-                    continue;
-                }
+            if (size_ < 3) {
+                break;
             }
-            if (size_ < 3 || size_ < expected) {
+            const size_t expected = ((size_t(frame_[1] & 3) << 8) | frame_[2]) + 6;
+            if (expected < 8) {
+                memmove(frame_.data(), frame_.data() + 1, --size_);
+                continue;
+            }
+            if (size_ < expected) {
                 break;
             }
             const uint32_t actual = (uint32_t(frame_[expected - 3]) << 16)

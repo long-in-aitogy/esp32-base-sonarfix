@@ -475,7 +475,7 @@ static void logNetworkStatus(bool force)
                   mqtt.connected() ? "UP" : "DOWN", isNtripConnected() ? "UP" : "DOWN");
     if (isWifiConnection())
         Serial.printf("[NETWORK][WIFI] connected=%s; SSID=%s; IP=%s; RSSI=%d dBm\n",
-                      WiFi.status() == WL_CONNECTED ? "YES" : "NO", WiFi.SSID().c_str(),
+                      WiFiClass::status() == WL_CONNECTED ? "YES" : "NO", WiFi.SSID().c_str(),
                       WiFi.localIP().toString().c_str(), WiFi.RSSI());
 }
 

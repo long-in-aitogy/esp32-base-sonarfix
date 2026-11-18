@@ -24,7 +24,8 @@ using nvs_handle_t=int;
 String profiles, tried, triedPassword;
 std::map<String, String> saved;
 bool writeOk=true, connected=true, cleanupOk=true, failPasswordOnce=false; unsigned cleaned=0;
-struct { void persistent(bool) {} void mode(int) {} } WiFi;
+struct WiFiClass { static void mode(int) {} };
+struct { void persistent(bool) {} } WiFi;
 struct Preferences {
     bool begin(const char *, bool) { return true; }
     void end() {}

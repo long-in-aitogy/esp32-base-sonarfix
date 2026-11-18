@@ -20,7 +20,8 @@ bool isNtripConnected() { return true; }
 struct { bool connected() { return true; } } mqtt;
 constexpr int WL_CONNECTED = 3;
 struct Address { std::string toString() { return "192.0.2.1"; } };
-struct Wifi { int status() { return WL_CONNECTED; } std::string SSID() { return "test"; } Address localIP() { return {}; } int RSSI() { return -50; } } WiFi;
+struct WiFiClass { static int status() { return WL_CONNECTED; } };
+struct Wifi { std::string SSID() { return "test"; } Address localIP() { return {}; } int RSSI() { return -50; } } WiFi;
 struct Logger {
     int active = 0, wifi = 0;
     template<class... T> void printf(const char *format, T...) {
