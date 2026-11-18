@@ -61,12 +61,12 @@ namespace BackendAgentInternal
 
     String epochString()
     {
-    if (const time_t now = time(nullptr); now > 1700000000)
+        if (const time_t now = time(nullptr); now > 1700000000)
         {
             return String(static_cast<unsigned long>(now));
         }
         // Before clock synchronization, report uptime seconds rather than Unix time.
-        return String(static_cast<unsigned long>(millis() / 1000UL));
+        return String(millis() / 1000UL);
     }
 
     bool jsonBool(JsonObjectConst object, const String &key, bool fallback)
