@@ -233,7 +233,8 @@ void Vn2000Session::feed(const uint8_t *data, size_t length) {
             if (size_ < 3) {
                 break;
             }
-            const size_t expected = ((size_t(frame_[1] & 3) << 8) | frame_[2]) + 6;
+            const auto lengthHigh = std::to_integer<size_t>(std::byte{frame_[1]} & std::byte{0x03});
+            const size_t expected = ((lengthHigh << 8) | frame_[2]) + 6;
             if (expected < 8) {
                 memmove(frame_.data(), frame_.data() + 1, --size_);
                 continue;
