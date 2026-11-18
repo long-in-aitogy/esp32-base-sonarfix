@@ -226,7 +226,7 @@ void Vn2000Session::feed(const uint8_t *data, size_t length) {
     for (size_t i = 0; i < length; ++i) {
         frame_[size_++] = data[i];
         while (size_ > 0) {
-            if (frame_[0] != 0xD3 || (size_ >= 2 && (frame_[1] & 0xFC))) {
+            if (frame_[0] != 0xD3 || (size_ >= 2 && (std::byte{frame_[1]} & std::byte{0xFC}) != std::byte{})) {
                 memmove(frame_.data(), frame_.data() + 1, --size_);
                 continue;
             }

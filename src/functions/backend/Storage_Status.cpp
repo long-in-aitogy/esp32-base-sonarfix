@@ -6,6 +6,7 @@
 #include <esp_partition.h>
 #include <esp_ota_ops.h>
 #include <array>
+#include <algorithm>
 #include <type_traits>
 #include <memory>
 
@@ -118,14 +119,12 @@ namespace {
 bool readableNvsValue(const nvs_entry_info_t &entry) {
     if (strcmp(entry.namespace_name, "myPrefs") && strcmp(entry.namespace_name, "backend")) return false;
     // Raw values use an allowlist. Known configuration JSON is expanded below.
-    for (const char *key : {"DEVICE_SERIAL", "DEVICE_NAME", "SENSOR_TYPE", "CONNECTION_TYPE",
-                           "GNSS_MDL_TYPE", "WIFI_SSID", "APN", "MQTT_SERVER", "MQTT_PORT",
-                           "BACKEND_HOST", "BACKEND_PORT", "NTRIP_SERVER", "NTRIP_PORT",
-                           "NTRIP_MPT", "TPC_SUB_CMD", "TPC_HEALTH", "RSTRT_COUNT",
-                           "PROVISIONED", "REMOTE_LOCK", "LOCK_SERVERS", "NEED_RESET"}) {
-        if (!strcmp(entry.key, key)) return true;
-    }
-    return false;
+    const auto keys = {"DEVICE_SERIAL", "DEVICE_NAME", "SENSOR_TYPE", "CONNECTION_TYPE",
+                       "GNSS_MDL_TYPE", "WIFI_SSID", "APN", "MQTT_SERVER", "MQTT_PORT",
+                       "BACKEND_HOST", "BACKEND_PORT", "NTRIP_SERVER", "NTRIP_PORT",
+                       "NTRIP_MPT", "TPC_SUB_CMD", "TPC_HEALTH", "RSTRT_COUNT",
+                       "PROVISIONED", "REMOTE_LOCK", "LOCK_SERVERS", "NEED_RESET"};
+    return std::any_of(keys.begin(), keys.end(), [&](const char *key) { return !strcmp(entry.key, key); });
 }
 
 bool configurationNamespace(const nvs_entry_info_t &entry) {
@@ -134,9 +133,8 @@ bool configurationNamespace(const nvs_entry_info_t &entry) {
 
 bool configurationJson(const nvs_entry_info_t &entry) {
     if (!configurationNamespace(entry) || entry.type != NVS_TYPE_STR) return false;
-    for (const char *key : {"BASE_JSON", "SERVICE_JSON", "PROGRESS_JSON", "CMD_RESULT", "SURVEY_RESULT"})
-        if (!strcmp(entry.key, key)) return true;
-    return false;
+    const auto keys = {"BASE_JSON", "SERVICE_JSON", "PROGRESS_JSON", "CMD_RESULT", "SURVEY_RESULT"};
+    return std::any_of(keys.begin(), keys.end(), [&](const char *key) { return !strcmp(entry.key, key); });
 }
 
 bool secretField(String path) {
