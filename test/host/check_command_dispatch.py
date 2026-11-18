@@ -30,8 +30,8 @@ const char *findPreferenceKey(const String &key, const PreferenceMapping *map, s
     for (size_t i = 0; i < size; ++i) if (key == map[i].command) return map[i].preferenceKey;
     return nullptr;
 }
-cmd_action_t saveStringPreference(const char *key, const String &value) { savedKey = key; savedValue = value; return cmd_action_t::CMD_ACTION_NONE; }
-cmd_action_t saveUShortPreference(const char *key, uint16_t value) { savedKey = key; savedValue = String(value); return cmd_action_t::CMD_ACTION_NONE; }
+cmd_action_t saveStringPreference(const char *key, const String &value) { savedKey = key; savedValue = value; return cmd_action_t::CMD_ACTION_HANDLED; }
+cmd_action_t saveUShortPreference(const char *key, uint16_t value) { savedKey = key; savedValue = String(value); return cmd_action_t::CMD_ACTION_HANDLED; }
 }
 '''
 checks = r'''

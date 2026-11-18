@@ -259,8 +259,8 @@ void Vn2000Session::decode(size_t length) {
     Vn2000Datum next = datum_;
     if (message == 1021) {
         ++datum_.count1021;
-        const size_t sourceName = bits.u(5); bits.skip(8 * sourceName);
-        const size_t targetName = bits.u(5); bits.skip(8 * targetName);
+        const size_t sourceName = static_cast<size_t>(bits.u(5)); bits.skip(8 * sourceName);
+        const size_t targetName = static_cast<size_t>(bits.u(5)); bits.skip(8 * targetName);
         bits.skip(8 + 10 + 5 + 4 + 2 + 19 + 20 + 14 + 14);
         next.dX = double(bits.s(23)) * 0.001;
         next.dY = double(bits.s(23)) * 0.001;
@@ -281,9 +281,9 @@ void Vn2000Session::decode(size_t length) {
         double h = 0;
         // Retain the reference algorithm's central-four residual mean.
         for (int i = 0; i < 16; ++i) {
-            const double db = bits.s(9);
-            const double dl = bits.s(9);
-            const double dh = bits.s(9);
+            const double db = static_cast<double>(bits.s(9));
+            const double dl = static_cast<double>(bits.s(9));
+            const double dh = static_cast<double>(bits.s(9));
             if (i == 5 || i == 6 || i == 9 || i == 10) { b += db; l += dl; h += dh; }
         }
         next.resB = (meanB + b * 0.00003 / 4.0) * ARCSEC_TO_RAD;
@@ -293,10 +293,10 @@ void Vn2000Session::decode(size_t length) {
     } else if (message == 1025) {
         ++datum_.count1025;
         bits.skip(8);
-        next.projectionType = bits.u(6);
+        next.projectionType = static_cast<uint8_t>(bits.u(6));
         const int64_t originLatitude = bits.s(34);
         next.projectionLongitudeRaw = bits.s(35);
-        next.projectionScaleRaw = bits.u(30);
+        next.projectionScaleRaw = static_cast<uint32_t>(bits.u(30));
         next.centralMeridianDeg = double(next.projectionLongitudeRaw) * 1.1e-8;
         next.scale = (double(next.projectionScaleRaw) * 0.00001 + 993000.0) * 0.000001;
         next.falseEasting = double(bits.u(36)) * 0.001;
@@ -304,7 +304,7 @@ void Vn2000Session::decode(size_t length) {
         if (originLatitude != 0 || next.centralMeridianDeg < 100 || next.centralMeridianDeg > 112
             || next.scale < 0.999 || next.scale > 1.001) return;
         next.has1025 = bits.ok;
-        next.projectionFrameBytes = length;
+        next.projectionFrameBytes = static_cast<uint16_t>(length);
         for (size_t i = 0; i < length && i < 32; ++i)
             snprintf(next.projectionFrameHex.data() + i * 2, 3, "%02x", frame_[i]);
     } else return;

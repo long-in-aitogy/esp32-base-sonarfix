@@ -98,7 +98,7 @@ bool BackendAgent::buildStartupCommands(JsonObjectConst base,
             error = "Saved Survey-In parameters are invalid";
             return false;
         }
-        surveyInTargetSeconds_ = duration;
+        surveyInTargetSeconds_ = static_cast<uint32_t>(duration);
         surveyInMonitoring_ = true;
         surveyInResultPending_ = true;
         commands = buildBaseSurveyInCommand(static_cast<uint32_t>(duration), accuracy, detected, options);

@@ -280,7 +280,8 @@ bool BackendAgentWebsocket::readFrame(uint8_t &opcode, String &payload)
     payload.reserve(static_cast<size_t>(payloadLength));
     for (size_t i = 0; i < payloadLength; ++i)
         payload += static_cast<char>(rx_[headerLength + i]);
-    rx_.erase(rx_.begin(), rx_.begin() + headerLength + payloadLength);
+    const auto frameLength = headerLength + static_cast<size_t>(payloadLength);
+    rx_.erase(rx_.begin(), rx_.begin() + static_cast<std::ptrdiff_t>(frameLength));
     return true;
 }
 

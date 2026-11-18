@@ -43,7 +43,9 @@ namespace BackendAgentInternal
     constexpr size_t MAX_NMEA_PACKET = 512;
     constexpr size_t MAX_RTCM_PACKET = 1030;
     constexpr size_t NMEA_QUEUE_LENGTH = 16;
+#if BACKEND_PUBLISH_RAW_RTCM
     constexpr size_t RTCM_QUEUE_LENGTH = 4;
+#endif
 
     struct DataPacket
     {

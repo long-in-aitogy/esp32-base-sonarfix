@@ -23,14 +23,6 @@ using namespace ntrip_common;
 
 namespace
 {
-  class ntripConfig
-  {
-  public:
-    inline static bool isIcyOk = false;
-    inline static unsigned long lastReconnect = 0;
-    inline static bool isNmeaSent = false;
-  };
-
   inline constexpr std::array<uint8_t, 8> ubxMonVerPoll = {
       0xB5, 0x62, 0x0A, 0x04, 0x00, 0x00, 0x0E, 0x34};
 

@@ -238,7 +238,7 @@ void appendUbxPortBaud(JsonObject port, int portIndex) {
     if (portIndex != 1 && portIndex != 2) return;
     uint32_t baud = 0;
     String error;
-    if (UbloxReadback::readBaud(portIndex, baud, error)) port["baud"] = baud;
+    if (UbloxReadback::readBaud(static_cast<uint8_t>(portIndex), baud, error)) port["baud"] = baud;
     else port["baud"] = nullptr;
 }
 bool matchUbxOutputValues(const uint8_t *expected, size_t expectedLength,
