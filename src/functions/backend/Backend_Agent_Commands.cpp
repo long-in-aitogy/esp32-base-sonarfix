@@ -18,7 +18,6 @@
 
 using namespace BackendAgentInternal;
 
-extern SemaphoreHandle_t rtcmBufferMutex;
 
 namespace
 {
@@ -176,7 +175,7 @@ void BackendAgent::publishConfigState(const char *kind) const
     String output;
     serializeJson(doc, output);
     const auto topic = String("pi/devices/") + serialNumber_ + "/" + kind;
-    mqtt.publish(topic.c_str(), output.c_str(), true);
+    mqttClient().publish(topic.c_str(), output.c_str(), true);
 }
 
 bool BackendAgent::applyServiceStreamCommand(JsonObject payload, String &error)
@@ -318,11 +317,11 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
                 return false;
             continue;
         }
-        if (rtcmBufferMutex && xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE)
+        if (rtcmBufferMutex() && xSemaphoreTake(rtcmBufferMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE)
         {
             const auto written = Serial1.write(decoded.data(), length);
             Serial1.flush();
-            xSemaphoreGive(rtcmBufferMutex);
+            xSemaphoreGive(rtcmBufferMutex());
             if (written != length)
             {
                 error = "GNSS serial write incomplete";
@@ -342,7 +341,7 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
 void BackendAgent::handleCommand(const String &source, const String &message)
 {
     Serial.printf("[BACKEND][RX] Nhan goi lenh qua %s (%u bytes).\n",
-                  source.c_str(), static_cast<unsigned>(message.length()));
+                  source.c_str(), message.length());
     DynamicJsonDocument doc(COMMAND_DOCUMENT_SIZE);
     if (deserializeJson(doc, message) != DeserializationError::Ok || !doc.is<JsonObject>())
     {
@@ -1151,9 +1150,9 @@ void BackendAgent::executeCommand(const String &source, const String &command,
         saveStatePreferences();
         publishStatus(true);
         delay(500);
-        prefs.begin("myPrefs", false);
-        prefs.clear();
-        prefs.end();
+        appPrefs().begin("myPrefs", false);
+        appPrefs().clear();
+        appPrefs().end();
         if (beginBackendPreferences(false))
         {
             backendPreferences().clear();

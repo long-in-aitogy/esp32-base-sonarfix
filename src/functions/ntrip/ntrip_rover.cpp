@@ -16,7 +16,6 @@
 #include <array>
 #include <cstring>
 
-extern Preferences prefs;
 
 using namespace ntrip_common;
 
@@ -235,7 +234,7 @@ int loopNtripRover()
         return 200;
 
     std::array<uint8_t, 512> buffer{};
-    if (!rtcmBufferMutex || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+    if (!rtcmBufferMutex() || xSemaphoreTake(rtcmBufferMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
     {
         return 200;
     }
@@ -253,11 +252,11 @@ int loopNtripRover()
             roverSession().lastError = "GNSS UART did not accept all CORS bytes";
             Serial.printf("[NTRIP ROVER][ERROR] UART accepted %u/%u bytes\n",
                           static_cast<unsigned>(written), static_cast<unsigned>(bytesRead));
-            xSemaphoreGive(rtcmBufferMutex);
+            xSemaphoreGive(rtcmBufferMutex());
             return 504;
         }
     }
-    xSemaphoreGive(rtcmBufferMutex);
+    xSemaphoreGive(rtcmBufferMutex());
     // Return status, not byte count: a valid 504-byte read is not a disconnect.
     return 200;
 }

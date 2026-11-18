@@ -17,6 +17,7 @@ constexpr unsigned BACKEND_STATUS_INTERVAL_MS = 1000;
 unsigned now = 100;
 unsigned millis() { return now; }
 struct Mqtt { int calls = 0; bool publish(const char *, const char *, bool) { ++calls; return true; } } mqtt;
+Mqtt &mqttClient() { return mqtt; }
 struct Socket { int calls = 0; void sendText(const String &) { ++calls; } } socket;
 struct BackendAgent {
     String serialNumber_ = "station", nextPayload;

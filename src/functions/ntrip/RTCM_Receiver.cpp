@@ -26,7 +26,11 @@ namespace
     size_t ubxBytesRemaining = 0;
 
     GnssTelemetrySnapshot telemetry;
-    portMUX_TYPE telemetryMux = portMUX_INITIALIZER_UNLOCKED;
+    portMUX_TYPE &telemetryMux()
+    {
+        static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+        return mux;
+    }
 
     uint32_t inputWindowStartedMs = 0;
     uint32_t inputWindowBytes = 0;
@@ -35,18 +39,18 @@ namespace
 /** @brief Implements noteInputBytes. */
     void noteInputBytes(size_t count)
     {
-        portENTER_CRITICAL(&telemetryMux);
+        portENTER_CRITICAL(&telemetryMux());
         telemetry.traffic.bytesRead += count;
         telemetry.hasData = true;
         telemetry.lastDataMs = millis();
-        portEXIT_CRITICAL(&telemetryMux);
+        portEXIT_CRITICAL(&telemetryMux());
     }
 
 /** @brief Implements noteRtcmBytes. */
     void noteRtcmBytes(size_t count)
     {
         const uint32_t now = millis();
-        portENTER_CRITICAL(&telemetryMux);
+        portENTER_CRITICAL(&telemetryMux());
         if (inputWindowStartedMs == 0)
             inputWindowStartedMs = now;
         inputWindowBytes += static_cast<uint32_t>(count);
@@ -59,7 +63,7 @@ namespace
             inputWindowStartedMs = now;
             inputWindowBytes = 0;
         }
-        portEXIT_CRITICAL(&telemetryMux);
+        portEXIT_CRITICAL(&telemetryMux());
     }
 
 /** @brief Implements nmeaCoordinate. */
@@ -346,13 +350,13 @@ namespace
     void updateNmeaTelemetry(const String &sentence, const char *type,
                              const NmeaMeasurements &measurements)
     {
-        portENTER_CRITICAL(&telemetryMux);
+        portENTER_CRITICAL(&telemetryMux());
         telemetry.hasData = true;
         telemetry.lastDataMs = millis();
         updateNmeaCounters(type);
         updateGgaTelemetry(sentence, type, measurements.gga);
         updateNmeaMeasurements(measurements);
-        portEXIT_CRITICAL(&telemetryMux);
+        portEXIT_CRITICAL(&telemetryMux());
     }
 
     void publishNmeaHealthSentence(const String &rawSentence, const char *type)
@@ -365,7 +369,7 @@ namespace
         auto outbound = rawSentence;
         outbound.trim();
         outbound += "\r\n";
-        backendAgent.enqueueNmea(reinterpret_cast<const uint8_t *>(outbound.c_str()),
+        backendAgent().enqueueNmea(reinterpret_cast<const uint8_t *>(outbound.c_str()),
                                  outbound.length());
     }
 
@@ -379,7 +383,7 @@ namespace
         if (!hasValidNmeaChecksum(sentence))
             return;
         if (sentence.startsWith("$PUBX"))
-            backendAgent.setDetectedChipIfUnknown("Ublox");
+            backendAgent().setDetectedChipIfUnknown("Ublox");
 
         std::array<char, MAX_NMEA_LENGTH> line = {};
         std::array<char *, 32> fields = {};
@@ -430,13 +434,13 @@ namespace
 
         // Forward the complete RTCM frame without validating its CRC or decoding its type.
         rtcmOutput.concat(reinterpret_cast<const char *>(rtcmFrame.data()), rtcmLength);
-        backendAgent.enqueueRtcm(rtcmFrame.data(), rtcmLength);
+        backendAgent().enqueueRtcm(rtcmFrame.data(), rtcmLength);
         noteRtcmBytes(rtcmLength);
-        portENTER_CRITICAL(&telemetryMux);
+        portENTER_CRITICAL(&telemetryMux());
         ++telemetry.traffic.rtcmFrames;
         telemetry.hasData = true;
         telemetry.lastDataMs = millis();
-        portEXIT_CRITICAL(&telemetryMux);
+        portEXIT_CRITICAL(&telemetryMux());
         resetRtcmParser();
         return true;
     }
@@ -539,8 +543,8 @@ String receiveRtcmFromGnss()
     rtcmData.reserve(1024);
     std::array<uint8_t, 128> buffer = {};
 
-    if (gnssSerialMutex == nullptr ||
-        !xSemaphoreTake(gnssSerialMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)))
+    if (gnssSerialMutex() == nullptr ||
+        !xSemaphoreTake(gnssSerialMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)))
     {
         return rtcmData;
     }
@@ -572,7 +576,7 @@ String receiveRtcmFromGnss()
             consumeByte(buffer[i], rtcmData);
         }
     }
-    xSemaphoreGive(gnssSerialMutex);
+    xSemaphoreGive(gnssSerialMutex());
 
     // Count forwarded RTCM bytes for the periodic UART diagnostic log.
     static uint32_t lastLogMs = 0;
@@ -585,7 +589,7 @@ String receiveRtcmFromGnss()
         const auto snapshot = getGnssTelemetrySnapshot();
         Serial.printf("[GNSS UART] GGA total=%lu; last_age_ms=%lu; RX bytes=%llu\n",
                       static_cast<unsigned long>(snapshot.traffic.ggaCount),
-                      static_cast<unsigned long>(snapshot.lastGgaMs == 0 ? UINT32_MAX : millis() - snapshot.lastGgaMs),
+                      snapshot.lastGgaMs == 0 ? UINT32_MAX : millis() - snapshot.lastGgaMs,
                       static_cast<unsigned long long>(snapshot.traffic.bytesRead));
         receivedBytes = 0;
         lastLogMs = millis();
@@ -604,9 +608,9 @@ RtcmMessageCounts consumeRtcmMessageCounts()
 GnssTelemetrySnapshot getGnssTelemetrySnapshot()
 {
     GnssTelemetrySnapshot copy;
-    portENTER_CRITICAL(&telemetryMux);
+    portENTER_CRITICAL(&telemetryMux());
     copy = telemetry;
-    portEXIT_CRITICAL(&telemetryMux);
+    portEXIT_CRITICAL(&telemetryMux());
     if (copy.lastGgaMs == 0 || millis() - copy.lastGgaMs > 15000UL)
     {
         copy.fixStatus = {'N', 'O', '_', 'F', 'I', 'X'};
@@ -618,7 +622,7 @@ GnssTelemetrySnapshot getGnssTelemetrySnapshot()
 uint32_t getRtcmInputBps()
 {
     const uint32_t now = millis();
-    portENTER_CRITICAL(&telemetryMux);
+    portENTER_CRITICAL(&telemetryMux());
     if (inputWindowStartedMs > 0 && now - inputWindowStartedMs >= 1000UL)
     {
         const uint32_t elapsed = now - inputWindowStartedMs;
@@ -629,6 +633,6 @@ uint32_t getRtcmInputBps()
         inputWindowBytes = 0;
     }
     const uint32_t result = inputBytesPerSecond;
-    portEXIT_CRITICAL(&telemetryMux);
+    portEXIT_CRITICAL(&telemetryMux());
     return result;
 }

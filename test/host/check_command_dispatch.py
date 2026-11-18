@@ -17,9 +17,11 @@ harness = r'''
 #include "hardware/Wifi_Credentials.h"
 enum class cmd_action_t { CMD_ACTION_NONE, CMD_ACTION_ESP_RESTART, CMD_ACTION_HANDLED };
 struct { bool active = false; int calls = 0; bool workflowActive() { return active; }
-         bool applyRoverMode() { ++calls; return true; } } backendAgent;
+         bool applyRoverMode() { ++calls; return true; } } backendAgentStub;
+auto &backendAgent() { return backendAgentStub; }
 struct { int writes = 0; void begin(const char *, bool) {} void end() {}
          void putBool(const char *, bool) { ++writes; } } prefs;
+auto &appPrefs() { return prefs; }
 int baseCalls = 0, setCalls = 0; String savedKey, savedValue;
 cmd_action_t handleGnssBaseCommand(const std::vector<String> &v) { ++baseCalls; assert(v.size() == 1 && v[0] == "X"); return cmd_action_t::CMD_ACTION_NONE; }
 cmd_action_t handleGnssSetCommand(const std::vector<String> &v) { ++setCalls; assert(v.size() == 2 && v[0] == "SET"); return cmd_action_t::CMD_ACTION_NONE; }
@@ -49,8 +51,8 @@ int main() {
     std::vector<String> incomplete = {"ATG", "GNSS"};
     assert(handleCommand(incomplete) == A::CMD_ACTION_NONE);
     std::vector<String> rover = {"ATG", "GNSS", "ROVER"};
-    backendAgent.active = true; handleCommand(rover); assert(backendAgent.calls == 0);
-    backendAgent.active = false; handleCommand(rover); assert(backendAgent.calls == 1);
+    backendAgentStub.active = true; handleCommand(rover); assert(backendAgentStub.calls == 0);
+    backendAgentStub.active = false; handleCommand(rover); assert(backendAgentStub.calls == 1);
     std::vector<String> base = {"ATG", "GNSS", "BASE", "X"}; handleCommand(base); assert(baseCalls == 1);
     std::vector<String> set = {"ATG", "GNSS", "SET", "X"}; handleCommand(set); assert(setCalls == 1);
     std::vector<String> unknown = {"ATG", "CONFIG", "BAD"};

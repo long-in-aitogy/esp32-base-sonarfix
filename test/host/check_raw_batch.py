@@ -15,7 +15,7 @@ harness = r'''
 #include <cassert>
 #include <cstring>
 constexpr int GNSS_UNICORE_PORT = 0, MUTEX_TIMEOUT_MS = 100, pdTRUE = 1;
-int rtcmBufferMutex = 1, releases = 0, writes = 0;
+int &rtcmBufferMutex() { static int mutex = 1; return mutex; } int releases = 0, writes = 0;
 bool shortWrite = false, busy = false, unicoreOk = true;
 int pdMS_TO_TICKS(int n) { return n; }
 int xSemaphoreTake(int, int) { return !busy; }

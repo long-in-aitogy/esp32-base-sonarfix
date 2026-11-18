@@ -21,7 +21,7 @@ bool wifiFallbackActive = false, wifiConnected = false, wifiOk = false, probeOk 
 bool mqttUp = false, ntripUp = false, networkOk = true, workflowActive = false;
 bool gprsUp = true, gsmOk = true, lockOk = true;
 int locks = 0, unlocks = 0;
-void *tcpStreamMutex = reinterpret_cast<void *>(1);
+void *&tcpStreamMutex() { static void *mutex = reinterpret_cast<void *>(1); return mutex; }
 constexpr int MUTEX_TIMEOUT_MS = 1500, LED_PIN = 1, HIGH = 1, LOW = 0;
 #define TCP_IP 1
 #define RTCM_COMMUNICATION_PROTOCOL TCP_IP
@@ -39,9 +39,11 @@ bool isGsmConnection() { return connectionType == ConnectionType::GSM; }
 struct WiFiClass { static int status() { return wifiConnected ? WL_CONNECTED : 0; } };
 struct { void disconnect() { wifiConnected = false; events += 'D'; } } WiFi;
 struct { bool connected() { return mqttUp; } void disconnect() { mqttUp = false; events += 'M'; } } mqtt;
+auto &mqttClient() { return mqtt; }
 struct { bool isNetworkConnected() { return networkOk; } bool isGprsConnected() { return gprsUp; } } modem;
 auto &getModem() { return modem; }
-struct { void onNetworkChanged() { events += 'B'; } bool workflowActive() { return ::workflowActive; } } backendAgent;
+struct { void onNetworkChanged() { events += 'B'; } bool workflowActive() { return ::workflowActive; } } backendAgentStub;
+auto &backendAgent() { return backendAgentStub; }
 bool isNtripConnected() { return ntripUp; }
 void stopNtrip() { ntripUp = false; events += 'N'; }
 void setupMQTT() { events += 'Q'; }
@@ -103,7 +105,7 @@ int main() {
     wifiConnected = false; wifiOk = true; mqttUp = ntripUp = true; events.clear();
     loop();
     assert(wifiConnected && !mqttUp && !ntripUp && events == "MNB");
-    tcpStreamMutex = nullptr; const int oldUnlocks = unlocks; loop();
+    tcpStreamMutex() = nullptr; const int oldUnlocks = unlocks; loop();
     assert(unlocks == oldUnlocks && locks == unlocks);
 }
 '''

@@ -41,6 +41,7 @@ struct Mqtt {
         return true;
     }
 } mqtt;
+auto &mqttClient() { return mqtt; }
 struct Socket {
     bool up = false, accept = true; std::vector<String> delivered;
     bool sendText(const String &s) { if (!accept) return false; delivered.push_back(s); return true; }
@@ -53,7 +54,7 @@ struct BackendAgent {
     bool websocketConnected() const { return websocket_->up; }
     String rawDataTopic() const { return "raw"; }
     void enqueueNmea(const uint8_t *, size_t);
-    void enqueueRtcm(const uint8_t *, size_t);
+    void enqueueRtcm(const uint8_t *, size_t) const;
     void drainDataQueues();
 };
 '''

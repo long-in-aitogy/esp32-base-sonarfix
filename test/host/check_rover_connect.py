@@ -146,7 +146,7 @@ for name in ('startAutoBaseRover', 'startReferenceRover'):
 wrapper_harness = r'''
 #include <cassert>
 constexpr int MUTEX_TIMEOUT_MS = 1500, pdTRUE = 1;
-int tcpStreamMutex = 1, releases = 0, stops = 0;
+int &tcpStreamMutex() { static int mutex = 1; return mutex; } int releases = 0, stops = 0;
 bool lockOk = true, startOk = true;
 int pdMS_TO_TICKS(int ms) { return ms; }
 int xSemaphoreTake(int, int) { return lockOk; }

@@ -17,7 +17,6 @@
 #include <array>
 #include <cstring>
 
-    extern Preferences prefs;
 
 using namespace ntrip_common;
 
@@ -425,7 +424,7 @@ int connectNTRIP()
 /** @brief Implements loopNTRIP. */
 int loopNTRIP(const String &rtcmData)
 {
-  if (ntripRoverSessionStarted() || backendAgent.workflowActive())
+  if (ntripRoverSessionStarted() || backendAgent().workflowActive())
     return 504;
 
   auto returnCode = NTRIP_MODE;

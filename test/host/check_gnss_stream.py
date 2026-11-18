@@ -31,7 +31,7 @@ void parseNmeaSentence(const String &line) {
     assert(line.find("$GNGGA,real") == 0);
     ++sentences;
 }
-int telemetryMux = 0;
+int &telemetryMux() { static int mux = 0; return mux; }
 #define portENTER_CRITICAL(x) ((void)0)
 #define portEXIT_CRITICAL(x) ((void)0)
 struct { struct { unsigned rtcmFrames = 0; } traffic; bool hasData = false; unsigned lastDataMs = 0; } telemetry;
@@ -42,7 +42,8 @@ struct {
     void enqueueRtcm(const uint8_t *data, size_t length) {
         frames.emplace_back(reinterpret_cast<const char *>(data), length);
     }
-} backendAgent;
+} backendAgentStub;
+auto &backendAgent() { return backendAgentStub; }
 '''
 checks = r'''
 int main() {
@@ -64,8 +65,8 @@ int main() {
     for (unsigned i = 0; i < 30; ++i) {
         feed(ubx); feed(rtcm); feed(gga);
     }
-    assert(sentences == 30 && backendAgent.frames.size() == 30);
-    for (const auto &frame : backendAgent.frames) assert(frame == rtcm);
+    assert(sentences == 30 && backendAgentStub.frames.size() == 30);
+    for (const auto &frame : backendAgentStub.frames) assert(frame == rtcm);
     feed(std::string("\xD3\xFF", 2)); feed(gga);
     assert(sentences == 31); // Invalid RTCM reserved bits cannot swallow GGA.
     feed("$truncated"); feed(ubx); feed(gga);

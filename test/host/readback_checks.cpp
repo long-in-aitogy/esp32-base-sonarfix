@@ -10,8 +10,8 @@
 static void reset() {
     assert(acquiredLocks == releasedLocks);
     Serial1 = {}; hostMillis = 0; deniedLock = nullptr;
-    rtcmBufferMutex = reinterpret_cast<void *>(1);
-    gnssSerialMutex = reinterpret_cast<void *>(2);
+    rtcmBufferMutex() = reinterpret_cast<void *>(1);
+    gnssSerialMutex() = reinterpret_cast<void *>(2);
     acquiredLocks = releasedLocks = 0; bufferedQueryBytes.clear();
 }
 
@@ -39,10 +39,10 @@ static void checkUblox() {
     String error, encoded;
     for (unsigned failure = 0; failure < 5; ++failure) {
         reset(); error.clear();
-        if (failure == 0) rtcmBufferMutex = nullptr;
-        if (failure == 1) deniedLock = rtcmBufferMutex;
-        if (failure == 2) gnssSerialMutex = nullptr;
-        if (failure == 3) deniedLock = gnssSerialMutex;
+        if (failure == 0) rtcmBufferMutex() = nullptr;
+        if (failure == 1) deniedLock = rtcmBufferMutex();
+        if (failure == 2) gnssSerialMutex() = nullptr;
+        if (failure == 3) deniedLock = gnssSerialMutex();
         if (failure == 4) Serial1.shortWrite = true;
         assert(!UbloxReadback::readVersion(encoded, error) && !error.isEmpty());
         assert(acquiredLocks == releasedLocks);
@@ -107,10 +107,10 @@ static void checkUnicore() {
     String mode, error;
     for (unsigned failure = 0; failure < 5; ++failure) {
         reset(); error.clear();
-        if (failure == 0) rtcmBufferMutex = nullptr;
-        if (failure == 1) deniedLock = rtcmBufferMutex;
-        if (failure == 2) gnssSerialMutex = nullptr;
-        if (failure == 3) deniedLock = gnssSerialMutex;
+        if (failure == 0) rtcmBufferMutex() = nullptr;
+        if (failure == 1) deniedLock = rtcmBufferMutex();
+        if (failure == 2) gnssSerialMutex() = nullptr;
+        if (failure == 3) deniedLock = gnssSerialMutex();
         if (failure == 4) Serial1.shortWrite = true;
         assert(!UnicoreReadback::readMode(mode, error) && !error.isEmpty());
     }

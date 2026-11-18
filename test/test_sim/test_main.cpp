@@ -4,7 +4,11 @@
 #include "Prog_Config.h"
 #include "hardware/Sim_handler.h"
 
-Preferences prefs;
+Preferences &appPrefs()
+{
+    static Preferences store;
+    return store;
+}
 TinyGsmClient testClient(modem);
 
 void setUp(void)

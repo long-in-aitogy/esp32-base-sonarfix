@@ -20,8 +20,6 @@
 
 using namespace BackendAgentInternal;
 
-extern SemaphoreHandle_t tcpStreamMutex;
-extern SemaphoreHandle_t rtcmBufferMutex;
 
 namespace
 {
@@ -179,7 +177,7 @@ void BackendAgent::workflowTaskThunk(void *parameter)
 
 bool BackendAgent::restartConfiguredNtrip(bool transportLocked) const
 {
-    if (!transportLocked && (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS * 4)) != pdTRUE))
+    if (!transportLocked && (!tcpStreamMutex() || xSemaphoreTake(tcpStreamMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS * 4)) != pdTRUE))
     {
         return false;
     }
@@ -187,31 +185,31 @@ bool BackendAgent::restartConfiguredNtrip(bool transportLocked) const
     setupNTRIP();
     connectNTRIP();
     if (!transportLocked)
-        xSemaphoreGive(tcpStreamMutex);
+        xSemaphoreGive(tcpStreamMutex());
     return true;
 }
 
 int BackendAgent::loopNtripRoverLocked() const
 {
-    if (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+    if (!tcpStreamMutex() || xSemaphoreTake(tcpStreamMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
     {
         // Contention is not a caster disconnect; let the workflow retry on
         // its next pass without touching a TinyGSM socket concurrently.
         return 200;
     }
     const auto result = loopNtripRover();
-    xSemaphoreGive(tcpStreamMutex);
+    xSemaphoreGive(tcpStreamMutex());
     return result;
 }
 
 bool BackendAgent::stopNtripRoverLocked() const
 {
-    if (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS * 4)) != pdTRUE)
+    if (!tcpStreamMutex() || xSemaphoreTake(tcpStreamMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS * 4)) != pdTRUE)
     {
         return false;
     }
     stopNtripRover();
-    xSemaphoreGive(tcpStreamMutex);
+    xSemaphoreGive(tcpStreamMutex());
     return true;
 }
 
@@ -261,14 +259,14 @@ bool BackendAgent::writeUnicoreCommand(const uint8_t *data, size_t length, Strin
         error = "invalid Unicore ASCII command";
         return false;
     }
-    if (!rtcmBufferMutex || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+    if (!rtcmBufferMutex() || xSemaphoreTake(rtcmBufferMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
     {
         error = "GNSS command port is busy";
         return false;
     }
-    if (!gnssSerialMutex || xSemaphoreTake(gnssSerialMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+    if (!gnssSerialMutex() || xSemaphoreTake(gnssSerialMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
     {
-        xSemaphoreGive(rtcmBufferMutex);
+        xSemaphoreGive(rtcmBufferMutex());
         error = "GNSS reader is busy";
         return false;
     }
@@ -277,8 +275,8 @@ bool BackendAgent::writeUnicoreCommand(const uint8_t *data, size_t length, Strin
     const auto written = Serial1.write(data, length) == length;
     Serial1.flush();
     const auto matched = waitForUnicoreReply(reply, written);
-    xSemaphoreGive(gnssSerialMutex);
-    xSemaphoreGive(rtcmBufferMutex);
+    xSemaphoreGive(gnssSerialMutex());
+    xSemaphoreGive(rtcmBufferMutex());
     if (!written)
         error = String("Unicore UART write failed: ") + reply.key.data();
     else if (!matched)
@@ -311,11 +309,11 @@ bool BackendAgent::writeGnssCommands(const GnssCmdBuilder::CommandList &commands
                 return false;
             continue;
         }
-        if (!rtcmBufferMutex || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+        if (!rtcmBufferMutex() || xSemaphoreTake(rtcmBufferMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
             return false;
         const auto written = Serial1.write(command.data(), command.size());
         Serial1.flush();
-        xSemaphoreGive(rtcmBufferMutex);
+        xSemaphoreGive(rtcmBufferMutex());
         if (written != command.size())
             return false;
         delay(100);
@@ -377,11 +375,11 @@ bool BackendAgent::waitForRoverGga(const uint32_t startedMs) const
 
 bool BackendAgent::configureUbloxRover() const
 {
-    if (!rtcmBufferMutex || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+    if (!rtcmBufferMutex() || xSemaphoreTake(rtcmBufferMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
         return false;
-    if (!gnssSerialMutex || xSemaphoreTake(gnssSerialMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+    if (!gnssSerialMutex() || xSemaphoreTake(gnssSerialMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
     {
-        xSemaphoreGive(rtcmBufferMutex);
+        xSemaphoreGive(rtcmBufferMutex());
         return false;
     }
     for (const auto &command : GnssCmdBuilder::buildRoverCommand(GnssCmdBuilder::GnssSensorType::Ublox))
@@ -391,8 +389,8 @@ bool BackendAgent::configureUbloxRover() const
     }
     const auto roverConfirmed = exchangeUbloxRoverCommand(
         {0xB5, 0x62, 0x06, 0x71, 0, 0, 0x77, 0x6B}, true);
-    xSemaphoreGive(gnssSerialMutex);
-    xSemaphoreGive(rtcmBufferMutex);
+    xSemaphoreGive(gnssSerialMutex());
+    xSemaphoreGive(rtcmBufferMutex());
     if (!roverConfirmed)
     {
         Serial.println("[AUTO BASE][ERROR] Chua xac nhan chip o Rover; dung truoc khi ket noi caster");
@@ -557,7 +555,7 @@ bool BackendAgent::startAutoBaseRover(const String &host, const uint16_t port,
                                       const String &mountpoint, const uint8_t ntripVersion, String &error,
                                       String *selectedMountpoint) const
 {
-    if (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+    if (!tcpStreamMutex() || xSemaphoreTake(tcpStreamMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
     {
         error = "network transport is busy";
         return false;
@@ -568,7 +566,7 @@ bool BackendAgent::startAutoBaseRover(const String &host, const uint16_t port,
     const auto started = startNtripRover(host, port, username, password, mountpoint, options);
     if (!started)
         error = ntripRoverLastError();
-    xSemaphoreGive(tcpStreamMutex);
+    xSemaphoreGive(tcpStreamMutex());
     return started;
 }
 
@@ -817,11 +815,11 @@ bool BackendAgent::completeAutoBaseSetup(
     DynamicJsonDocument location(2048);
     double projectedHeight = rawAltitude;
     ProjectedPosition result{rawLatitude, rawLongitude, rawAltitude};
-    if (tcpStreamMutex && xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS * 4)) == pdTRUE)
+    if (tcpStreamMutex() && xSemaphoreTake(tcpStreamMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS * 4)) == pdTRUE)
     {
         datum = ntripRoverDatum();
         stopNtripRover();
-        xSemaphoreGive(tcpStreamMutex);
+        xSemaphoreGive(tcpStreamMutex());
     }
     else
     {
@@ -1163,6 +1161,43 @@ namespace
             || !std::isfinite(coordinateNumber(coords["lon"]))
             || !std::isfinite(coordinateNumber(coords["alt"]));
     }
+
+    uint32_t autoBaseWaitFixTimeout(JsonObjectConst payload, bool autoNearest, uint32_t timeoutSeconds)
+    {
+        return (autoNearest && !payload.containsKey("timeout")) ? 180UL : timeoutSeconds;
+    }
+
+    bool canFallbackNoNearbyStation(bool autoNearest, const String &failureReason, bool cancelRequested)
+    {
+        return autoNearest && !cancelRequested && failureReason == "ERROR - NO STATION WITHIN 20 KM";
+    }
+
+    bool canFallbackAutoNearestTimeout(JsonObjectConst payload, bool autoNearest,
+                                       const String &failureReason, bool cancelled, bool cancelRequested)
+    {
+        if (!autoNearest || cancelled || cancelRequested || failureReason != "RTK fix timeout")
+            return false;
+        return !payload.containsKey("timeout") || payload["timeout"].as<uint32_t>() >= 180UL;
+    }
+
+    void annotateAutoBaseResult(String &resultJson, const String &sourceMountpoint,
+                                bool autoApply, size_t capacity)
+    {
+        DynamicJsonDocument result(capacity);
+        if (deserializeJson(result, resultJson) != DeserializationError::Ok)
+            return;
+        result["source_mountpoint"] = sourceMountpoint;
+        result["auto_applied"] = autoApply;
+        result["receiver_write_completed"] = autoApply;
+        result["configured_ntrip_restarted"] = true;
+        resultJson.clear();
+        serializeJson(result, resultJson);
+    }
+
+    const char *autoBaseDonePhase(bool autoApply)
+    {
+        return autoApply ? "completed" : "ready_for_review";
+    }
 } // namespace
 
 void BackendAgent::finishAutoBaseWorkflow(JsonDocument &previousBase, bool hasSavedPrevious,
@@ -1380,11 +1415,11 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
     String failureReason;
     Serial.printf("[AUTO BASE][CASTER] Connecting %s:%u/%s; AutoNearest=%s.\n",
                   host.c_str(), static_cast<unsigned>(port), mountpoint.c_str(), autoNearest ? "YES" : "NO");
-    if (!startAutoBaseRover(host, port, username, password, mountpoint, ntripVersion, failureReason,
-                            autoNearest ? &selectedMountpoint : nullptr))
+    String *const selectedTarget = autoNearest ? &selectedMountpoint : nullptr;
+    if (!startAutoBaseRover(host, port, username, password, mountpoint, ntripVersion, failureReason, selectedTarget))
     {
         Serial.printf("[AUTO BASE][CASTER][FAILED] %s\n", failureReason.c_str());
-        if (autoNearest && failureReason == "ERROR - NO STATION WITHIN 20 KM" && !workflowCancelRequested_)
+        if (canFallbackNoNearbyStation(autoNearest, failureReason, workflowCancelRequested_))
             return fallbackToSurvey(false, failureReason);
         finish(false, workflowCancelRequested_, failureReason);
         return false;
@@ -1394,11 +1429,10 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
     setAgentState("auto_setup_wait_fix");
     setWorkflowProgress("wait_fix", 2, 4);
     auto cancelled = false;
-    const bool fallbackOnTimeout = autoNearest && (!payload.containsKey("timeout") || payload["timeout"].as<uint32_t>() >= 180UL);
-    if (const uint32_t waitFixTimeout = (autoNearest && !payload.containsKey("timeout")) ? 180UL : timeoutSeconds;
+    if (const uint32_t waitFixTimeout = autoBaseWaitFixTimeout(payload, autoNearest, timeoutSeconds);
         !waitForAutoBaseFix(waitFixTimeout, fixedStreakRequired, cancelled, failureReason, sourceMountpoint))
     {
-        if (fallbackOnTimeout && failureReason == "RTK fix timeout" && !cancelled && !workflowCancelRequested_)
+        if (canFallbackAutoNearestTimeout(payload, autoNearest, failureReason, cancelled, workflowCancelRequested_))
             return fallbackToSurvey(true, failureReason);
         finish(false, cancelled, failureReason);
         return false;
@@ -1430,17 +1464,8 @@ bool BackendAgent::runAutoBaseWorkflow(JsonObject payload)
         finish(false, false, "cannot restore previous Base/NTRIP state after sampling");
         return false;
     }
-    if (DynamicJsonDocument result(AUTO_BASE_RESULT_SIZE);
-        deserializeJson(result, resultJson) == DeserializationError::Ok)
-    {
-        result["source_mountpoint"] = sourceMountpoint;
-        result["auto_applied"] = autoApply;
-        result["receiver_write_completed"] = autoApply;
-        result["configured_ntrip_restarted"] = true;
-        resultJson.clear();
-        serializeJson(result, resultJson);
-    }
-    setWorkflowProgress(autoApply ? "completed" : "ready_for_review", 4, 4, resultJson);
+    annotateAutoBaseResult(resultJson, sourceMountpoint, autoApply, AUTO_BASE_RESULT_SIZE);
+    setWorkflowProgress(autoBaseDonePhase(autoApply), 4, 4, resultJson);
     saveStatePreferences();
     return true;
 }
@@ -1500,7 +1525,7 @@ bool BackendAgent::startReferenceRover(const String &host, const uint16_t port,
                                               const String &username, const String &password,
                                               const String &mountpoint, String &error) const
 {
-    if (!tcpStreamMutex || xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+    if (!tcpStreamMutex() || xSemaphoreTake(tcpStreamMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
     {
         error = "network transport is busy";
         return false;
@@ -1510,7 +1535,7 @@ bool BackendAgent::startReferenceRover(const String &host, const uint16_t port,
                                          NtripRoverOptions{});
     if (!started)
         error = ntripRoverLastError();
-    xSemaphoreGive(tcpStreamMutex);
+    xSemaphoreGive(tcpStreamMutex());
     return started;
 }
 

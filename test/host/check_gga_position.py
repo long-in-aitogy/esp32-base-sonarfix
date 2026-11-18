@@ -26,7 +26,8 @@ constexpr size_t MAX_NMEA_LENGTH = 512;
 struct {
     void setDetectedChipIfUnknown(const String &) {}
     void enqueueNmea(const uint8_t *, size_t) {}
-} backendAgent;
+} backendAgentStub;
+auto &backendAgent() { return backendAgentStub; }
 '''
 checks = r'''
 std::string withChecksum(const char *text) {

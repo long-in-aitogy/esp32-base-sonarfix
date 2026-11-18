@@ -26,7 +26,8 @@ struct {
     bool locked=false;
     bool isLocked() { return locked; }
     void onMqttMessage(const char *,const uint8_t *,size_t) { ++backendMessages; }
-} backendAgent;
+} backendAgentStub;
+auto &backendAgent() { return backendAgentStub; }
 '''
 checks=r'''
 int main() {
@@ -34,14 +35,14 @@ int main() {
     mqttCallback(nullptr,command,1); mqttCallback(topic,nullptr,1); mqttCallback(topic,command,0);
     assert(backendMessages==0);
     mqttCallback(jsonTopic,command,sizeof(command)-1); assert(dispatched==0 && backendMessages==1);
-    backendAgent.locked=true; mqttCallback(topic,command,sizeof(command)-1); assert(dispatched==0);
-    backendAgent.locked=false; mqttCallback(topic,command,sizeof(command)); assert(dispatched==0);
+    backendAgentStub.locked=true; mqttCallback(topic,command,sizeof(command)-1); assert(dispatched==0);
+    backendAgentStub.locked=false; mqttCallback(topic,command,sizeof(command)); assert(dispatched==0);
     std::vector<byte> oversized(1025,'A'); mqttCallback(topic,oversized.data(),oversized.size()); assert(dispatched==0);
     mqttCallback(topic,command,sizeof(command)-1); assert(dispatched==1);
     configuredTopic="custom/topic"; char customTopic[]="custom/topic";
     mqttCallback(topic,command,sizeof(command)-1); assert(dispatched==2);
-    backendAgent.locked=true; mqttCallback(customTopic,command,sizeof(command)-1); assert(dispatched==2);
-    backendAgent.locked=false;
+    backendAgentStub.locked=true; mqttCallback(customTopic,command,sizeof(command)-1); assert(dispatched==2);
+    backendAgentStub.locked=false;
     mqttCallback(customTopic,command,sizeof(command)-1); assert(dispatched==2);
     restartRequested=true; mqttCallback(topic,command,sizeof(command)-1); assert(dispatched==3 && shutdowns==1 && restarts==1);
 }

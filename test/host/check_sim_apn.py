@@ -18,6 +18,7 @@ struct {
     void begin(const char *,bool) {} void end() {}
     String getString(const char *key,const String &fallback) { return data.count(key) ? data[key] : fallback; }
 } prefs;
+auto &appPrefs() { return prefs; }
 struct {
     String provider="VIETTEL", usedApn, usedUser, usedPass;
     bool network=true, connectOk=true, gprs=false;

@@ -8,8 +8,8 @@
 #include "Top_Lvl_Config.h"
 #include "hardware/Connection_type.h"
 
-extern PubSubClient mqtt;
-extern SemaphoreHandle_t tcpStreamMutex;
+PubSubClient &mqttClient();
+SemaphoreHandle_t &tcpStreamMutex();
 
 // ================= KHAI BÁO HÀM =================
 

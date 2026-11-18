@@ -6,7 +6,7 @@ import tempfile
 root = Path(__file__).resolve().parents[2]
 source = (root / 'src/main.cpp').read_text()
 start = source.index('        if (isWifiConnection() && WiFiClass::status() != WL_CONNECTED)', source.index('void loop()'))
-end = source.index('\n        xSemaphoreGive(tcpStreamMutex);', start)
+end = source.index('\n        xSemaphoreGive(tcpStreamMutex());', start)
 branch = source[start:end]
 harness = r'''
 #include <cassert>
@@ -18,8 +18,10 @@ bool isWifiConnection() { return wifi; }
 struct WiFiClass { static int status() { return connected ? WL_CONNECTED : 0; } };
 void digitalWrite(int, int state) { events += state==HIGH ? "H" : "L"; }
 struct { void disconnect() { events += "M"; } } mqtt;
+auto &mqttClient() { return mqtt; }
 void stopNtrip() { events += "N"; }
-struct { void onNetworkChanged() { events += "B"; } } backendAgent;
+struct { void onNetworkChanged() { events += "B"; } } backendAgentStub;
+auto &backendAgent() { return backendAgentStub; }
 bool setupWiFi() { events += "W"; return setupOk; }
 void recover() {
 '''

@@ -8,7 +8,7 @@ source = (root / 'src/hardware/Connection_type.cpp').read_text()
 method = source[source.index('void loadConnectionTypeFromPrefs('):]
 main = (root / 'src/main.cpp').read_text()
 init = main[main.index('void initPrefs()\n{'):]
-assert 'prefs.putString("CONNECTION_TYPE", CONNECTION_PREFERENCE)' in init
+assert 'appPrefs().putString("CONNECTION_TYPE", CONNECTION_PREFERENCE)' in init
 harness = r'''
 #include <hardware/Connection_type.h>
 #include <cassert>
@@ -18,6 +18,7 @@ struct Preferences {
     String value;
     String getString(const char *, const char *fallback) { return hasValue ? value : String(fallback); }
 } prefs;
+Preferences &appPrefs() { return prefs; }
 ConnectionType connectionType = ConnectionType::GSM;
 '''
 checks = r'''

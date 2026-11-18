@@ -50,7 +50,7 @@ Snapshot getGnssTelemetrySnapshot() { return {}; }
 struct Logger { int data = 0, closed = 0; template <typename... T> void printf(const char *format, T...) { const std::string message(format); if (message.find("[NTRIP ROVER][DATA]") == 0) ++data; if (message.find("CORS socket closed") != std::string::npos) ++closed; } };
 [[maybe_unused]] Logger Serial;
 constexpr int MUTEX_TIMEOUT_MS = 1500, pdTRUE = 1;
-int rtcmBufferMutex = 1, releases = 0;
+int &rtcmBufferMutex() { static int mutex = 1; return mutex; } int releases = 0;
 bool lockAvailable = true;
 int pdMS_TO_TICKS(int ms) { return ms; }
 int xSemaphoreTake(int, int) { return lockAvailable; }

@@ -32,10 +32,6 @@
 using namespace BackendAgentInternal;
 #endif
 
-extern Preferences prefs;
-extern PubSubClient mqtt;
-extern SemaphoreHandle_t tcpStreamMutex;
-extern SemaphoreHandle_t rtcmBufferMutex;
 
 namespace BackendAgentInternal
 {
@@ -123,7 +119,11 @@ namespace BackendAgentInternal
 
 namespace
 {
-    WiFiClient backendWebsocketWifiClient;
+    WiFiClient &backendWebsocketWifiClient()
+    {
+        static WiFiClient client;
+        return client;
+    }
     TinyGsmClient &backendWebsocketGsmClient()
     {
         static TinyGsmClient client(getModem(), 3);
@@ -139,7 +139,11 @@ void initializeBackendGsmClient()
 BackendAgent::BackendAgent() = default;
 BackendAgent::~BackendAgent() = default;
 
-BackendAgent backendAgent;
+BackendAgent &backendAgent()
+{
+    static BackendAgent instance;
+    return instance;
+}
 
 void BackendAgent::begin()
 {
@@ -348,7 +352,7 @@ bool BackendAgent::effectiveStreamActive(const JsonObjectConst &service,
 
 bool BackendAgent::mqttConnected() const
 {
-    return mqttConnected_ && mqtt.connected();
+    return mqttConnected_ && mqttClient().connected();
 }
 
 bool BackendAgent::websocketConnected() const
@@ -379,12 +383,12 @@ void BackendAgent::publishStatus(bool force)
     }
     if (mqttConnected())
     {
-        const auto sent = mqtt.publish(statusTopic().c_str(), payload.c_str(), true);
+        const auto sent = mqttClient().publish(statusTopic().c_str(), payload.c_str(), true);
         if (!sent || !statusPublishConfirmed_)
         {
             Serial.printf("[BACKEND][MQTT] STATUS %s topic=%s bytes=%u\n",
                           sent ? "SENT" : "FAILED", statusTopic().c_str(),
-                          static_cast<unsigned>(payload.length()));
+                          payload.length());
         }
         statusPublishConfirmed_ = sent;
     }
@@ -440,7 +444,7 @@ void BackendAgent::enqueueNmea(const uint8_t *data, size_t length)
     }
 }
 
-void BackendAgent::enqueueRtcm(const uint8_t *data, size_t length)
+void BackendAgent::enqueueRtcm(const uint8_t *data, size_t length) const
 {
 #if BACKEND_PUBLISH_RAW_RTCM
     if (!rtcmQueue_ || !data || length == 0 || length > MAX_RTCM_PACKET)
@@ -468,7 +472,7 @@ void BackendAgent::drainDataQueues()
         auto delivered = false;
         if (mqttConnected())
         {
-            delivered = mqtt.publish(rawDataTopic().c_str(), nmea.data.data(), nmea.length);
+            delivered = mqttClient().publish(rawDataTopic().c_str(), nmea.data.data(), nmea.length);
         }
         if (!delivered && websocketConnected())
         {
@@ -493,7 +497,7 @@ void BackendAgent::drainDataQueues()
     DataPacket rtcm;
     while (rtcmQueue_ && xQueueReceive(rtcmQueue_, &rtcm, 0) == pdTRUE)
     {
-        if (!mqttConnected() || !mqtt.publish(rawDataTopic().c_str(), rtcm.data.data(), rtcm.length))
+        if (!mqttConnected() || !mqttClient().publish(rawDataTopic().c_str(), rtcm.data.data(), rtcm.length))
         {
             xQueueSendToFront(rtcmQueue_, &rtcm, 0);
             break;
@@ -502,19 +506,19 @@ void BackendAgent::drainDataQueues()
 #endif
 }
 
-void BackendAgent::setupWebsocket()
+void BackendAgent::setupWebsocket() const
 {
 #if BACKEND_WEBSOCKET_ENABLED
     if (!websocket_)
         return;
     const auto host = readPreference("BACKEND_HOST", BACKEND_HOST);
-    prefs.begin("myPrefs", true);
-    const uint16_t port = prefs.getUShort("BACKEND_PORT", BACKEND_WEBSOCKET_PORT);
-    prefs.end();
+    appPrefs().begin("myPrefs", true);
+    const uint16_t port = appPrefs().getUShort("BACKEND_PORT", BACKEND_WEBSOCKET_PORT);
+    appPrefs().end();
     const auto path = String("/ws/pi/") + serialNumber_ + (licenseToken_.isEmpty() ? String() : String("?token=") + urlEncode(licenseToken_));
     if (isWifiConnection())
     {
-        websocket_->begin(host, port, path, backendWebsocketWifiClient);
+        websocket_->begin(host, port, path, backendWebsocketWifiClient());
     }
     else
     {
@@ -531,7 +535,7 @@ void BackendAgent::refreshWebsocket()
     setupWebsocket();
 }
 
-void BackendAgent::loopWebsocket()
+void BackendAgent::loopWebsocket() const
 {
 #if BACKEND_WEBSOCKET_ENABLED
     if (websocket_)
@@ -624,20 +628,20 @@ void BackendAgent::retryUnknownChipProbe()
         return;
 
     lastChipProbeMs_ = now;
-    if (!rtcmBufferMutex || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+    if (!rtcmBufferMutex() || xSemaphoreTake(rtcmBufferMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
     {
         return;
     }
 
-    if (!gnssSerialMutex || xSemaphoreTake(gnssSerialMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+    if (!gnssSerialMutex() || xSemaphoreTake(gnssSerialMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
     {
-        xSemaphoreGive(rtcmBufferMutex);
+        xSemaphoreGive(rtcmBufferMutex());
         return;
     }
 
     detectGnssChip(Serial1);
-    xSemaphoreGive(gnssSerialMutex);
-    xSemaphoreGive(rtcmBufferMutex);
+    xSemaphoreGive(gnssSerialMutex());
+    xSemaphoreGive(rtcmBufferMutex());
 }
 
 void BackendAgent::handleControlAck(const String &source, const String &message, bool retained)
@@ -718,8 +722,8 @@ void BackendAgent::handleWebsocketText(const String &message)
 }
 
 
-bool backendDeviceLocked(uint8_t serverId) { return serverId == 0 ? backendAgent.isLocked() : backendAgent.isServerLocked(serverId); }
-bool backendControlPlaneFailOpen() { return backendAgent.controlPlaneFailOpen(); }
-bool backendDeviceProvisioned() { return backendAgent.isProvisioned(); }
-bool backendLicenseValid() { return backendAgent.licenseValid(); }
-bool backendBaseStartupConfigured() { return backendAgent.baseStartupConfigured(); }
+bool backendDeviceLocked(uint8_t serverId) { return serverId == 0 ? backendAgent().isLocked() : backendAgent().isServerLocked(serverId); }
+bool backendControlPlaneFailOpen() { return backendAgent().controlPlaneFailOpen(); }
+bool backendDeviceProvisioned() { return backendAgent().isProvisioned(); }
+bool backendLicenseValid() { return backendAgent().licenseValid(); }
+bool backendBaseStartupConfigured() { return backendAgent().baseStartupConfigured(); }

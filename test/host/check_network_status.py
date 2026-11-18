@@ -18,6 +18,7 @@ bool wifi = false, wifiFallbackActive = false;
 bool isWifiConnection() { return wifi; }
 bool isNtripConnected() { return true; }
 struct { bool connected() { return true; } } mqtt;
+auto &mqttClient() { return mqtt; }
 constexpr int WL_CONNECTED = 3;
 struct Address { std::string toString() { return "192.0.2.1"; } };
 struct WiFiClass { static int status() { return WL_CONNECTED; } };

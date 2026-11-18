@@ -18,7 +18,8 @@ uint32_t millis() { return now; }
 bool isWifiConnection() { return true; }
 struct WiFiClass { static int status() { return wifiConnected ? WL_CONNECTED : 0; } };
 struct { void disconnect() {} } WiFi;
-struct { bool workflowActive() { return active; } } backendAgent;
+struct { bool workflowActive() { return active; } } backendAgentStub;
+auto &backendAgent() { return backendAgentStub; }
 struct { bool isNetworkConnected() { return true; } bool isGprsConnected() { return true; } } modem;
 auto &getModem() { return modem; }
 bool connectGSM(int) { return true; }

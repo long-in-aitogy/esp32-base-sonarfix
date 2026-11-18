@@ -42,7 +42,7 @@ public:
     void onMqttMessage(const char *topic, const uint8_t *payload, size_t length);
 
     void enqueueNmea(const uint8_t *data, size_t length);
-    void enqueueRtcm(const uint8_t *data, size_t length);
+    void enqueueRtcm(const uint8_t *data, size_t length) const;
 
     void publishStatus(bool force = false);
     void setAgentState(const String &state);
@@ -150,9 +150,9 @@ private:
     bool probePassiveUblox(Stream &stream) const;
     void ensureDefaultServiceConfig();
     String normalAgentState() const;
-    void setupWebsocket();
+    void setupWebsocket() const;
     void refreshWebsocket();
-    void loopWebsocket();
+    void loopWebsocket() const;
     void drainDataQueues();
     void retryUnknownChipProbe();
     void evaluateControlPlaneFailover();
@@ -334,7 +334,7 @@ private:
     friend class BackendAgentWebsocket;
 };
 
-extern BackendAgent backendAgent;
+BackendAgent &backendAgent();
 
 // Expose device permissions and fail-open state to network transports.
 bool backendDeviceLocked(uint8_t serverId = 0);

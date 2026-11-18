@@ -42,6 +42,7 @@ struct Preferences {
     size_t putUChar(const char *key, uint8_t value) { return putString(key, String(unsigned(value))) ? 1 : 0; }
     int getInt(const char *key, int fallback = 0) { return isKey(key) ? std::stoi(stores[space][key]) : fallback; }
 } prefs;
+auto &appPrefs() { return prefs; }
 constexpr int CONFIG_DOCUMENT_SIZE = 4096, PROGRESS_DOCUMENT_SIZE = 8192;
 namespace GnssCmdBuilder { constexpr float BASE_ACCURACY_METERS = 5; }
 namespace BackendAgentInternal {

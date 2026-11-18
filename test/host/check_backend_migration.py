@@ -27,7 +27,9 @@ struct Preferences {
     size_t putBool(const char *key, bool value) { values[key] = value ? "1" : "0"; return 1; }
     size_t putUChar(const char *key, unsigned char value) { values[key] = String(value); return 1; }
 };
-Preferences prefs, backendPrefs;
+Preferences prefs, backendPrefsStore;
+Preferences &appPrefs() { return prefs; }
+Preferences &backendPrefs() { return backendPrefsStore; }
 constexpr char BACKEND_PREFS_NAMESPACE[] = "backend";
 constexpr char BACKEND_PREFS_PARTITION[] = "agent_state";
 '''
@@ -35,18 +37,18 @@ checks = r'''
 int main() {
     prefs.values["SURVEY_RESULT"] = R"({"lat":21.1})";
     prefs.values["BASE_JSON"] = R"({"accuracy":5})";
-    backendPrefs.failSurvey = true;
+    backendPrefsStore.failSurvey = true;
     assert(!migrateBackendPreferences());
-    assert(!backendPrefs.isKey("MIGRATED"));
+    assert(!backendPrefsStore.isKey("MIGRATED"));
     assert(prefs.isKey("SURVEY_RESULT"));
-    backendPrefs.failSurvey = false;
+    backendPrefsStore.failSurvey = false;
     assert(migrateBackendPreferences());
-    assert(backendPrefs.getString("SURVEY_RESULT") == prefs.getString("SURVEY_RESULT"));
-    assert(backendPrefs.getString("BASE_JSON") == prefs.getString("BASE_JSON"));
-    assert(backendPrefs.isKey("MIGRATED"));
+    assert(backendPrefsStore.getString("SURVEY_RESULT") == prefs.getString("SURVEY_RESULT"));
+    assert(backendPrefsStore.getString("BASE_JSON") == prefs.getString("BASE_JSON"));
+    assert(backendPrefsStore.isKey("MIGRATED"));
     prefs.values["SURVEY_RESULT"] = "old";
     assert(migrateBackendPreferences());
-    assert(backendPrefs.getString("SURVEY_RESULT") != "old");
+    assert(backendPrefsStore.getString("SURVEY_RESULT") != "old");
 }
 '''
 with tempfile.TemporaryDirectory(prefix='esp-backend-migration-') as directory:

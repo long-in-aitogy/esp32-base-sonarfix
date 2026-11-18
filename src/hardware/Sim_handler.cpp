@@ -69,11 +69,11 @@ bool connectGSM(uint8_t maxAttempts)
         retries++;
         auto simOperator = getModem().getProvider();
         SerialMon.println("[GSM] Nha mang GSM: " + simOperator);
-        prefs.begin("myPrefs", true);
-        String apn = prefs.getString("APN", String(APN));
-        auto gprsUser = prefs.getString("GPRS_USER", String(GPRS_USER));
-        auto gprsPass = prefs.getString("GPRS_PASS", String(GPRS_PASS));
-        prefs.end();
+        appPrefs().begin("myPrefs", true);
+        String apn = appPrefs().getString("APN", String(APN));
+        auto gprsUser = appPrefs().getString("GPRS_USER", String(GPRS_USER));
+        auto gprsPass = appPrefs().getString("GPRS_PASS", String(GPRS_PASS));
+        appPrefs().end();
         if (apn.isEmpty() || apn.equalsIgnoreCase("auto"))
         {
             if (simOperator.indexOf("VIETTEL") >= 0)

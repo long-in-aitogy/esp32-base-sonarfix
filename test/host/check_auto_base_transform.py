@@ -38,7 +38,7 @@ harness = r'''
 #include "functions/backend/Base_Sample.h"
 #include "functions/gnss/gnss_cmd_builder.h"
 #include "functions/gnss/ublox_commands.h"
-int tcpStreamMutex = 1; constexpr int MUTEX_TIMEOUT_MS = 1500, pdTRUE = 1;
+int &tcpStreamMutex() { static int mutex = 1; return mutex; } constexpr int MUTEX_TIMEOUT_MS = 1500, pdTRUE = 1;
 constexpr size_t CONFIG_DOCUMENT_SIZE = 6144, AUTO_BASE_RESULT_SIZE = 6144, PROGRESS_DOCUMENT_SIZE = 8192;
 uint32_t now = 1000;
 uint32_t millis() { return now; }
