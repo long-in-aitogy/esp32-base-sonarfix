@@ -259,8 +259,8 @@ void Vn2000Session::decode(size_t length) {
     Vn2000Datum next = datum_;
     if (message == 1021) {
         ++datum_.count1021;
-        const size_t sourceName = static_cast<size_t>(bits.u(5)); bits.skip(8 * sourceName);
-        const size_t targetName = static_cast<size_t>(bits.u(5)); bits.skip(8 * targetName);
+        const auto sourceName = static_cast<size_t>(bits.u(5)); bits.skip(8 * sourceName);
+        const auto targetName = static_cast<size_t>(bits.u(5)); bits.skip(8 * targetName);
         bits.skip(8 + 10 + 5 + 4 + 2 + 19 + 20 + 14 + 14);
         next.dX = double(bits.s(23)) * 0.001;
         next.dY = double(bits.s(23)) * 0.001;
@@ -281,9 +281,9 @@ void Vn2000Session::decode(size_t length) {
         double h = 0;
         // Retain the reference algorithm's central-four residual mean.
         for (int i = 0; i < 16; ++i) {
-            const double db = static_cast<double>(bits.s(9));
-            const double dl = static_cast<double>(bits.s(9));
-            const double dh = static_cast<double>(bits.s(9));
+            const auto db = static_cast<double>(bits.s(9));
+            const auto dl = static_cast<double>(bits.s(9));
+            const auto dh = static_cast<double>(bits.s(9));
             if (i == 5 || i == 6 || i == 9 || i == 10) { b += db; l += dl; h += dh; }
         }
         next.resB = (meanB + b * 0.00003 / 4.0) * ARCSEC_TO_RAD;

@@ -478,8 +478,8 @@ bool BackendAgent::executeServiceConfigCommand(JsonObject payload, String &error
     for (uint8_t id = 1; id <= 2; ++id)
     {
         const auto prefix = String("server") + String(id);
-        const auto onDemandKey = prefix + "_stream_on_demand";
-        const auto activeKey = prefix + "_stream_active";
+        const auto &onDemandKey = prefix + "_stream_on_demand";
+        const auto &activeKey = prefix + "_stream_active";
         const auto serverOnDemand = jsonBool(service, onDemandKey, onDemand);
         service[onDemandKey] = serverOnDemand;
         if (!serverOnDemand)

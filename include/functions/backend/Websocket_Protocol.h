@@ -57,9 +57,9 @@ inline bool validUpgrade(std::string_view response, std::string_view accept) {
         const auto line = response.substr(start, end - start);
         const auto colon = line.find(':');
         if (colon == std::string_view::npos || colon == 0) return false;
-        const auto name = lower(std::string(line.substr(0, colon)));
-        const auto value = trim(line.substr(colon + 1));
-        if (!validateUpgradeHeader(name, value, accept, upgrade, connection, accepted)) {
+        const auto name = lower(line.substr(0, colon));
+        if (const auto value = trim(line.substr(colon + 1));
+            !validateUpgradeHeader(name, value, accept, upgrade, connection, accepted)) {
             return false;
         }
         start = end + 2;

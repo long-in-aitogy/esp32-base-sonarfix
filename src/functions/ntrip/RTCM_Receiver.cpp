@@ -477,7 +477,7 @@ namespace
         if (rtcmLength > 0 && processRtcmByte(value, rtcmOutput))
             return;
 
-        if (nmeaBuffer.length() > 0)
+        if (!nmeaBuffer.isEmpty())
         {
             if (value == '\n')
             {

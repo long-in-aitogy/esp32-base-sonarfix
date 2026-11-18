@@ -8,7 +8,7 @@ int setupNTRIP();
 int bootstrapUM980();
 int bootstrapUblox();
 GnssCmdBuilder::GnssSensorType detectGnssSensorType();
-int loopNTRIP(String &rtcmData);
+int loopNTRIP(const String &rtcmData);
 int connectNTRIP();
 bool isNtripConnected();
 void stopNtrip();

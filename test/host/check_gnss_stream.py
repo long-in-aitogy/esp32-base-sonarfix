@@ -18,6 +18,7 @@ harness = r'''
 #include <vector>
 struct String : std::string {
     using std::string::string;
+    bool isEmpty() const { return empty(); }
     void concat(const char *data, size_t length) { append(data, length); }
 };
 constexpr size_t MAX_NMEA_LENGTH = 512;

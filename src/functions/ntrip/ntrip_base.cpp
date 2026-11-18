@@ -424,7 +424,7 @@ int connectNTRIP()
 }
 
 /** @brief Implements loopNTRIP. */
-int loopNTRIP(String &rtcmData)
+int loopNTRIP(const String &rtcmData)
 {
   if (ntripRoverSessionStarted() || backendAgent.workflowActive())
     return 504;
