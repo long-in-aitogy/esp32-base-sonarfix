@@ -17,7 +17,6 @@ namespace
   WiFiClient wifiMqttClient;
 }
 
-extern TinyGsm modem;
 namespace
 {
   class MqttGsmClient : public TinyGsmClient
@@ -42,11 +41,25 @@ namespace
     }
   };
 
-  MqttGsmClient gsmMqttClient(modem, 1);
-  MqttGsmClient gsmProbeClient(modem, 4);
+  MqttGsmClient &gsmMqttClient()
+  {
+    static MqttGsmClient client(getModem(), 1);
+    return client;
+  }
+  MqttGsmClient &gsmProbeClient()
+  {
+    static MqttGsmClient client(getModem(), 4);
+    return client;
+  }
   WiFiClient wifiProbeClient;
 }
 PubSubClient mqtt(wifiMqttClient);
+
+void initializeMqttGsmClients()
+{
+  (void)gsmMqttClient();
+  (void)gsmProbeClient();
+}
 
 extern Preferences prefs;
 
@@ -64,7 +77,7 @@ namespace
 Client &activeMqttClient()
 {
   return isWifiConnection() ? static_cast<Client &>(wifiMqttClient)
-                            : static_cast<Client &>(gsmMqttClient);
+                            : static_cast<Client &>(gsmMqttClient());
 }
 
 // ================= ĐỊNH NGHĨA HÀM =================
@@ -114,7 +127,7 @@ bool probeMqttTransport(bool useGsm)
   const auto password = prefs.getString("MQTT_PASS", String(MQTT_PASS));
   prefs.end();
 
-  Client &transport = useGsm ? static_cast<Client &>(gsmProbeClient)
+  Client &transport = useGsm ? static_cast<Client &>(gsmProbeClient())
                              : static_cast<Client &>(wifiProbeClient);
   PubSubClient probe(transport);
   probe.setServer(host.c_str(), port);
@@ -122,7 +135,7 @@ bool probeMqttTransport(bool useGsm)
   if (!probe.setBufferSize(1024))
     return false;
   // TinyGSM connect timeout is seconds; WiFiClient uses milliseconds.
-  const auto tcpReady = useGsm ? gsmProbeClient.connect(host.c_str(), port, 5)
+  const auto tcpReady = useGsm ? gsmProbeClient().connect(host.c_str(), port, 5)
                                : wifiProbeClient.connect(host.c_str(), port, 3000);
   // No LWT, publish or subscribe: this probe cannot change station status.
   const auto clientId = "net-probe-" + backendAgent.serial();

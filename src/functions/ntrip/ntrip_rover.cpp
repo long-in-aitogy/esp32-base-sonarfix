@@ -17,7 +17,6 @@
 #include <cstring>
 
 extern Preferences prefs;
-extern TinyGsm modem;
 
 using namespace ntrip_common;
 

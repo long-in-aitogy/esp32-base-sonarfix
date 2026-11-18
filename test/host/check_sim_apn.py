@@ -27,6 +27,7 @@ struct {
     bool gprsConnect(const char *apn,const char *user,const char *pass) { usedApn=apn;usedUser=user;usedPass=pass;return gprs=connectOk; }
     bool isGprsConnected() { return gprs; }
 } modem;
+auto &getModem() { return modem; }
 '''
 checks=r'''
 int main() {

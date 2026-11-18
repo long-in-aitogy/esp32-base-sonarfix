@@ -17,6 +17,7 @@ std::string events;
 bool gsm = true;
 struct { void disconnect() { events += 'M'; } } mqtt;
 struct { bool isGprsConnected() { return true; } void gprsDisconnect() { events += 'G'; } } modem;
+auto &getModem() { return modem; }
 struct { void disconnect() { events += 'W'; } } WiFi;
 bool isGsmConnection() { return gsm; }
 bool isWifiConnection() { return !gsm; }

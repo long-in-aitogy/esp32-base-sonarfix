@@ -13,7 +13,7 @@
 #include "functions/ntrip/ntrip_base.h"
 
 // ================= ĐỊNH NGHĨA CÁC BIẾN TOÀN CỤC =================
-extern TinyGsm modem;
+TinyGsm &getModem();
 
 class SerialCommandProcessor
 {

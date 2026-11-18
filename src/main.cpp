@@ -3,6 +3,8 @@
 #include "functions/ntrip/RTCM_Receiver.h"
 #include "functions/backend/cmd_handler.h"
 #include "functions/ntrip/ntrip_base.h"
+#include "functions/ntrip/ntrip_common.h"
+#include "functions/mqtt/MQTT_Manager.h"
 
 #include <time.h>
 #include "esp_bt.h"
@@ -57,6 +59,11 @@ void setup()
 {
     static RtcmState rtcmState;
     Serial.begin(115200);
+    // Initialize modem clients before starting any tasks.
+    (void)getModem();
+    initializeMqttGsmClients();
+    ntrip_common::initializeGsmClients();
+    initializeBackendGsmClient();
 
     Serial.println("[DEBUG] Serial initialized");
     Serial.println("\n=========================================");
@@ -243,7 +250,7 @@ __attribute__((noreturn)) void taskNtrip([[maybe_unused]] void *parameter)
                 vTaskDelay(pdMS_TO_TICKS(100));
                 continue;
             }
-            const auto gprsConnected = modem.isGprsConnected();
+            const auto gprsConnected = getModem().isGprsConnected();
             xSemaphoreGive(tcpStreamMutex);
             if (!gprsConnected)
             {
@@ -292,7 +299,7 @@ String collectDeviceHealth(RtcmState &rtcmState)
 
     int32_t signalQualityDbm = -1;
     if (isGsmConnection())
-        signalQualityDbm = modem.getSignalQuality();
+        signalQualityDbm = getModem().getSignalQuality();
     const String payload = formDeviceHealthString(signalQualityDbm, gnssDataOk,
                                                   messageCounts.values.data());
     xSemaphoreGive(tcpStreamMutex);
@@ -347,7 +354,7 @@ void loop()
 {
     if (isGsmConnection() && tcpStreamMutex && xSemaphoreTake(tcpStreamMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)))
     {
-        if (!modem.isGprsConnected())
+        if (!getModem().isGprsConnected())
         {
             digitalWrite(LED_PIN, HIGH);
 #if RTCM_COMMUNICATION_PROTOCOL == TCP_IP
@@ -440,7 +447,7 @@ static void checkSimRecovery()
         return;
     lastSimProbeMs = now;
     // Avoid a blocking registration wait while healthy Wi-Fi carries traffic.
-    if (const auto reachable = modem.isNetworkConnected() && (modem.isGprsConnected() || connectGSM(1)) && probeMqttTransport(true); !reachable)
+    if (const auto reachable = getModem().isNetworkConnected() && (getModem().isGprsConnected() || connectGSM(1)) && probeMqttTransport(true); !reachable)
     {
         simRecoverySuccesses = 0;
         return;
@@ -510,7 +517,7 @@ static void settleModemBeforeNtrip()
 
     while (millis() - settleStart < settleDurationMs)
     {
-        modem.maintain();
+        getModem().maintain();
         delay(20);
     }
 

@@ -20,6 +20,7 @@ struct WiFiClass { static int status() { return wifiConnected ? WL_CONNECTED : 0
 struct { void disconnect() {} } WiFi;
 struct { bool workflowActive() { return active; } } backendAgent;
 struct { bool isNetworkConnected() { return true; } bool isGprsConnected() { return true; } } modem;
+auto &getModem() { return modem; }
 bool connectGSM(int) { return true; }
 bool probeMqttTransport(bool) { ++probes; return probeOk; }
 enum class ConnectionType { GSM };

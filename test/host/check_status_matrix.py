@@ -43,6 +43,7 @@ uint32_t millis() { return now; }
 struct { unsigned baudRate() { return 115200; } } Serial1;
 struct { int RSSI() { return -50; } } WiFi;
 struct { int getSignalQuality() { return 20; } } modem;
+auto &getModem() { return modem; }
 struct {
     unsigned getHeapSize() { return 300000; }
     unsigned getFreeHeap() { return 150000; }

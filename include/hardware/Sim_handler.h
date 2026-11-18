@@ -17,13 +17,7 @@
 #include <TinyGsmClient.h>
 #include "Top_Lvl_Config.h"
 
-#ifdef DUMP_AT_COMMANDS
-#include <StreamDebugger.h>
-extern StreamDebugger debugger;
-extern TinyGsm modem;
-#else
-extern TinyGsm modem;
-#endif
+TinyGsm &getModem();
 
 bool startSIM();
 bool connectGSM(uint8_t maxAttempts = 6);

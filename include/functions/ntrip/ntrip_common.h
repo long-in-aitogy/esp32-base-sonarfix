@@ -41,6 +41,7 @@ namespace ntrip_common
 
     NtripEndpoint &endpointFor(uint8_t index);
     Client &clientFor(uint8_t index);
+    void initializeGsmClients();
     void clearEndpointState(NtripEndpoint &endpoint);
     void loadEndpoints();
     bool streamActive(uint8_t index);

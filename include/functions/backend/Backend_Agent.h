@@ -17,6 +17,7 @@
 #include <vector>
 
 class BackendAgentWebsocket;
+void initializeBackendGsmClient();
 struct GnssTelemetrySnapshot;
 struct Vn2000Datum;
 

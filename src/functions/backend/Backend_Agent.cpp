@@ -123,7 +123,16 @@ namespace BackendAgentInternal
 namespace
 {
     WiFiClient backendWebsocketWifiClient;
-    TinyGsmClient backendWebsocketGsmClient(modem, 3);
+    TinyGsmClient &backendWebsocketGsmClient()
+    {
+        static TinyGsmClient client(getModem(), 3);
+        return client;
+    }
+}
+
+void initializeBackendGsmClient()
+{
+    (void)backendWebsocketGsmClient();
 }
 
 BackendAgent::BackendAgent() = default;
@@ -510,7 +519,7 @@ void BackendAgent::setupWebsocket()
     }
     else
     {
-        websocket_->begin(host, port, path, backendWebsocketGsmClient);
+        websocket_->begin(host, port, path, backendWebsocketGsmClient());
     }
 #endif
 }

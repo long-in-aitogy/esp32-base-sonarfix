@@ -15,7 +15,6 @@
 #include <cstring>
 
 extern Preferences prefs;
-extern TinyGsm modem;
 
 /** @brief Implements jsonBool. */
 bool jsonBool(JsonObjectConst object, const String &key, bool fallback = false)
@@ -130,8 +129,21 @@ namespace ntrip_common
     constexpr size_t CONFIG_DOCUMENT_SIZE = BackendAgentInternal::CONFIG_DOCUMENT_SIZE;
     WiFiClient wifiNtripClient1;
     WiFiClient wifiNtripClient2;
-    TinyGsmClient gsmNtripClient1(modem, 0);
-    TinyGsmClient gsmNtripClient2(modem, 2);
+    TinyGsmClient &gsmNtripClient1()
+    {
+        static TinyGsmClient client(getModem(), 0);
+        return client;
+    }
+    TinyGsmClient &gsmNtripClient2()
+    {
+        static TinyGsmClient client(getModem(), 2);
+        return client;
+    }
+    void initializeGsmClients()
+    {
+        (void)gsmNtripClient1();
+        (void)gsmNtripClient2();
+    }
     NtripEndpoint &endpointFor(uint8_t index)
     {
         static std::array<NtripEndpoint, NTRIP_SERVER_COUNT> endpoints;
@@ -144,11 +156,11 @@ namespace ntrip_common
         {
             return isWifiConnection()
                        ? static_cast<Client &>(wifiNtripClient1)
-                       : static_cast<Client &>(gsmNtripClient1);
+                       : static_cast<Client &>(gsmNtripClient1());
         }
         return isWifiConnection()
                    ? static_cast<Client &>(wifiNtripClient2)
-                   : static_cast<Client &>(gsmNtripClient2);
+                   : static_cast<Client &>(gsmNtripClient2());
     }
 
 /** @brief Implements clearEndpointState. */

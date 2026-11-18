@@ -14,6 +14,7 @@ constexpr int WL_CONNECTED=3;
 bool gsm=false, connected=false;
 bool isGsmConnection() { return gsm; }
 struct { bool isGprsConnected() { return connected; } } modem;
+auto &getModem() { return modem; }
 struct { int status() { return connected ? WL_CONNECTED : 0; } } WiFi;
 struct BackendAgent {
     String baseStartupState_="awaiting_auto_base",baseStartupError_,statusBootId_="boot";

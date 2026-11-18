@@ -40,6 +40,7 @@ struct WiFiClass { static int status() { return wifiConnected ? WL_CONNECTED : 0
 struct { void disconnect() { wifiConnected = false; events += 'D'; } } WiFi;
 struct { bool connected() { return mqttUp; } void disconnect() { mqttUp = false; events += 'M'; } } mqtt;
 struct { bool isNetworkConnected() { return networkOk; } bool isGprsConnected() { return gprsUp; } } modem;
+auto &getModem() { return modem; }
 struct { void onNetworkChanged() { events += 'B'; } bool workflowActive() { return ::workflowActive; } } backendAgent;
 bool isNtripConnected() { return ntripUp; }
 void stopNtrip() { ntripUp = false; events += 'N'; }

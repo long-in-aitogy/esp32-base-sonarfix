@@ -21,5 +21,6 @@ void mqttCallback(char *topic, byte *payload, unsigned int length);
 int publishHealth(const String &payload);
 bool isMqttConnected();
 Client &activeMqttClient();
+void initializeMqttGsmClients();
 
 #endif
