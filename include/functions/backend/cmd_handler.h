@@ -7,7 +7,8 @@
 enum class cmd_action
 {
     CMD_ACTION_NONE = 0,
-    CMD_ACTION_ESP_RESTART = 1
+    CMD_ACTION_ESP_RESTART = 1,
+    CMD_ACTION_HANDLED = 2
 };
 using cmd_action_t = cmd_action;
 

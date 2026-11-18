@@ -105,7 +105,7 @@ namespace cmd_helper {
         prefs.begin("myPrefs", false);
         prefs.putString(key, value);
         prefs.end();
-        return cmd_action_t::CMD_ACTION_NONE;
+        return cmd_action_t::CMD_ACTION_HANDLED;
     }
 
 /** @brief Implements saveUShortPreference. */
@@ -114,7 +114,7 @@ namespace cmd_helper {
         prefs.begin("myPrefs", false);
         prefs.putUShort(key, value);
         prefs.end();
-        return cmd_action_t::CMD_ACTION_NONE;
+        return cmd_action_t::CMD_ACTION_HANDLED;
     }
 
 /** @brief Implements saveIntPreference. */
@@ -123,7 +123,7 @@ namespace cmd_helper {
         prefs.begin("myPrefs", false);
         prefs.putInt(key, value);
         prefs.end();
-        return cmd_action_t::CMD_ACTION_NONE;
+        return cmd_action_t::CMD_ACTION_HANDLED;
     }
 
     inline const char *findPreferenceKey(const String &command,

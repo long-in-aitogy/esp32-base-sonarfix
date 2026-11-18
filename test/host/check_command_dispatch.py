@@ -15,7 +15,7 @@ harness = r'''
 #include <cstdlib>
 #include <vector>
 #include "hardware/Wifi_Credentials.h"
-enum class cmd_action_t { CMD_ACTION_NONE, CMD_ACTION_ESP_RESTART };
+enum class cmd_action_t { CMD_ACTION_NONE, CMD_ACTION_ESP_RESTART, CMD_ACTION_HANDLED };
 struct { bool active = false; int calls = 0; bool workflowActive() { return active; }
          bool applyRoverMode() { ++calls; return true; } } backendAgent;
 struct { int writes = 0; void begin(const char *, bool) {} void end() {}
@@ -41,11 +41,11 @@ int main() {
     assert(handleEspCommand({"SET", "CONNECTION", "WIFI"}) == A::CMD_ACTION_ESP_RESTART && savedValue == "WIFI");
     assert(handleEspCommand({"SET", "CONNECTION"}) == A::CMD_ACTION_NONE);
     std::vector<String> wifi = {"ATG", "ESP", "SET", "WIFI", "SSID", "station"};
-    assert(handleCommand(wifi) == A::CMD_ACTION_NONE && savedKey == "WIFI_SSID" && savedValue == "station");
+    assert(handleCommand(wifi) == A::CMD_ACTION_HANDLED && savedKey == "WIFI_SSID" && savedValue == "station");
     std::vector<String> mqtt = {"ATG", "MQTT", "SET", "SERVER", "broker"};
-    assert(handleCommand(mqtt) == A::CMD_ACTION_NONE && savedKey == "MQTT_SERVER" && savedValue == "broker");
+    assert(handleCommand(mqtt) == A::CMD_ACTION_HANDLED && savedKey == "MQTT_SERVER" && savedValue == "broker");
     std::vector<String> ntrip = {"ATG", "NTRIP", "SET", "MNTPNT", "mount"};
-    assert(handleCommand(ntrip) == A::CMD_ACTION_NONE && savedKey == "NTRIP_MPT" && savedValue == "mount");
+    assert(handleCommand(ntrip) == A::CMD_ACTION_HANDLED && savedKey == "NTRIP_MPT" && savedValue == "mount");
     std::vector<String> incomplete = {"ATG", "GNSS"};
     assert(handleCommand(incomplete) == A::CMD_ACTION_NONE);
     std::vector<String> rover = {"ATG", "GNSS", "ROVER"};
