@@ -133,5 +133,5 @@ jobs:
           args: >
             -Dsonar.host.url=https://sonarcloud.io
             -Dsonar.organization=tundzai001
-            -Dsonar.projectKey=tundzai001_esp32-base
+            -Dsonar.projectKey=tundzai001_esp32-base-sonarfix
             -Dsonar.qualitygate.wait=true
