@@ -193,7 +193,7 @@ void BackendAgent::saveDetectedChip(const char *chipType)
     markStatusDirty();
 }
 
-bool BackendAgent::probeUnicore(Stream &stream, String &identityLine)
+bool BackendAgent::probeUnicore(Stream &stream, String &identityLine) const
 {
     stream.print("VERSIONA\r\n");
     UnicoreIdentification identity;
@@ -213,7 +213,7 @@ bool BackendAgent::probeUnicore(Stream &stream, String &identityLine)
     return false;
 }
 
-bool BackendAgent::probeUblox(Stream &stream)
+bool BackendAgent::probeUblox(Stream &stream) const
 {
     while (stream.available())
         stream.read();
@@ -237,7 +237,7 @@ bool BackendAgent::probeUblox(Stream &stream)
     return false;
 }
 
-bool BackendAgent::probePassiveUblox(Stream &stream)
+bool BackendAgent::probePassiveUblox(Stream &stream) const
 {
     const uint32_t startMs = millis();
     String passiveStr;
@@ -245,7 +245,7 @@ bool BackendAgent::probePassiveUblox(Stream &stream)
     {
         while (stream.available())
         {
-        if (const auto b = static_cast<uint8_t>(stream.read()); b >= 32 && b <= 126)
+            if (const auto b = static_cast<uint8_t>(stream.read()); b >= 32 && b <= 126)
                 passiveStr += static_cast<char>(b);
             if (passiveStr.length() >= 512)
                 break;

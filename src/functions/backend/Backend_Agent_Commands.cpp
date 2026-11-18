@@ -203,9 +203,8 @@ bool BackendAgent::applyServiceStreamCommand(JsonObject payload, String &error)
     if (address.isEmpty())
         address = payload["host"] | String();
     address = normalizedStreamValue(address, false);
-    const auto serverId = streamServerId(payload);
-
-    if (!applyTargetedStreamState(service, serverId, active, address, mountpoint))
+    if (const auto serverId = streamServerId(payload);
+        !applyTargetedStreamState(service, serverId, active, address, mountpoint))
         applyGlobalStreamState(service, active, mountpoint);
     service["stream_active"] = BackendAgent::effectiveStreamActive(service, 1, false) || BackendAgent::effectiveStreamActive(service, 2, false);
     if (serviceDoc.overflowed())
@@ -368,8 +367,8 @@ void BackendAgent::handleCommand(const String &source, const String &message)
         return;
     }
 
-    const auto allowed = command == "LOCK_DEVICE" || command == "UNLOCK_DEVICE" || command == "PROVISION_DEVICE" || command == "DEPLOY_LICENSE" || command == "TRIGGER_AUTO_BASE" || command == "TRIGGER_BASE_REFERENCE_CHECK" || command == "STOP_AUTO_BASE" || command == "APPLY_VN2000_PROVINCE" || command == "EXECUTE_RAW_COMMANDS" || command == "DEPLOY_SERVICE_CONFIG" || command == "SET_RTCM_STREAM_ACTIVE" || command == "DELETE_DEVICE" || command == "CHECK_BASE_STATUS" || command == "VERIFY_GNSS_CONFIG" || command == "CHECK_STORAGE_STATUS" || command == "CLEAR_NVS_DATA" || command == "REBOOT_DEVICE";
-    if (!allowed)
+    if (const auto allowed = command == "LOCK_DEVICE" || command == "UNLOCK_DEVICE" || command == "PROVISION_DEVICE" || command == "DEPLOY_LICENSE" || command == "TRIGGER_AUTO_BASE" || command == "TRIGGER_BASE_REFERENCE_CHECK" || command == "STOP_AUTO_BASE" || command == "APPLY_VN2000_PROVINCE" || command == "EXECUTE_RAW_COMMANDS" || command == "DEPLOY_SERVICE_CONFIG" || command == "SET_RTCM_STREAM_ACTIVE" || command == "DELETE_DEVICE" || command == "CHECK_BASE_STATUS" || command == "VERIFY_GNSS_CONFIG" || command == "CHECK_STORAGE_STATUS" || command == "CLEAR_NVS_DATA" || command == "REBOOT_DEVICE";
+        !allowed)
     {
         recordCommandResult(command, source, "rejected", "unsupported command", commandId);
         publishStatus(true);
@@ -837,7 +836,7 @@ bool BackendAgent::executeReferenceCheckCommand(JsonObject payload, String &erro
 }
 
 bool BackendAgent::executeProvinceCommand([[maybe_unused]] JsonObject payload, String &error,
-                                          [[maybe_unused]] String &detail)
+                                          [[maybe_unused]] String &detail) const
 {
     error = "Review Auto Base results and apply Fixed LLA; province overrides no longer write the receiver";
     return false;
@@ -1050,9 +1049,9 @@ void BackendAgent::finishCommand(const String &source, const String &command,
 {
     const bool workflowState = command == "TRIGGER_AUTO_BASE" || command == "TRIGGER_BASE_REFERENCE_CHECK"
         || (command == "STOP_AUTO_BASE" && workflowActive());
-    const bool normalCompletion = command != "REBOOT_DEVICE" && command != "DELETE_DEVICE"
-        && command != "DEPLOY_LICENSE" && !workflowState;
-    if (!workflowActive() && (!success || normalCompletion))
+    if (const bool normalCompletion = command != "REBOOT_DEVICE" && command != "DELETE_DEVICE"
+            && command != "DEPLOY_LICENSE" && !workflowState;
+        !workflowActive() && (!success || normalCompletion))
     {
         setAgentState(normalAgentState());
     }

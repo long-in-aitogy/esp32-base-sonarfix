@@ -11,7 +11,7 @@ harness = r'''
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <cassert>
-struct BackendAgent { bool executeProvinceCommand(JsonObject, String &, String &); };
+struct BackendAgent { bool executeProvinceCommand(JsonObject, String &, String &) const; };
 '''
 checks = r'''
 int main() {

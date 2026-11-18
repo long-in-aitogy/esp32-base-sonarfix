@@ -327,11 +327,10 @@ void BackendAgentWebsocket::sendControl(uint8_t opcode, const uint8_t *payload, 
         static_cast<uint8_t>((mask >> 8) & 0xFF),
         static_cast<uint8_t>(mask & 0xFF),
     };
-    const std::array<uint8_t, 2> header = {
+    if (const std::array<uint8_t, 2> header = {
         static_cast<uint8_t>(0x80 | opcode),
         static_cast<uint8_t>(0x80 | length),
-    };
-    if (client_->write(header.data(), header.size()) != header.size() ||
+    }; client_->write(header.data(), header.size()) != header.size() ||
         client_->write(maskBytes.data(), maskBytes.size()) != maskBytes.size())
     {
         disconnect(false);

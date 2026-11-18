@@ -137,7 +137,7 @@ bool BackendAgent::buildStartupCommands(JsonObjectConst base,
 
 bool BackendAgent::verifyStartupReadback(GnssCmdBuilder::GnssSensorType detected,
                                          bool restoreFixed, const StartupPosition &expected,
-                                         String &error)
+                                         String &error) const
 {
     DynamicJsonDocument readback(2048);
     deserializeJson(readback, receiverBaseReadback_.c_str());

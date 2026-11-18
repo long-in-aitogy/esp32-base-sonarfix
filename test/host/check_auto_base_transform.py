@@ -122,7 +122,7 @@ struct BackendAgent {
     bool restartConfiguredNtrip() { return restartOk; }
     bool applyRoverMode() { return roverModeOk; }
     int loopNtripRoverLocked() { return disconnectAt && now >= disconnectAt ? 504 : 200; }
-    bool prepareAutoBaseConfig(JsonObject, String &, uint16_t &, String &, String &, String &, uint8_t &, uint32_t &, uint8_t &);
+    bool prepareAutoBaseConfig(JsonObject, String &, uint16_t &, String &, String &, String &, uint8_t &, uint32_t &, uint8_t &) const;
     bool startAutoBaseRover(const String &, uint16_t, const String &, const String &, const String &, uint8_t, String &error, String *selected) {
         if (!sourceAvailable) { error = sourceError; return false; }
         if (selected) *selected = "station";
@@ -154,14 +154,14 @@ struct BackendAgent {
     bool waitForAutoBaseFix(uint32_t, uint8_t, bool &, String &, const String &);
     bool collectAutoBaseSamples(int, std::vector<double> &, std::vector<double> &, std::vector<double> &, bool &, String &, const String &);
     bool restoreAutoBaseAfterReview(JsonDocument &);
-    bool prepareAutoBaseSnapshot(JsonDocument &);
-    bool waitForAutoNearestPosition(uint32_t);
+    bool prepareAutoBaseSnapshot(JsonDocument &) const;
+    bool waitForAutoNearestPosition(uint32_t) const;
     bool startSurveyInFallback(JsonObject, JsonDocument &, const String &, const String &, String &);
     void finishAutoBaseWorkflow(JsonDocument &, bool, const String &, bool, bool, const String &);
     bool runAutoBaseWorkflow(JsonObject);
     bool waitForReferenceFix(uint32_t, String &);
     bool collectReferenceSamples(uint16_t, std::vector<double> &, std::vector<double> &, std::vector<double> &, String &);
-    String buildReferenceCheckResult(JsonObject, double, double, double, size_t);
+    String buildReferenceCheckResult(JsonObject, double, double, double, size_t) const;
     bool runReferenceCheckWorkflow(JsonObject);
 };
 '''

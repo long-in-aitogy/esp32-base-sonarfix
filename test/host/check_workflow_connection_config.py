@@ -24,9 +24,9 @@ constexpr size_t CONFIG_DOCUMENT_SIZE = 6144;
 struct BackendAgent {
     String baseConfig_ = R"({"base_setup_method":"SURVEY_IN"})", sensorType_ = "Unicorecomm";
     uint32_t surveyInTargetSeconds_ = 0;
-    bool prepareAutoBaseConfig(JsonObject, String &, uint16_t &, String &, String &, String &, uint8_t &, uint32_t &, uint8_t &);
+    bool prepareAutoBaseConfig(JsonObject, String &, uint16_t &, String &, String &, String &, uint8_t &, uint32_t &, uint8_t &) const;
     bool prepareReferenceCheckConfig(JsonObject, JsonObject &, double &, double &, double &, double &, double &, double &, String &, uint16_t &, String &, String &, String &, uint32_t &, uint16_t &);
-    String buildReferenceCheckResult(JsonObject, double, double, double, size_t);
+    String buildReferenceCheckResult(JsonObject, double, double, double, size_t) const;
 };
 '''
 checks = r'''

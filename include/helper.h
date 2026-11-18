@@ -23,7 +23,7 @@ public:
 private:
 	static constexpr size_t MAX_COMMAND_LENGTH = 256;
 
-	void execute(String command);
+	static void execute(String command);
 
 	String commandBuffer;
 };

@@ -467,7 +467,7 @@ void BackendAgent::updateUbloxSurveyState(const UbxBaseStatus &status)
         surveyInTargetSeconds_ = status.targetSeconds;
 }
 
-void BackendAgent::logUbloxReadback(const UbxBaseStatus &status)
+void BackendAgent::logUbloxReadback(const UbxBaseStatus &status) const
 {
     if (status.mode == 1)
     {

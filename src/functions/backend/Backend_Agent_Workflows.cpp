@@ -140,15 +140,14 @@ bool BackendAgent::startWorkflow(const String &kind, const String &payload)
     workflowKind_ = kind;
     workflowPayload_ = payload;
     workflowCancelRequested_ = false;
-    const BaseType_t created = xTaskCreatePinnedToCore(
+    if (const BaseType_t created = xTaskCreatePinnedToCore(
         &BackendAgent::workflowTaskThunk,
         "Backend Workflow",
         12288,
         this,
         1,
         &workflowTask_,
-        1);
-    if (created != pdPASS)
+        1); created != pdPASS)
     {
         workflowKind_ = String();
         workflowPayload_ = String();
@@ -360,7 +359,7 @@ bool BackendAgent::exchangeUbloxRoverCommand(const GnssCmdBuilder::Command &comm
     return false;
 }
 
-bool BackendAgent::waitForRoverGga(const uint32_t startedMs)
+bool BackendAgent::waitForRoverGga(const uint32_t startedMs) const
 {
     while (millis() - startedMs < 10000UL && !workflowCancelRequested_)
     {
@@ -536,7 +535,7 @@ void BackendAgent::runWorkflow()
 bool BackendAgent::prepareAutoBaseConfig(JsonObject payload, String &host, uint16_t &port,
                                          String &username, String &password, String &mountpoint,
                                          uint8_t &ntripVersion, uint32_t &timeoutSeconds,
-                                         uint8_t &fixedStreakRequired)
+                                         uint8_t &fixedStreakRequired) const
 {
     host = payload["ip"] | String();
     host.trim();
@@ -1267,7 +1266,7 @@ bool BackendAgent::startSurveyInFallback(JsonObject payload, JsonDocument &previ
     return true;
 }
 
-bool BackendAgent::waitForAutoNearestPosition(uint32_t timeoutSeconds)
+bool BackendAgent::waitForAutoNearestPosition(uint32_t timeoutSeconds) const
 {
     const uint32_t started = millis();
     bool hasPosition = false;
@@ -1287,7 +1286,7 @@ bool BackendAgent::waitForAutoNearestPosition(uint32_t timeoutSeconds)
     return hasPosition && !workflowCancelRequested_;
 }
 
-bool BackendAgent::prepareAutoBaseSnapshot(JsonDocument &previousBase)
+bool BackendAgent::prepareAutoBaseSnapshot(JsonDocument &previousBase) const
 {
     const JsonObjectConst savedPrevious = previousBase["auto_base_previous_config"].as<JsonObjectConst>();
     const bool hasSavedPrevious = !savedPrevious.isNull();
@@ -1613,7 +1612,7 @@ bool BackendAgent::collectReferenceSamples(const uint16_t requestedSamples,
 String BackendAgent::buildReferenceCheckResult(JsonObject reference, const double measuredLatitude,
                                                const double measuredLongitude,
                                                const double measuredAltitude,
-                                               const size_t sampleCount)
+                                               const size_t sampleCount) const
 {
     const auto meanLatitudeRad = (measuredLatitude + coordinateNumber(reference["lat"])) * 3.14159265358979323846 / 360.0;
     DynamicJsonDocument result(2048);

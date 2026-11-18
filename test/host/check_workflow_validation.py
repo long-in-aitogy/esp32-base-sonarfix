@@ -41,8 +41,8 @@ struct BackendAgent {
     bool saveStatePreferences() { ++saved; return true; }
     void publishConfigState(const char *) {}
     bool restoreAutoBaseAfterReview(JsonDocument &);
-    bool prepareAutoBaseSnapshot(JsonDocument &);
-    bool waitForAutoNearestPosition(uint32_t);
+    bool prepareAutoBaseSnapshot(JsonDocument &) const;
+    bool waitForAutoNearestPosition(uint32_t) const;
     bool startSurveyInFallback(JsonObject, JsonDocument &, const String &, const String &, String &);
     void finishAutoBaseWorkflow(JsonDocument &, bool, const String &, bool, bool, const String &);
     bool runAutoBaseWorkflow(JsonObject);
