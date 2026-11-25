@@ -38,7 +38,7 @@ harness = r'''
 #include "functions/backend/Base_Sample.h"
 #include "functions/gnss/gnss_cmd_builder.h"
 #include "functions/gnss/ublox_commands.h"
-int tcpStreamMutex = 1; constexpr int MUTEX_TIMEOUT_MS = 1500, pdTRUE = 1;
+int &tcpStreamMutex() { static int mutex = 1; return mutex; } constexpr int MUTEX_TIMEOUT_MS = 1500, pdTRUE = 1;
 constexpr size_t CONFIG_DOCUMENT_SIZE = 6144, AUTO_BASE_RESULT_SIZE = 6144, PROGRESS_DOCUMENT_SIZE = 8192;
 uint32_t now = 1000;
 uint32_t millis() { return now; }
@@ -109,7 +109,7 @@ struct BackendAgent {
     void setWorkflowProgress(const char *value, int, int, const String &details = String()) { phase = value; phaseDetails = details; }
     struct ProjectedPosition { double latitude, longitude, altitude; double northing = 0, easting = 0; };
     bool transformAutoBasePosition(JsonObject, Vn2000Datum &, JsonDocument &, ProjectedPosition &, double &, const char *&, String &);
-    void appendAutoBaseReport(JsonDocument &, JsonObject, const ProjectedPosition &, double, double, double, const String &);
+    void appendAutoBaseReport(JsonDocument &, JsonObject, const ProjectedPosition &, double, double, double, const String &) const;
     bool applyAutoBasePosition(JsonDocument &, const ProjectedPosition &, size_t, const char *, const String &, const String &, String &);
     bool reachedWrite = false, failFinalResult = false;
     bool receiverOk = true, saveOk = true, restartOk = true;
@@ -122,14 +122,31 @@ struct BackendAgent {
     bool restartConfiguredNtrip() { return restartOk; }
     bool applyRoverMode() { return roverModeOk; }
     int loopNtripRoverLocked() { return disconnectAt && now >= disconnectAt ? 504 : 200; }
-    bool prepareAutoBaseConfig(JsonObject, String &, uint16_t &, String &, String &, String &, uint8_t &, uint32_t &, uint8_t &);
-    bool startAutoBaseRover(const String &, uint16_t, const String &, const String &, const String &, uint8_t, String &error, String *selected) {
+    struct AutoBaseConfig {
+        String host; uint16_t port = 0; String username, password, mountpoint;
+        uint8_t ntripVersion = 0; uint32_t timeoutSeconds = 0; uint8_t fixedStreakRequired = 0;
+    };
+    struct AutoBaseResultInput {
+        double finalLatitude = 0, finalLongitude = 0, finalAltitude = 0;
+        double rawLatitude = 0, rawLongitude = 0, rawAltitude = 0;
+        bool transformed = false, transportRestored = false; size_t sampleCount = 0;
+        const char *projectionSource = "", *provinceCode = "", *provinceName = "";
+        double centralMeridianDeg = 0, scale = 0;
+    };
+    struct ReferenceCheckConfig {
+        JsonObject reference;
+        double referenceLatitude = 0, referenceLongitude = 0, referenceAltitude = 0;
+        double restoreLatitude = 0, restoreLongitude = 0, restoreAltitude = 0;
+        String host; uint16_t port = 0; String username, password, mountpoint;
+        uint32_t timeoutSeconds = 0; uint16_t requestedSamples = 0;
+    };
+    bool prepareAutoBaseConfig(JsonObject, AutoBaseConfig &) const;
+    bool startAutoBaseRover(const AutoBaseConfig &, String &error, String *selected) {
         if (!sourceAvailable) { error = sourceError; return false; }
         if (selected) *selected = "station";
         return true;
     }
-    bool prepareReferenceCheckConfig(JsonObject, JsonObject &, double &, double &, double &, double &, double &, double &,
-                                     String &, uint16_t &, String &, String &, String &, uint32_t &, uint16_t &);
+    bool prepareReferenceCheckConfig(JsonObject, ReferenceCheckConfig &);
     bool startReferenceRover(const String &, uint16_t, const String &, const String &, const String &, String &error) {
         if (!referenceRoverOk) error = "caster unavailable";
         return referenceRoverOk;
@@ -138,15 +155,11 @@ struct BackendAgent {
     String normalAgentState() { return "online"; }
     void publishConfigState(const char *) {}
     bool applyCandidate(String &);
-    String buildRealAutoBaseResult(double, double, double, double, double, double, bool, bool, size_t,
-                                   const String &, const String &, const String &, double, double, JsonObjectConst);
-    String buildAutoBaseResult(double lat, double lon, double alt, double rawLat, double rawLon, double rawAlt,
-                               bool transformed, bool restarted, size_t count, const String &source,
-                               const String &code, const String &name, double meridian, double scale, JsonObjectConst report) {
-        if (restarted && failFinalResult) return String();
+    String buildRealAutoBaseResult(const AutoBaseResultInput &, JsonObjectConst) const;
+    String buildAutoBaseResult(const AutoBaseResultInput &input, JsonObjectConst report) {
+        if (input.transportRestored && failFinalResult) return String();
         reportJson.clear(); serializeJson(report, reportJson);
-        return buildRealAutoBaseResult(lat, lon, alt, rawLat, rawLon, rawAlt, transformed, restarted,
-                                       count, source, code, name, meridian, scale, report);
+        return buildRealAutoBaseResult(input, report);
     }
     bool resolveAutoBaseLocation(double, double, double, JsonDocument &, String &);
     bool completeAutoBaseSetup(JsonObject, const std::vector<double> &, const std::vector<double> &, const std::vector<double> &, String &, String &, const String &);
@@ -154,14 +167,14 @@ struct BackendAgent {
     bool waitForAutoBaseFix(uint32_t, uint8_t, bool &, String &, const String &);
     bool collectAutoBaseSamples(int, std::vector<double> &, std::vector<double> &, std::vector<double> &, bool &, String &, const String &);
     bool restoreAutoBaseAfterReview(JsonDocument &);
-    bool prepareAutoBaseSnapshot(JsonDocument &);
-    bool waitForAutoNearestPosition(uint32_t);
+    bool prepareAutoBaseSnapshot(JsonDocument &) const;
+    bool waitForAutoNearestPosition(uint32_t) const;
     bool startSurveyInFallback(JsonObject, JsonDocument &, const String &, const String &, String &);
     void finishAutoBaseWorkflow(JsonDocument &, bool, const String &, bool, bool, const String &);
     bool runAutoBaseWorkflow(JsonObject);
     bool waitForReferenceFix(uint32_t, String &);
     bool collectReferenceSamples(uint16_t, std::vector<double> &, std::vector<double> &, std::vector<double> &, String &);
-    String buildReferenceCheckResult(JsonObject, double, double, double, size_t);
+    String buildReferenceCheckResult(JsonObject, double, double, double, size_t) const;
     bool runReferenceCheckWorkflow(JsonObject);
 };
 '''
@@ -222,15 +235,15 @@ int main() {
     payload["enable_itrf_vn2000_transform"] = true;
     assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(error == "missing RTCM 1021 from this CORS session");
-    sessionDatum.has1021 = true;
+    sessionDatum.messages.has1021 = true;
     assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(error == "location reply queue could not be allocated");
     BackendAgent cancelledDuringConversion;
     cancelFlag = &cancelledDuringConversion.workflowCancelRequested_;
-    cancelDuringTransform = true; sessionDatum.has1025 = true;
+    cancelDuringTransform = true; sessionDatum.messages.has1025 = true;
     assert(!cancelledDuringConversion.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(error == "cancelled by user" && !cancelledDuringConversion.reachedWrite);
-    cancelDuringTransform = false; cancelFlag = nullptr; sessionDatum.has1025 = false;
+    cancelDuringTransform = false; cancelFlag = nullptr; sessionDatum.messages.has1025 = false;
     agent.autoBaseLocationQueue_ = 1;
     assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(error == "backend location ACK timed out or did not match sampled LLH");
@@ -268,11 +281,11 @@ int main() {
     assert(error == "province projection unresolved; RTCM 1025 or a unique server region is required");
     assert(!agent.reachedWrite);
     realLocation = 0;
-    sessionDatum.has1025 = true; sessionDatum.centralMeridianDeg = 105; sessionDatum.scale = 0.9999;
-    sessionDatum.projectionLongitudeRaw = 9545454545LL; sessionDatum.projectionFrameBytes = 31;
-    sessionDatum.projectionType = 1; sessionDatum.projectionScaleRaw = 690000000;
-    std::strcpy(sessionDatum.projectionFrameHex.data(), "d30019401070400000000471e827a3490484000ee6b28000000000002264a8");
-    sessionDatum.kT = 1.00000008613; sessionDatum.count1021 = 2;
+    sessionDatum.messages.has1025 = true; sessionDatum.projection.centralMeridianDeg = 105; sessionDatum.projection.scale = 0.9999;
+    sessionDatum.projection.longitudeRaw = 9545454545LL; sessionDatum.projection.frameBytes = 31;
+    sessionDatum.projection.type = 1; sessionDatum.projection.scaleRaw = 690000000;
+    std::strcpy(sessionDatum.projection.frameHex.data(), "d30019401070400000000471e827a3490484000ee6b28000000000002264a8");
+    sessionDatum.helmert.kT = 1.00000008613; sessionDatum.messages.count1021 = 2;
     datumTransformOk = false;
     assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(!agent.reachedWrite && error == "VN2000 conversion failed; no candidate coordinates were installed");
@@ -293,17 +306,17 @@ int main() {
     assert(applied["conversion_report"]["rtcm1025"]["raw_k0"] == 690000000);
     assert(applied["conversion_report"]["rtcm1025"]["raw_l0"] == "9545454545");
     assert(applied["conversion_report"]["rtcm1025"]["frame_bytes"] == 31);
-    assert(applied["conversion_report"]["rtcm1025"]["frame_hex"] == sessionDatum.projectionFrameHex.data());
+    assert(applied["conversion_report"]["rtcm1025"]["frame_hex"] == sessionDatum.projection.frameHex.data());
     assert(applied["conversion_report"]["rtcm1025"]["frame_truncated"] == false);
     assert(applied["conversion_report"]["receiver_write_completed"] == true);
-    sessionDatum.scale = 0.9996; sessionDatum.projectionScaleRaw = 660000000;
-    std::strcpy(sessionDatum.projectionFrameHex.data(), "d30019401070400000000471e827a33ab668000ee6b2800000000000e9a16f");
+    sessionDatum.projection.scale = 0.9996; sessionDatum.projection.scaleRaw = 660000000;
+    std::strcpy(sessionDatum.projection.frameHex.data(), "d30019401070400000000471e827a33ab668000ee6b2800000000000e9a16f");
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     report.clear(); assert(!deserializeJson(report, agent.reportJson));
     assert(report["zone_width_deg"] == 6);
     assert(report["rtcm1025"]["raw_k0"] == 660000000);
-    assert(report["rtcm1025"]["frame_hex"] == sessionDatum.projectionFrameHex.data());
-    sessionDatum.scale = 0.9998;
+    assert(report["rtcm1025"]["frame_hex"] == sessionDatum.projection.frameHex.data());
+    sessionDatum.projection.scale = 0.9998;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     report.clear(); assert(!deserializeJson(report, agent.reportJson));
     assert(!report.containsKey("zone_width_deg"));
@@ -311,7 +324,7 @@ int main() {
     assert(!agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(error == "invalid CORS shift");
     payload.remove("resN");
-    sessionDatum.has1025 = false;
+    sessionDatum.messages.has1025 = false;
     payload["l0_deg"] = 105; payload["k0"] = 0.9999;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     payload["auto_apply"] = true;
@@ -322,7 +335,7 @@ int main() {
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     assert(agent.reachedWrite);
     payload["auto_apply"] = false; payload["enable_itrf_vn2000_transform"] = false;
-    sessionDatum.has1025 = true; sessionDatum.count1025 = 2; sessionDatum.projectionScaleRaw = 660000000;
+    sessionDatum.messages.has1025 = true; sessionDatum.messages.count1025 = 2; sessionDatum.projection.scaleRaw = 660000000;
     assert(agent.completeAutoBaseSetup(payload, lat, lon, alt, resultJson, error, "station"));
     report.clear(); assert(!deserializeJson(report, agent.reportJson));
     assert(report["transform_applied"] == false && report["rtcm1025_used"] == false);
@@ -381,13 +394,13 @@ int main() {
     sourceAvailable = true;
     fullRequest["ip"] = "vngeonet.vn";
     fullRequest["enable_itrf_vn2000_transform"] = true;
-    now = 1000; sessionDatum.has1021 = false; BackendAgent missingDatum;
+    now = 1000; sessionDatum.messages.has1021 = false; BackendAgent missingDatum;
     assert(!missingDatum.runAutoBaseWorkflow(fullRequest.as<JsonObject>()));
     assert(missingDatum.phase == "failed" && missingDatum.baseConfig_ == previous && missingDatum.configWrites == 1);
     finalResult.clear(); assert(!deserializeJson(finalResult, missingDatum.phaseDetails));
     assert(finalResult["reason"] == "missing RTCM 1021 from this CORS session");
-    now = 1000; sessionDatum.has1021 = sessionDatum.has1025 = true;
-    sessionDatum.centralMeridianDeg = 105; sessionDatum.scale = 0.9999; datumTransformOk = false;
+    now = 1000; sessionDatum.messages.has1021 = sessionDatum.messages.has1025 = true;
+    sessionDatum.projection.centralMeridianDeg = 105; sessionDatum.projection.scale = 0.9999; datumTransformOk = false;
     BackendAgent conversionFailure;
     assert(!conversionFailure.runAutoBaseWorkflow(fullRequest.as<JsonObject>()));
     assert(conversionFailure.phase == "failed" && conversionFailure.baseConfig_ == previous && conversionFailure.configWrites == 1);

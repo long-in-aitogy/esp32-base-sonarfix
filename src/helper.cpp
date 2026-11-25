@@ -51,11 +51,11 @@ void SerialCommandProcessor::processPending()
 void shutdownTcpTransportBeforeRestart()
 {
     Serial.println("[SETUP] Dong cac ket noi TCP va GPRS truoc khi khoi dong lai...");
-    mqtt.disconnect();
+    mqttClient().disconnect();
     stopNtrip();
-    if (isGsmConnection() && modem.isGprsConnected())
+    if (isGsmConnection() && getModem().isGprsConnected())
     {
-        modem.gprsDisconnect();
+        getModem().gprsDisconnect();
     }
     if (isWifiConnection())
     {

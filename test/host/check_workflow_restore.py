@@ -39,7 +39,7 @@ struct BackendAgent {
     uint32_t surveyInTargetSeconds_ = 0;
     bool surveyInMonitoring_ = false;
     bool buildStartupCommands(JsonObjectConst, GnssCmdBuilder::GnssSensorType, bool, GnssCmdBuilder::CommandList &, StartupPosition &, String &);
-    bool verifyStartupReadback(GnssCmdBuilder::GnssSensorType, bool, const StartupPosition &, String &);
+    bool verifyStartupReadback(GnssCmdBuilder::GnssSensorType, bool, const StartupPosition &, String &) const;
     String sensorType_ = "Ublox", baseStartupState_, baseStartupError_, receiverBaseReadback_, baseConfig_;
     bool surveyInResultPending_ = false, writeOk = true, readOk = true;
     int writes = 0, roverCalls = 0;

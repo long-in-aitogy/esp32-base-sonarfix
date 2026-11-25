@@ -6,8 +6,10 @@
 #include "Top_Lvl_Config.h"
 #include <Preferences.h>
 
-extern Preferences prefs;
-extern SemaphoreHandle_t gnssSerialMutex;
+Preferences &appPrefs();
+SemaphoreHandle_t &rtcmBufferMutex();
+SemaphoreHandle_t &tcpStreamMutex();
+SemaphoreHandle_t &gnssSerialMutex();
 
 // ================= CẤU HÌNH CHÂN CẮM VÀ TỐC ĐỘ SERIAL =================
 #if BOARD_2A53N

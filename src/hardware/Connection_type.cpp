@@ -1,16 +1,20 @@
 #include "hardware/Connection_type.h"
 #include "Prog_Config.h"
 
-ConnectionType connectionType = ConnectionType::GSM;
+ConnectionType &activeConnectionType()
+{
+    static ConnectionType type = ConnectionType::GSM;
+    return type;
+}
 
 /** @brief Implements loadConnectionTypeFromPrefs. */
 void loadConnectionTypeFromPrefs()
 {
-    const auto configuredType = prefs.getString("CONNECTION_TYPE", CONNECTION_PREFERENCE);
+    const auto configuredType = appPrefs().getString("CONNECTION_TYPE", CONNECTION_PREFERENCE);
 
     if (configuredType.equalsIgnoreCase("WIFI"))
     {
-        connectionType = ConnectionType::WIFI;
+        activeConnectionType() = ConnectionType::WIFI;
         return;
     }
 
@@ -18,5 +22,5 @@ void loadConnectionTypeFromPrefs()
     {
         Serial.println("[SETUP][WARN] CONNECTION_TYPE khong hop le: " + configuredType + ". Su dung 4G.");
     }
-    connectionType = ConnectionType::GSM;
+    activeConnectionType() = ConnectionType::GSM;
 }

@@ -21,7 +21,7 @@ struct UbxNavigation
                 (std::byte{p[78]} & std::byte{1}) == std::byte{};
         satellites = p[23];
         haccMm = uint32_t(p[40]) | uint32_t(p[41]) << 8 | uint32_t(p[42]) << 16 | uint32_t(p[43]) << 24;
-        pdop = uint16_t(p[76]) | uint16_t(p[77]) << 8;
+        pdop = static_cast<uint16_t>(uint16_t(p[76]) | uint16_t(p[77]) << 8);
         return true;
     }
 };
@@ -36,8 +36,8 @@ struct UbxDop
     {
         if (!p || size != 18)
             return false;
-        pdop = uint16_t(p[6]) | uint16_t(p[7]) << 8;
-        hdop = uint16_t(p[12]) | uint16_t(p[13]) << 8;
+        pdop = static_cast<uint16_t>(uint16_t(p[6]) | uint16_t(p[7]) << 8);
+        hdop = static_cast<uint16_t>(uint16_t(p[12]) | uint16_t(p[13]) << 8);
         return true;
     }
 };

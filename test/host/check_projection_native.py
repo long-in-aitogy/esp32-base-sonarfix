@@ -48,49 +48,49 @@ int main(int argc, char **argv) {
     }
     Vn2000Session session; Vn2000Result result;
     assert(!transformVn2000(21, 105, 0, session.datum(), result));
-    session.feed(packets[3].data(), packets[3].size()); assert(!session.datum().has1021);
+    session.feed(packets[3].data(), packets[3].size()); assert(!session.datum().messages.has1021);
     session.reset(); auto corrupt = packets[0]; corrupt.back() ^= 1;
-    session.feed(corrupt.data(), corrupt.size()); assert(!session.datum().has1021);
+    session.feed(corrupt.data(), corrupt.size()); assert(!session.datum().messages.has1021);
     const uint8_t noise[] = {0, 0xd3, 0xff, 0xd3, 0, 0, 7}; session.feed(noise, sizeof(noise));
     for (unsigned i = 0; i < 3; ++i) for (uint8_t byte : packets[i]) session.feed(&byte, 1);
     auto datum = session.datum();
-    assert(datum.has1021 && datum.has1023 && datum.has1025 && session.validFrames() == 3);
-    assert(std::abs(datum.dX - 191.904) < 1e-9 && std::abs(datum.dY + 39.303) < 1e-9);
-    assert(datum.projectionScaleRaw == 660000000 && std::abs(datum.scale - 0.9996) < 1e-12);
-    assert(datum.projectionLongitudeRaw == 9545454545LL && datum.projectionFrameBytes == 31);
+    assert(datum.messages.has1021 && datum.messages.has1023 && datum.messages.has1025 && session.validFrames() == 3);
+    assert(std::abs(datum.helmert.dX - 191.904) < 1e-9 && std::abs(datum.helmert.dY + 39.303) < 1e-9);
+    assert(datum.projection.scaleRaw == 660000000 && std::abs(datum.projection.scale - 0.9996) < 1e-12);
+    assert(datum.projection.longitudeRaw == 9545454545LL && datum.projection.frameBytes == 31);
     assert(transformVn2000(21.08499, 105.786656, -8.0624, datum, result));
     for (double scale : {0.9996, 0.9999}) {
-        datum.scale = scale; datum.resN = 0.25; datum.resE = -0.75; datum.resHS = 1.5;
+        datum.projection.scale = scale; datum.residuals.resN = 0.25; datum.residuals.resE = -0.75; datum.residuals.resHS = 1.5;
         assert(transformVn2000(21.08499, 105.786656, -8.0624, datum, result));
         assert(std::isfinite(result.north) && std::isfinite(result.east));
     }
     // Independently recorded CORS reference, already documented in check_vn2000.py.
-    Vn2000Datum reference; reference.has1021 = reference.has1023 = true;
-    reference.dX=192.604; reference.dY=37.189; reference.dZ=111.134;
-    reference.rX=0.0234; reference.rY=-0.02762; reference.rZ=0.01152; reference.kT=1.00000008613;
-    reference.resB=9.55082951785786e-9; reference.resL=1.090830782496456e-9; reference.resH=1.75275;
-    reference.centralMeridianDeg=9545454545 * 1.1e-8; reference.scale=0.9996;
+    Vn2000Datum reference; reference.messages.has1021 = reference.messages.has1023 = true;
+    reference.helmert.dX=192.604; reference.helmert.dY=37.189; reference.helmert.dZ=111.134;
+    reference.helmert.rX=0.0234; reference.helmert.rY=-0.02762; reference.helmert.rZ=0.01152; reference.helmert.kT=1.00000008613;
+    reference.residuals.resB=9.55082951785786e-9; reference.residuals.resL=1.090830782496456e-9; reference.residuals.resH=1.75275;
+    reference.projection.centralMeridianDeg=9545454545 * 1.1e-8; reference.projection.scale=0.9996;
     assert(transformVn2000(21.084988,105.7866608046,-9.7862,reference,result));
     assert(std::abs(result.north-2331863.6117)<0.0001);
     assert(std::abs(result.east-581515.6492)<0.0001 && std::abs(result.h-16.9987)<0.0001);
     for (unsigned failure=0; failure<9; ++failure) {
         auto invalid=reference;
-        if(failure==0) invalid.has1021=false;
-        if(failure==1) invalid.centralMeridianDeg=0;
-        if(failure==2) invalid.scale=0.998;
-        if(failure==3) invalid.resN=NAN;
-        if(failure==4) invalid.resE=INFINITY;
-        if(failure==5) invalid.resHS=NAN;
+        if(failure==0) invalid.messages.has1021=false;
+        if(failure==1) invalid.projection.centralMeridianDeg=0;
+        if(failure==2) invalid.projection.scale=0.998;
+        if(failure==3) invalid.residuals.resN=NAN;
+        if(failure==4) invalid.residuals.resE=INFINITY;
+        if(failure==5) invalid.residuals.resHS=NAN;
         assert(!transformVn2000(failure==6 ? NAN : failure==7 ? 91 : 21,
                                failure==8 ? 181 : 105,0,invalid,result));
     }
     const auto before=session.datum();
     session.feed(packets[4].data(),packets[4].size());
-    assert(session.datum().centralMeridianDeg==before.centralMeridianDeg);
+    assert(session.datum().projection.centralMeridianDeg==before.projection.centralMeridianDeg);
     session.feed(packets[5].data(),packets[5].size());
-    assert(session.datum().dX==before.dX);
-    session.reset(); assert(session.validFrames()==0 && !session.datum().has1021);
-    session.feed(packets[0].data(),packets[0].size()); assert(session.datum().has1021);
+    assert(session.datum().helmert.dX==before.helmert.dX);
+    session.reset(); assert(session.validFrames()==0 && !session.datum().messages.has1021);
+    session.feed(packets[0].data(),packets[0].size()); assert(session.datum().messages.has1021);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='projection-native-') as directory:

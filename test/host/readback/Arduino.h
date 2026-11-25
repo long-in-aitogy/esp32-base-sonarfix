@@ -9,8 +9,8 @@
 inline uint32_t hostMillis = 0;
 inline uint32_t millis() { return hostMillis; }
 using SemaphoreHandle_t = void *;
-inline SemaphoreHandle_t rtcmBufferMutex = reinterpret_cast<void *>(1);
-inline SemaphoreHandle_t gnssSerialMutex = reinterpret_cast<void *>(2);
+inline SemaphoreHandle_t &rtcmBufferMutex() { static SemaphoreHandle_t mutex = reinterpret_cast<void *>(1); return mutex; }
+inline SemaphoreHandle_t &gnssSerialMutex() { static SemaphoreHandle_t mutex = reinterpret_cast<void *>(2); return mutex; }
 inline SemaphoreHandle_t deniedLock = nullptr;
 inline unsigned acquiredLocks = 0, releasedLocks = 0;
 inline constexpr unsigned pdTRUE = 1;

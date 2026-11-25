@@ -16,12 +16,13 @@ harness = r'''
 #include <string>
 constexpr int WL_CONNECTED = 1;
 enum class ConnectionType { WIFI, GSM };
-ConnectionType connectionType = ConnectionType::GSM;
-bool wifiFallbackActive = false, wifiConnected = false, wifiOk = false, probeOk = true;
+ConnectionType &activeConnectionType() { static ConnectionType type = ConnectionType::GSM; return type; }
+bool &wifiFallbackActive() { static bool active = false; return active; }
+bool wifiConnected = false, wifiOk = false, probeOk = true;
 bool mqttUp = false, ntripUp = false, networkOk = true, workflowActive = false;
 bool gprsUp = true, gsmOk = true, lockOk = true;
 int locks = 0, unlocks = 0;
-void *tcpStreamMutex = reinterpret_cast<void *>(1);
+void *&tcpStreamMutex() { static void *mutex = reinterpret_cast<void *>(1); return mutex; }
 constexpr int MUTEX_TIMEOUT_MS = 1500, LED_PIN = 1, HIGH = 1, LOW = 0;
 #define TCP_IP 1
 #define RTCM_COMMUNICATION_PROTOCOL TCP_IP
@@ -30,17 +31,22 @@ bool xSemaphoreTake(void *, int) { if (!lockOk) return false; ++locks; return tr
 void xSemaphoreGive(void *) { ++unlocks; }
 void vTaskDelay(int) {}
 void digitalWrite(int, int) {}
-uint32_t now = 1000, lastSimProbeMs = 0;
-int simRecoverySuccesses = 0, wifiAttempts = 0, probes = 0;
+uint32_t now = 1000;
+uint32_t &lastSimProbeMs() { static uint32_t ms = 0; return ms; }
+int &simRecoverySuccesses() { static int count = 0; return count; }
+int wifiAttempts = 0, probes = 0;
 std::string events;
 uint32_t millis() { return now; }
-bool isWifiConnection() { return connectionType == ConnectionType::WIFI; }
-bool isGsmConnection() { return connectionType == ConnectionType::GSM; }
+bool isWifiConnection() { return activeConnectionType() == ConnectionType::WIFI; }
+bool isGsmConnection() { return activeConnectionType() == ConnectionType::GSM; }
 struct WiFiClass { static int status() { return wifiConnected ? WL_CONNECTED : 0; } };
 struct { void disconnect() { wifiConnected = false; events += 'D'; } } WiFi;
 struct { bool connected() { return mqttUp; } void disconnect() { mqttUp = false; events += 'M'; } } mqtt;
+auto &mqttClient() { return mqtt; }
 struct { bool isNetworkConnected() { return networkOk; } bool isGprsConnected() { return gprsUp; } } modem;
-struct { void onNetworkChanged() { events += 'B'; } bool workflowActive() { return ::workflowActive; } } backendAgent;
+auto &getModem() { return modem; }
+struct { void onNetworkChanged() { events += 'B'; } bool workflowActive() { return ::workflowActive; } } backendAgentStub;
+auto &backendAgent() { return backendAgentStub; }
 bool isNtripConnected() { return ntripUp; }
 void stopNtrip() { ntripUp = false; events += 'N'; }
 void setupMQTT() { events += 'Q'; }
@@ -60,13 +66,13 @@ int main() {
     ++now; checkSimInternetFallback();
     assert(wifiAttempts == 1 && isGsmConnection() && events.empty());
     now += 30000; wifiOk = true; checkSimInternetFallback();
-    assert(isWifiConnection() && wifiFallbackActive && events == "MNBQSC");
+    assert(isWifiConnection() && wifiFallbackActive() && events == "MNBQSC");
     now += 60000; probeOk = false; checkSimRecovery();
-    assert(isWifiConnection() && simRecoverySuccesses == 0);
+    assert(isWifiConnection() && simRecoverySuccesses() == 0);
     now += 60000; probeOk = true; checkSimRecovery();
-    assert(isWifiConnection() && simRecoverySuccesses == 1);
+    assert(isWifiConnection() && simRecoverySuccesses() == 1);
     now += 60000; checkSimRecovery();
-    assert(isGsmConnection() && !wifiFallbackActive && !wifiConnected && events == "MNBQSCMNBQSCD");
+    assert(isGsmConnection() && !wifiFallbackActive() && !wifiConnected && events == "MNBQSCMNBQSCD");
 
     // Geodetic probes SIM even while a workflow is active; a lost Wi-Fi route
     // can return to SIM after one successful probe.
@@ -79,7 +85,7 @@ int main() {
     networkOk = true; now += 14999;
     checkSimRecovery(); assert(probes == before + 1 && isWifiConnection());
     ++now; checkSimRecovery();
-    assert(probes == before + 2 && isGsmConnection() && !wifiFallbackActive);
+    assert(probes == before + 2 && isGsmConnection() && !wifiFallbackActive());
 
     // A failed Wi-Fi probe must leave existing SIM sockets running.
     workflowActive = false; mqttUp = ntripUp = true; wifiOk = false; events.clear();
@@ -90,7 +96,7 @@ int main() {
     assert(isWifiConnection() && !mqttUp && ntripUp && events == "MNBQSC");
 
     // Run the production loop with failed and successful mutex acquisition.
-    connectionType = ConnectionType::GSM; wifiFallbackActive = false;
+    activeConnectionType() = ConnectionType::GSM; wifiFallbackActive() = false;
     gprsUp = false; gsmOk = false; wifiOk = false; events.clear();
     lockOk = false; const int oldLocks = locks; loop();
     assert(locks == oldLocks && events.empty());
@@ -98,11 +104,11 @@ int main() {
     assert(events == "N");
     gsmOk = true; events.clear(); loop();
     assert(gprsUp && events == "NSC");
-    connectionType = ConnectionType::WIFI; wifiFallbackActive = false;
+    activeConnectionType() = ConnectionType::WIFI; wifiFallbackActive() = false;
     wifiConnected = false; wifiOk = true; mqttUp = ntripUp = true; events.clear();
     loop();
     assert(wifiConnected && !mqttUp && !ntripUp && events == "MNB");
-    tcpStreamMutex = nullptr; const int oldUnlocks = unlocks; loop();
+    tcpStreamMutex() = nullptr; const int oldUnlocks = unlocks; loop();
     assert(unlocks == oldUnlocks && locks == unlocks);
 }
 '''

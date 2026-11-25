@@ -146,7 +146,7 @@ for name in ('startAutoBaseRover', 'startReferenceRover'):
 wrapper_harness = r'''
 #include <cassert>
 constexpr int MUTEX_TIMEOUT_MS = 1500, pdTRUE = 1;
-int tcpStreamMutex = 1, releases = 0, stops = 0;
+int &tcpStreamMutex() { static int mutex = 1; return mutex; } int releases = 0, stops = 0;
 bool lockOk = true, startOk = true;
 int pdMS_TO_TICKS(int ms) { return ms; }
 int xSemaphoreTake(int, int) { return lockOk; }
@@ -162,29 +162,35 @@ bool startNtripRover(const String &, uint16_t, const String &, const String &, c
 }
 const char *ntripRoverLastError() { return "ERROR - NO STATION WITHIN 20 KM"; }
 struct BackendAgent {
+    struct AutoBaseConfig {
+        String host; uint16_t port = 0; String username, password, mountpoint;
+        uint8_t ntripVersion = 0; uint32_t timeoutSeconds = 0; uint8_t fixedStreakRequired = 0;
+    };
     String serialNumber_ = "esp-test";
-    bool startAutoBaseRover(const String &, uint16_t, const String &, const String &, const String &, uint8_t, String &, String * = nullptr);
-    bool startReferenceRover(const String &, uint16_t, const String &, const String &, const String &, String &);
+    bool startAutoBaseRover(const AutoBaseConfig &, String &, String * = nullptr) const;
+    bool startReferenceRover(const String &, uint16_t, const String &, const String &, const String &, String &) const;
 };
 '''
 wrapper_checks = r'''
 int main() {
     BackendAgent agent; String error;
+    const BackendAgent::AutoBaseConfig config{"host", 2101, "user", "password", "mount", 1, 30, 5};
+    const BackendAgent::AutoBaseConfig nearest{"host", 2101, "user", "password", "nearest", 1, 30, 5};
     lockOk = false;
-    assert(!agent.startAutoBaseRover("host", 2101, "user", "password", "mount", 1, error));
+    assert(!agent.startAutoBaseRover(config, error));
     assert(error == "network transport is busy" && releases == 0 && stops == 0);
     assert(!agent.startReferenceRover("host", 2101, "user", "password", "mount", error));
     assert(error == "network transport is busy" && releases == 0 && stops == 0);
     lockOk = true; startOk = false;
-    assert(!agent.startAutoBaseRover("host", 2101, "user", "password", "mount", 1, error));
+    assert(!agent.startAutoBaseRover(config, error));
     assert(error == "ERROR - NO STATION WITHIN 20 KM" && releases == 1 && stops == 1);
     assert(!agent.startReferenceRover("host", 2101, "user", "password", "mount", error));
     assert(error == "ERROR - NO STATION WITHIN 20 KM" && releases == 2 && stops == 2);
     startOk = true;
-    assert(agent.startAutoBaseRover("host", 2101, "user", "password", "mount", 1, error));
+    assert(agent.startAutoBaseRover(config, error));
     assert(releases == 3 && stops == 3 && passedSelection == nullptr && passedReceiver.isEmpty());
     String selected;
-    assert(agent.startAutoBaseRover("host", 2101, "user", "password", "nearest", 1, error, &selected));
+    assert(agent.startAutoBaseRover(nearest, error, &selected));
     assert(selected == "station" && passedSelection == &selected && passedReceiver == "esp-test");
 }
 '''

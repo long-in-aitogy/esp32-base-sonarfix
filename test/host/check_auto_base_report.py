@@ -15,11 +15,18 @@ constexpr size_t AUTO_BASE_RESULT_SIZE=6144, PROGRESS_DOCUMENT_SIZE=8192;
 struct Epoch { long toInt() { return 123; } };
 Epoch epochString() { return {}; }
 struct BackendAgent {
+    struct AutoBaseResultInput {
+        double finalLatitude = 0, finalLongitude = 0, finalAltitude = 0;
+        double rawLatitude = 0, rawLongitude = 0, rawAltitude = 0;
+        bool transformed = false, transportRestored = false;
+        size_t sampleCount = 0;
+        const char *projectionSource = "", *provinceCode = "", *provinceName = "";
+        double centralMeridianDeg = 0, scale = 0;
+    };
     String autoBaseProgress_;
     void markStatusDirty() {}
     void setWorkflowProgress(const String &, uint8_t, uint8_t, const String &);
-    String buildAutoBaseResult(double,double,double,double,double,double,bool,bool,size_t,
-                               const String &,const String &,const String &,double,double,JsonObjectConst);
+    String buildAutoBaseResult(const AutoBaseResultInput &, JsonObjectConst) const;
 };
 '''
 checks=r'''
@@ -36,8 +43,9 @@ int main() {
     report["location"]["province_name"]="Hà Nội";
     report["location"]["projection_options"][0]["l0_deg"]=105.0;
     BackendAgent agent;
-    const String result=agent.buildAutoBaseResult(21,105,10,21,105,10,true,true,60,
-                                                   "rtcm1025","01","Hanoi",105,0.9999,report.as<JsonObjectConst>());
+    const BackendAgent::AutoBaseResultInput input{
+        21,105,10,21,105,10,true,true,60,"rtcm1025","01","Hanoi",105,0.9999};
+    const String result=agent.buildAutoBaseResult(input, report.as<JsonObjectConst>());
     assert(!deserializeJson(decoded,result));
     assert(decoded["fixed_samples_only"]==true && decoded["sample_count"]==60);
     assert(decoded["averaged_coord"]["lat"]=="21.0849901310");
@@ -61,8 +69,7 @@ int main() {
         DynamicJsonDocument candidate(8192), output(AUTO_BASE_RESULT_SIZE), progressOutput(PROGRESS_DOCUMENT_SIZE);
         candidate["source"]["mountpoint"] = "NTRIP-TEST";
         candidate["location"]["padding"] = String(std::string(size, 'x'));
-        const String value = agent.buildAutoBaseResult(21,105,10,21,105,10,true,true,60,
-                                                        "rtcm1025","01","Hanoi",105,0.9999,candidate.as<JsonObjectConst>());
+        const String value = agent.buildAutoBaseResult(input, candidate.as<JsonObjectConst>());
         if (value.isEmpty()) { sawRejected = true; continue; }
         sawAccepted = true;
         assert(!deserializeJson(output, value));
@@ -78,8 +85,7 @@ int main() {
     }
     assert(sawAccepted && sawRejected);
     report["location"]["extra"] = String(std::string(6500, 'x'));
-    const String oversized=agent.buildAutoBaseResult(21,105,10,21,105,10,true,true,60,
-                                                      "rtcm1025","01","Hanoi",105,0.9999,report.as<JsonObjectConst>());
+    const String oversized=agent.buildAutoBaseResult(input, report.as<JsonObjectConst>());
     assert(oversized.isEmpty());
 }
 '''

@@ -14,7 +14,9 @@ harness = r'''
 #include <cstring>
 #include <deque>
 constexpr int MUTEX_TIMEOUT_MS = 1500, pdTRUE = 1;
-int rtcmBufferMutex = 1, gnssSerialMutex = 2, denied = 0, held = 0;
+int &rtcmBufferMutex() { static int mutex = 1; return mutex; }
+int &gnssSerialMutex() { static int mutex = 2; return mutex; }
+int denied = 0, held = 0;
 int pdMS_TO_TICKS(int ms) { return ms; }
 int xSemaphoreTake(int lock, int) { if (lock == denied) return 0; ++held; return 1; }
 void xSemaphoreGive(int) { --held; }
@@ -39,7 +41,7 @@ struct BackendAgent {
     bool surveyInMonitoring_ = false, surveyInResultPending_ = false;
     uint32_t surveyInStartedMs_ = 0, surveyInTargetSeconds_ = 0;
     void handleUnicoreAck(const UnicoreReply &, const uint8_t *, size_t);
-    bool waitForUnicoreReply(UnicoreReply &, bool);
+    bool waitForUnicoreReply(UnicoreReply &, bool) const;
     bool writeUnicoreCommand(const uint8_t *, size_t, String &);
 };
 '''
@@ -71,9 +73,9 @@ int main() {
     assert(!send(rover) && error.indexOf("response timeout") >= 0 && held == 0);
     Serial1.shortWrite = true;
     assert(!send(rover) && error.indexOf("UART write failed") >= 0 && held == 0);
-    Serial1.shortWrite = false; denied = gnssSerialMutex;
+    Serial1.shortWrite = false; denied = gnssSerialMutex();
     assert(!send(rover) && error == "GNSS reader is busy" && held == 0);
-    denied = rtcmBufferMutex;
+    denied = rtcmBufferMutex();
     assert(!send(rover) && error == "GNSS command port is busy" && held == 0);
     assert(!agent.writeUnicoreCommand(nullptr, 0, error) && held == 0);
 }

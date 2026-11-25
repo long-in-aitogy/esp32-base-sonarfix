@@ -31,7 +31,8 @@ std::array<int, 2> attempts;
 int sends = 0, updates = 0;
 bool roverActive = false;
 bool workflowActive = false;
-struct { bool workflowActive() const { return ::workflowActive; } } backendAgent;
+struct { bool workflowActive() const { return ::workflowActive; } } backendAgentStub;
+auto &backendAgent() { return backendAgentStub; }
 uint32_t now = 5000;
 uint32_t millis() { return now; }
 bool ntripRoverSessionStarted() { return roverActive; }

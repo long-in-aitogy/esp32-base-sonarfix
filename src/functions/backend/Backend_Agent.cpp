@@ -32,10 +32,6 @@
 using namespace BackendAgentInternal;
 #endif
 
-extern Preferences prefs;
-extern PubSubClient mqtt;
-extern SemaphoreHandle_t tcpStreamMutex;
-extern SemaphoreHandle_t rtcmBufferMutex;
 
 namespace BackendAgentInternal
 {
@@ -43,7 +39,9 @@ namespace BackendAgentInternal
     constexpr size_t MAX_NMEA_PACKET = 512;
     constexpr size_t MAX_RTCM_PACKET = 1030;
     constexpr size_t NMEA_QUEUE_LENGTH = 16;
+#if BACKEND_PUBLISH_RAW_RTCM
     constexpr size_t RTCM_QUEUE_LENGTH = 4;
+#endif
 
     struct DataPacket
     {
@@ -59,13 +57,12 @@ namespace BackendAgentInternal
 
     String epochString()
     {
-        const time_t now = time(nullptr);
-        if (now > 1700000000)
+        if (const time_t now = time(nullptr); now > 1700000000)
         {
             return String(static_cast<unsigned long>(now));
         }
         // Before clock synchronization, report uptime seconds rather than Unix time.
-        return String(static_cast<unsigned long>(millis() / 1000UL));
+        return String(millis() / 1000UL);
     }
 
     bool jsonBool(JsonObjectConst object, const String &key, bool fallback)
@@ -122,14 +119,33 @@ namespace BackendAgentInternal
 
 namespace
 {
-    WiFiClient backendWebsocketWifiClient;
-    TinyGsmClient backendWebsocketGsmClient(modem, 3);
+#if BACKEND_WEBSOCKET_ENABLED
+    WiFiClient &backendWebsocketWifiClient()
+    {
+        static WiFiClient client;
+        return client;
+    }
+#endif
+    TinyGsmClient &backendWebsocketGsmClient()
+    {
+        static TinyGsmClient client(getModem(), 3);
+        return client;
+    }
+}
+
+void initializeBackendGsmClient()
+{
+    (void)backendWebsocketGsmClient();
 }
 
 BackendAgent::BackendAgent() = default;
 BackendAgent::~BackendAgent() = default;
 
-BackendAgent backendAgent;
+BackendAgent &backendAgent()
+{
+    static BackendAgent instance;
+    return instance;
+}
 
 void BackendAgent::begin()
 {
@@ -183,7 +199,7 @@ void BackendAgent::saveDetectedChip(const char *chipType)
     markStatusDirty();
 }
 
-bool BackendAgent::probeUnicore(Stream &stream, String &identityLine)
+bool BackendAgent::probeUnicore(Stream &stream, String &identityLine) const
 {
     stream.print("VERSIONA\r\n");
     UnicoreIdentification identity;
@@ -203,7 +219,7 @@ bool BackendAgent::probeUnicore(Stream &stream, String &identityLine)
     return false;
 }
 
-bool BackendAgent::probeUblox(Stream &stream)
+bool BackendAgent::probeUblox(Stream &stream) const
 {
     while (stream.available())
         stream.read();
@@ -227,7 +243,7 @@ bool BackendAgent::probeUblox(Stream &stream)
     return false;
 }
 
-bool BackendAgent::probePassiveUblox(Stream &stream)
+bool BackendAgent::probePassiveUblox(Stream &stream) const
 {
     const uint32_t startMs = millis();
     String passiveStr;
@@ -235,8 +251,7 @@ bool BackendAgent::probePassiveUblox(Stream &stream)
     {
         while (stream.available())
         {
-            const auto b = static_cast<uint8_t>(stream.read());
-            if (b >= 32 && b <= 126)
+            if (const auto b = static_cast<uint8_t>(stream.read()); b >= 32 && b <= 126)
                 passiveStr += static_cast<char>(b);
             if (passiveStr.length() >= 512)
                 break;
@@ -258,8 +273,7 @@ bool BackendAgent::detectGnssChip(Stream &stream, bool force)
     while (stream.available())
         stream.read();
 
-    String identityLine;
-    if (probeUnicore(stream, identityLine))
+    if (String identityLine; probeUnicore(stream, identityLine))
     {
         saveDetectedChip("Unicorecomm");
         Serial.printf("[GNSS] => Phat hien chip: Unicorecomm (phan hoi: %s)\n",
@@ -340,7 +354,7 @@ bool BackendAgent::effectiveStreamActive(const JsonObjectConst &service,
 
 bool BackendAgent::mqttConnected() const
 {
-    return mqttConnected_ && mqtt.connected();
+    return mqttConnected_ && mqttClient().connected();
 }
 
 bool BackendAgent::websocketConnected() const
@@ -371,12 +385,12 @@ void BackendAgent::publishStatus(bool force)
     }
     if (mqttConnected())
     {
-        const auto sent = mqtt.publish(statusTopic().c_str(), payload.c_str(), true);
+        const auto sent = mqttClient().publish(statusTopic().c_str(), payload.c_str(), true);
         if (!sent || !statusPublishConfirmed_)
         {
             Serial.printf("[BACKEND][MQTT] STATUS %s topic=%s bytes=%u\n",
                           sent ? "SENT" : "FAILED", statusTopic().c_str(),
-                          static_cast<unsigned>(payload.length()));
+                          payload.length());
         }
         statusPublishConfirmed_ = sent;
     }
@@ -432,7 +446,7 @@ void BackendAgent::enqueueNmea(const uint8_t *data, size_t length)
     }
 }
 
-void BackendAgent::enqueueRtcm(const uint8_t *data, size_t length)
+void BackendAgent::enqueueRtcm(const uint8_t *data, size_t length) const
 {
 #if BACKEND_PUBLISH_RAW_RTCM
     if (!rtcmQueue_ || !data || length == 0 || length > MAX_RTCM_PACKET)
@@ -460,7 +474,7 @@ void BackendAgent::drainDataQueues()
         auto delivered = false;
         if (mqttConnected())
         {
-            delivered = mqtt.publish(rawDataTopic().c_str(), nmea.data.data(), nmea.length);
+            delivered = mqttClient().publish(rawDataTopic().c_str(), nmea.data.data(), nmea.length);
         }
         if (!delivered && websocketConnected())
         {
@@ -485,7 +499,7 @@ void BackendAgent::drainDataQueues()
     DataPacket rtcm;
     while (rtcmQueue_ && xQueueReceive(rtcmQueue_, &rtcm, 0) == pdTRUE)
     {
-        if (!mqttConnected() || !mqtt.publish(rawDataTopic().c_str(), rtcm.data.data(), rtcm.length))
+        if (!mqttConnected() || !mqttClient().publish(rawDataTopic().c_str(), rtcm.data.data(), rtcm.length))
         {
             xQueueSendToFront(rtcmQueue_, &rtcm, 0);
             break;
@@ -494,23 +508,23 @@ void BackendAgent::drainDataQueues()
 #endif
 }
 
-void BackendAgent::setupWebsocket()
+void BackendAgent::setupWebsocket() const
 {
 #if BACKEND_WEBSOCKET_ENABLED
     if (!websocket_)
         return;
     const auto host = readPreference("BACKEND_HOST", BACKEND_HOST);
-    prefs.begin("myPrefs", true);
-    const uint16_t port = prefs.getUShort("BACKEND_PORT", BACKEND_WEBSOCKET_PORT);
-    prefs.end();
+    appPrefs().begin("myPrefs", true);
+    const uint16_t port = appPrefs().getUShort("BACKEND_PORT", BACKEND_WEBSOCKET_PORT);
+    appPrefs().end();
     const auto path = String("/ws/pi/") + serialNumber_ + (licenseToken_.isEmpty() ? String() : String("?token=") + urlEncode(licenseToken_));
     if (isWifiConnection())
     {
-        websocket_->begin(host, port, path, backendWebsocketWifiClient);
+        websocket_->begin(host, port, path, backendWebsocketWifiClient());
     }
     else
     {
-        websocket_->begin(host, port, path, backendWebsocketGsmClient);
+        websocket_->begin(host, port, path, backendWebsocketGsmClient());
     }
 #endif
 }
@@ -523,7 +537,7 @@ void BackendAgent::refreshWebsocket()
     setupWebsocket();
 }
 
-void BackendAgent::loopWebsocket()
+void BackendAgent::loopWebsocket() const
 {
 #if BACKEND_WEBSOCKET_ENABLED
     if (websocket_)
@@ -616,20 +630,20 @@ void BackendAgent::retryUnknownChipProbe()
         return;
 
     lastChipProbeMs_ = now;
-    if (!rtcmBufferMutex || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+    if (!rtcmBufferMutex() || xSemaphoreTake(rtcmBufferMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
     {
         return;
     }
 
-    if (!gnssSerialMutex || xSemaphoreTake(gnssSerialMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+    if (!gnssSerialMutex() || xSemaphoreTake(gnssSerialMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
     {
-        xSemaphoreGive(rtcmBufferMutex);
+        xSemaphoreGive(rtcmBufferMutex());
         return;
     }
 
     detectGnssChip(Serial1);
-    xSemaphoreGive(gnssSerialMutex);
-    xSemaphoreGive(rtcmBufferMutex);
+    xSemaphoreGive(gnssSerialMutex());
+    xSemaphoreGive(rtcmBufferMutex());
 }
 
 void BackendAgent::handleControlAck(const String &source, const String &message, bool retained)
@@ -648,8 +662,8 @@ void BackendAgent::handleControlAck(const String &source, const String &message,
     const int32_t sequence = doc["status_sequence"] | -1;
     if (sequence < 0)
         return;
-    const JsonObjectConst location = doc["auto_base_location"].as<JsonObjectConst>();
-    if (autoBaseLocationQueue_
+    if (const JsonObjectConst location = doc["auto_base_location"].as<JsonObjectConst>();
+        autoBaseLocationQueue_
         && workflowActive() && !location.isNull()
         && measureJson(location) < AutoBaseLocationReply::capacity)
     {
@@ -710,8 +724,8 @@ void BackendAgent::handleWebsocketText(const String &message)
 }
 
 
-bool backendDeviceLocked(uint8_t serverId) { return serverId == 0 ? backendAgent.isLocked() : backendAgent.isServerLocked(serverId); }
-bool backendControlPlaneFailOpen() { return backendAgent.controlPlaneFailOpen(); }
-bool backendDeviceProvisioned() { return backendAgent.isProvisioned(); }
-bool backendLicenseValid() { return backendAgent.licenseValid(); }
-bool backendBaseStartupConfigured() { return backendAgent.baseStartupConfigured(); }
+bool backendDeviceLocked(uint8_t serverId) { return serverId == 0 ? backendAgent().isLocked() : backendAgent().isServerLocked(serverId); }
+bool backendControlPlaneFailOpen() { return backendAgent().controlPlaneFailOpen(); }
+bool backendDeviceProvisioned() { return backendAgent().isProvisioned(); }
+bool backendLicenseValid() { return backendAgent().licenseValid(); }
+bool backendBaseStartupConfigured() { return backendAgent().baseStartupConfigured(); }

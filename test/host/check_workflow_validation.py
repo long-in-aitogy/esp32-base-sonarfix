@@ -23,6 +23,8 @@ struct Snapshot { uint32_t lastGgaMs; double latitude, longitude; };
 Snapshot getGnssTelemetrySnapshot() { return {}; }
 double coordinateNumber(JsonVariantConst value) { return value.isNull() ? NAN : value.as<double>(); }
 struct BackendAgent {
+    struct AutoBaseConfig {};
+    struct ReferenceCheckConfig {};
     String baseStartupState_;
     void markStatusDirty() {}
     String baseConfig_ = R"({"base_setup_method":"SURVEY_IN","survey_in_duration":1800})";
@@ -41,8 +43,8 @@ struct BackendAgent {
     bool saveStatePreferences() { ++saved; return true; }
     void publishConfigState(const char *) {}
     bool restoreAutoBaseAfterReview(JsonDocument &);
-    bool prepareAutoBaseSnapshot(JsonDocument &);
-    bool waitForAutoNearestPosition(uint32_t);
+    bool prepareAutoBaseSnapshot(JsonDocument &) const;
+    bool waitForAutoNearestPosition(uint32_t) const;
     bool startSurveyInFallback(JsonObject, JsonDocument &, const String &, const String &, String &);
     void finishAutoBaseWorkflow(JsonDocument &, bool, const String &, bool, bool, const String &);
     bool runAutoBaseWorkflow(JsonObject);

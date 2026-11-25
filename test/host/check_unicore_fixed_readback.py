@@ -42,7 +42,7 @@ bool queryUnicoreLine(const char *query, const char *prefix, String &out, String
 struct BackendAgent {
     struct StartupPosition { double latitude, longitude, altitude; bool ellipsoid; };
     String receiverBaseReadback_;
-    bool verifyStartupReadback(GnssCmdBuilder::GnssSensorType, bool, const StartupPosition &, String &);
+    bool verifyStartupReadback(GnssCmdBuilder::GnssSensorType, bool, const StartupPosition &, String &) const;
 };
 '''
 checks = r'''

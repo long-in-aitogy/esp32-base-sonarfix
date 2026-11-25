@@ -18,6 +18,7 @@ struct Preferences {
     String getString(const char *, const String &fallback) { return fallback; }
     uint16_t getUShort(const char *, uint16_t fallback) { return fallback; }
 } prefs;
+Preferences &appPrefs() { return prefs; }
 struct BackendAgent {
     String serviceConfig_ = "{}"; int saves = 0;
     bool saveStatePreferences() { ++saves; return true; }

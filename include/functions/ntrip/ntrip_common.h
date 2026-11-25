@@ -8,8 +8,8 @@
 #include "Top_Lvl_Config.h"
 #include "hardware/Connection_type.h"
 
-extern SemaphoreHandle_t rtcmBufferMutex;
-extern SemaphoreHandle_t tcpStreamMutex;
+SemaphoreHandle_t &rtcmBufferMutex();
+SemaphoreHandle_t &tcpStreamMutex();
 
 bool safeNtripField(const String &value);
 String base64Encode(const String &plain);
@@ -41,6 +41,7 @@ namespace ntrip_common
 
     NtripEndpoint &endpointFor(uint8_t index);
     Client &clientFor(uint8_t index);
+    void initializeGsmClients();
     void clearEndpointState(NtripEndpoint &endpoint);
     void loadEndpoints();
     bool streamActive(uint8_t index);

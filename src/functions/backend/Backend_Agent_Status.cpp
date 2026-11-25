@@ -489,7 +489,7 @@ String BackendAgent::buildStatusPayload()
     const auto onDemand = jsonBool(service, "stream_on_demand", false);
     const GnssTelemetrySnapshot gnss = getGnssTelemetrySnapshot();
     const uint32_t nowMs = millis();
-    const int32_t signal = isWifiConnection() ? WiFi.RSSI() : modem.getSignalQuality();
+    const int32_t signal = isWifiConnection() ? WiFi.RSSI() : getModem().getSignalQuality();
     const auto timestamp = epochString();
     appendStatusFields(doc, statusForPayload(server1Active || server2Active, onDemand),
                        gnss, nowMs, timestamp);
@@ -513,8 +513,7 @@ String BackendAgent::buildStatusPayload()
     const size_t expected = measureJson(doc);
     String payload;
     payload.reserve(expected + 8);
-    const size_t written = serializeJson(doc, payload);
-    if (written != expected)
+    if (const size_t written = serializeJson(doc, payload); written != expected)
     {
         Serial.printf("[BACKEND][ERROR] Status serialize mismatch (written=%u, expected=%u)\n",
                       written, expected);

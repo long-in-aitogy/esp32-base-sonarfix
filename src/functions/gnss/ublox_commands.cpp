@@ -275,7 +275,7 @@ namespace UbloxCommands
             key = remapOutputKey(key, ports);
         for (const auto &message : RTCM_KEYS)
             key = remapOutputKey(key, message.keys);
-        for (const uint8_t protocol : {1, 2, 4})
+        for (const uint8_t protocol : {uint8_t{1}, uint8_t{2}, uint8_t{4}})
         {
             key = remapOutputKey(
                 key, {0x10740000U | protocol, 0x10760000U | protocol,

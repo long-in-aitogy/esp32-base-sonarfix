@@ -6,6 +6,7 @@
 #include <esp_partition.h>
 #include <esp_ota_ops.h>
 #include <array>
+#include <algorithm>
 #include <type_traits>
 #include <memory>
 
@@ -42,8 +43,7 @@ void appendStorageStatus(JsonObject system) {
     memory["minimum_free_heap_bytes"] = ESP.getMinFreeHeap();
     memory["largest_free_block_bytes"] = ESP.getMaxAllocHeap();
     JsonObject disk = system["disk"];
-    const esp_partition_t *app = esp_ota_get_running_partition();
-    if (app) disk["app_capacity_bytes"] = app->size;
+    if (const esp_partition_t *app = esp_ota_get_running_partition(); app) disk["app_capacity_bytes"] = app->size;
     // Physical flash also holds OTA/NVS/data partitions; it is not one free pool.
     disk["firmware_bytes"] = disk["used_bytes"];
     JsonObject nvs = system.createNestedObject("nvs");
@@ -119,14 +119,12 @@ namespace {
 bool readableNvsValue(const nvs_entry_info_t &entry) {
     if (strcmp(entry.namespace_name, "myPrefs") && strcmp(entry.namespace_name, "backend")) return false;
     // Raw values use an allowlist. Known configuration JSON is expanded below.
-    for (const char *key : {"DEVICE_SERIAL", "DEVICE_NAME", "SENSOR_TYPE", "CONNECTION_TYPE",
-                           "GNSS_MDL_TYPE", "WIFI_SSID", "APN", "MQTT_SERVER", "MQTT_PORT",
-                           "BACKEND_HOST", "BACKEND_PORT", "NTRIP_SERVER", "NTRIP_PORT",
-                           "NTRIP_MPT", "TPC_SUB_CMD", "TPC_HEALTH", "RSTRT_COUNT",
-                           "PROVISIONED", "REMOTE_LOCK", "LOCK_SERVERS", "NEED_RESET"}) {
-        if (!strcmp(entry.key, key)) return true;
-    }
-    return false;
+    const auto keys = {"DEVICE_SERIAL", "DEVICE_NAME", "SENSOR_TYPE", "CONNECTION_TYPE",
+                       "GNSS_MDL_TYPE", "WIFI_SSID", "APN", "MQTT_SERVER", "MQTT_PORT",
+                       "BACKEND_HOST", "BACKEND_PORT", "NTRIP_SERVER", "NTRIP_PORT",
+                       "NTRIP_MPT", "TPC_SUB_CMD", "TPC_HEALTH", "RSTRT_COUNT",
+                       "PROVISIONED", "REMOTE_LOCK", "LOCK_SERVERS", "NEED_RESET"};
+    return std::any_of(keys.begin(), keys.end(), [&](const char *key) { return !strcmp(entry.key, key); });
 }
 
 bool configurationNamespace(const nvs_entry_info_t &entry) {
@@ -135,9 +133,8 @@ bool configurationNamespace(const nvs_entry_info_t &entry) {
 
 bool configurationJson(const nvs_entry_info_t &entry) {
     if (!configurationNamespace(entry) || entry.type != NVS_TYPE_STR) return false;
-    for (const char *key : {"BASE_JSON", "SERVICE_JSON", "PROGRESS_JSON", "CMD_RESULT", "SURVEY_RESULT"})
-        if (!strcmp(entry.key, key)) return true;
-    return false;
+    const auto keys = {"BASE_JSON", "SERVICE_JSON", "PROGRESS_JSON", "CMD_RESULT", "SURVEY_RESULT"};
+    return std::any_of(keys.begin(), keys.end(), [&](const char *key) { return !strcmp(entry.key, key); });
 }
 
 bool secretField(String path) {
@@ -149,28 +146,35 @@ bool secretField(String path) {
         || path.indexOf("credential") >= 0;
 }
 
-void appendConfigurationFields(JsonArray entries, uint32_t offset, uint32_t &total,
-                               const char *partition, const nvs_entry_info_t &entry,
-                               JsonVariantConst value, const String &path, bool secret = false) {
+struct ConfigurationFieldTarget {
+    JsonArray entries;
+    uint32_t offset;
+    uint32_t &total;
+    const char *partition;
+    const nvs_entry_info_t &entry;
+};
+
+void appendConfigurationFields(ConfigurationFieldTarget &target, JsonVariantConst value,
+                               const String &path, bool secret = false) {
     secret = secret || secretField(path);
     if (value.is<JsonObjectConst>() && value.size()) {
         for (JsonPairConst field : value.as<JsonObjectConst>())
-            appendConfigurationFields(entries, offset, total, partition, entry, field.value(),
+            appendConfigurationFields(target, field.value(),
                                       path.isEmpty() ? String(field.key().c_str()) : path + "." + field.key().c_str(), secret);
         return;
     }
     if (value.is<JsonArrayConst>() && value.size()) {
         size_t index = 0;
         for (JsonVariantConst item : value.as<JsonArrayConst>())
-            appendConfigurationFields(entries, offset, total, partition, entry, item,
+            appendConfigurationFields(target, item,
                                       path + "[" + String(index++) + "]", secret);
         return;
     }
-    if (total++ < offset || entries.size() >= 6) return;
-    JsonObject row = entries.createNestedObject();
-    row["partition"] = String(partition);
-    row["namespace"] = String(entry.namespace_name);
-    row["key"] = String(entry.key);
+    if (target.total++ < target.offset || target.entries.size() >= 6) return;
+    JsonObject row = target.entries.createNestedObject();
+    row["partition"] = String(target.partition);
+    row["namespace"] = String(target.entry.namespace_name);
+    row["key"] = String(target.entry.key);
     row["field"] = path;
     row["type"] = "JSON";
     row["bytes"] = measureJson(value);
@@ -254,8 +258,8 @@ bool appendSavedConfiguration(JsonArray entries, uint32_t offset, uint32_t &tota
         && deserializeJson(config, text.get()) == DeserializationError::Ok;
     nvs_close(handle);
     if (!parsed) return false;
-    appendConfigurationFields(entries, offset, total, partition, entry,
-                              config.as<JsonVariantConst>(), String());
+    ConfigurationFieldTarget target{entries, offset, total, partition, entry};
+    appendConfigurationFields(target, config.as<JsonVariantConst>(), String());
     return true;
 }
 
@@ -265,8 +269,9 @@ void appendPartitionEntries(JsonArray entries, uint32_t offset, uint32_t &total,
          iterator = nvs_entry_next(iterator)) {
         nvs_entry_info_t entry;
         nvs_entry_info(iterator, &entry);
-        const bool wifi = configurationNamespace(entry) && !strncmp(entry.key, "WIFI_", 5);
-        const int entryPriority = wifi ? 0 : configurationNamespace(entry) ? 1 : 2;
+        int entryPriority = 2;
+        if (configurationNamespace(entry))
+            entryPriority = !strncmp(entry.key, "WIFI_", 5) ? 0 : 1;
         if (entryPriority != priority) continue;
         if (appendSavedConfiguration(entries, offset, total, partition, entry)) continue;
         if (total >= offset && entries.size() < 6)
@@ -288,8 +293,7 @@ bool readNvsInventory(uint32_t offset, const String &commandId, String &output, 
     for (int priority = 0; priority < 3; ++priority) {
         for (const char *partition : {"nvs", "agent_state"}) {
             nvs_stats_t stats{};
-            const esp_err_t status = nvs_get_stats(partition, &stats);
-            if (status == ESP_OK) {
+            if (const esp_err_t status = nvs_get_stats(partition, &stats); status == ESP_OK) {
                 appendPartitionEntries(entries, offset, total, partition, priority);
                 continue;
             }

@@ -22,7 +22,7 @@ struct Stream {
     int read() { auto value = incoming.front(); incoming.pop_front(); return value; }
     size_t write(const uint8_t *, size_t size) { incoming.insert(incoming.end(), reply.begin(), reply.end()); return size; }
 };
-struct BackendAgent { bool probeUblox(Stream &); };
+struct BackendAgent { bool probeUblox(Stream &) const; };
 '''
 checks = r'''
 int main() {

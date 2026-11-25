@@ -6,15 +6,22 @@
 #include <nvs.h>
 #include <esp_err.h>
 
-extern Preferences prefs;
 using namespace BackendAgentInternal;
 
 namespace BackendAgentInternal
 {
     constexpr char BACKEND_PREFS_NAMESPACE[] = "backend";
     constexpr char BACKEND_PREFS_PARTITION[] = "agent_state";
-    Preferences backendPrefs;
-    bool useDedicatedBackendPrefs = false;
+    Preferences &backendPrefs()
+    {
+        static Preferences store;
+        return store;
+    }
+    bool &useDedicatedBackendPrefs()
+    {
+        static bool enabled = false;
+        return enabled;
+    }
 
     String restoreWorkflowProgress(const String &saved)
     {
@@ -53,52 +60,52 @@ namespace BackendAgentInternal
 
     const char *backendPreferencesPartition()
     {
-        return useDedicatedBackendPrefs ? BACKEND_PREFS_PARTITION : "nvs";
+        return useDedicatedBackendPrefs() ? BACKEND_PREFS_PARTITION : "nvs";
     }
 
     Preferences &backendPreferences()
     {
-        return useDedicatedBackendPrefs ? backendPrefs : prefs;
+        return useDedicatedBackendPrefs() ? backendPrefs() : appPrefs();
     }
 
     bool beginBackendPreferences(bool readOnly)
     {
-        return useDedicatedBackendPrefs
-                   ? backendPrefs.begin(BACKEND_PREFS_NAMESPACE, readOnly, BACKEND_PREFS_PARTITION)
-                   : prefs.begin("myPrefs", readOnly);
+        return useDedicatedBackendPrefs()
+                   ? backendPrefs().begin(BACKEND_PREFS_NAMESPACE, readOnly, BACKEND_PREFS_PARTITION)
+                   : appPrefs().begin("myPrefs", readOnly);
     }
 
     bool migrateBackendPreferences()
     {
-        if (!backendPrefs.begin(BACKEND_PREFS_NAMESPACE, false, BACKEND_PREFS_PARTITION))
+        if (!backendPrefs().begin(BACKEND_PREFS_NAMESPACE, false, BACKEND_PREFS_PARTITION))
         {
             return false;
         }
-        const auto alreadyMigrated = backendPrefs.isKey("MIGRATED");
-        backendPrefs.end();
+        const auto alreadyMigrated = backendPrefs().isKey("MIGRATED");
+        backendPrefs().end();
         if (alreadyMigrated)
             return true;
 
-        if (!prefs.begin("myPrefs", true))
+        if (!appPrefs().begin("myPrefs", true))
             return false;
-        if (!backendPrefs.begin(BACKEND_PREFS_NAMESPACE, false, BACKEND_PREFS_PARTITION))
+        if (!backendPrefs().begin(BACKEND_PREFS_NAMESPACE, false, BACKEND_PREFS_PARTITION))
         {
-            prefs.end();
+            appPrefs().end();
             return false;
         }
 
         auto copyString = [](const char *key)
         {
-            if (!prefs.isKey(key))
+            if (!appPrefs().isKey(key))
                 return true;
-            const auto value = prefs.getString(key);
-            return backendPrefs.putString(key, value) == value.length();
+            const auto value = appPrefs().getString(key);
+            return backendPrefs().putString(key, value) == value.length();
         };
         auto copyBool = [](const char *key)
         {
-            if (!prefs.isKey(key))
+            if (!appPrefs().isKey(key))
                 return true;
-            return backendPrefs.putBool(key, prefs.getBool(key)) == 1;
+            return backendPrefs().putBool(key, appPrefs().getBool(key)) == 1;
         };
 
         auto migrated = true;
@@ -107,9 +114,9 @@ namespace BackendAgentInternal
         migrated &= copyString("SENSOR_TYPE");
         migrated &= copyBool("PROVISIONED");
         migrated &= copyBool("REMOTE_LOCK");
-        if (prefs.isKey("LOCK_SERVERS"))
+        if (appPrefs().isKey("LOCK_SERVERS"))
         {
-            migrated &= backendPrefs.putUChar("LOCK_SERVERS", prefs.getUChar("LOCK_SERVERS")) == 1;
+            migrated &= backendPrefs().putUChar("LOCK_SERVERS", appPrefs().getUChar("LOCK_SERVERS")) == 1;
         }
         migrated &= copyString("BASE_JSON");
         migrated &= copyString("SERVICE_JSON");
@@ -118,9 +125,9 @@ namespace BackendAgentInternal
         migrated &= copyString("PROGRESS_JSON");
         migrated &= copyString("SURVEY_RESULT");
         if (migrated)
-            migrated = backendPrefs.putBool("MIGRATED", true) == 1;
-        prefs.end();
-        backendPrefs.end();
+            migrated = backendPrefs().putBool("MIGRATED", true) == 1;
+        appPrefs().end();
+        backendPrefs().end();
         Serial.printf("[BACKEND][NVS] Migrasi state sang agent_state: %s.\n",
                       migrated ? "THANH CONG" : "THAT BAI");
         return migrated;
@@ -128,9 +135,9 @@ namespace BackendAgentInternal
 
     String readPreference(const char *key, const String &fallback)
     {
-        prefs.begin("myPrefs", true);
-        const auto value = prefs.isKey(key) ? prefs.getString(key) : fallback;
-        prefs.end();
+        appPrefs().begin("myPrefs", true);
+        const auto value = appPrefs().isKey(key) ? appPrefs().getString(key) : fallback;
+        appPrefs().end();
         return value;
     }
 
@@ -138,11 +145,11 @@ namespace BackendAgentInternal
 
 void BackendAgent::loadPreferences()
 {
-    useDedicatedBackendPrefs = migrateBackendPreferences();
+    useDedicatedBackendPrefs() = migrateBackendPreferences();
     if (!beginBackendPreferences(true))
     {
-        useDedicatedBackendPrefs = false;
-        prefs.begin("myPrefs", true);
+        useDedicatedBackendPrefs() = false;
+        appPrefs().begin("myPrefs", true);
         Serial.println("[BACKEND][NVS] Khong mo duoc agent_state; dung NVS cu.");
     }
     Preferences &statePrefs = backendPreferences();
@@ -202,9 +209,9 @@ void BackendAgent::loadPreferences()
         if (!saved)
             Serial.println("[BACKEND][NVS] Could not save Base accuracy.");
     }
-    prefs.begin("myPrefs", true);
-    const auto bootCounter = static_cast<uint32_t>(prefs.getInt("RSTRT_COUNT", 0));
-    prefs.end();
+    appPrefs().begin("myPrefs", true);
+    const auto bootCounter = static_cast<uint32_t>(appPrefs().getInt("RSTRT_COUNT", 0));
+    appPrefs().end();
     if (serialNeedsSave)
     {
         const auto opened = beginBackendPreferences(false);
@@ -240,12 +247,12 @@ void BackendAgent::ensureDefaultServiceConfig()
         return;
     }
 
-    prefs.begin("myPrefs", true);
-    const auto host = prefs.getString("NTRIP_SERVER", String(NTRIP_CASTER_ADDRESS));
-    const uint16_t port = prefs.getUShort("NTRIP_PORT", NTRIP_CASTER_PORT);
-    auto mountpoint = prefs.getString("NTRIP_MPT", String(NTRIP_MOUNTPOINT));
-    const auto password = prefs.getString("NT_AUTH_BS", String(NTRIP_AUTH_BASE_STATION));
-    prefs.end();
+    appPrefs().begin("myPrefs", true);
+    const auto host = appPrefs().getString("NTRIP_SERVER", String(NTRIP_CASTER_ADDRESS));
+    const uint16_t port = appPrefs().getUShort("NTRIP_PORT", NTRIP_CASTER_PORT);
+    auto mountpoint = appPrefs().getString("NTRIP_MPT", String(NTRIP_MOUNTPOINT));
+    const auto password = appPrefs().getString("NT_AUTH_BS", String(NTRIP_AUTH_BASE_STATION));
+    appPrefs().end();
     while (mountpoint.startsWith("/"))
         mountpoint.remove(0, 1);
 
@@ -268,11 +275,11 @@ void BackendAgent::ensureDefaultServiceConfig()
     serviceConfig_.clear();
     serializeJson(defaults, serviceConfig_);
     Serial.printf("[BACKEND][NVS] Default SERVICE_JSON (%u bytes): %s.\n",
-                  static_cast<unsigned>(serviceConfig_.length()),
+                  serviceConfig_.length(),
                   saveStatePreferences() ? "da luu" : "LOI luu");
 }
 
-bool BackendAgent::saveStatePreferences()
+bool BackendAgent::saveStatePreferences() const
 {
     if (serialNumber_.isEmpty())
     {
@@ -281,10 +288,9 @@ bool BackendAgent::saveStatePreferences()
     }
     // Persist the state snapshot with native NVS calls and one commit.
     nvs_handle_t handle;
-    const esp_err_t opened = useDedicatedBackendPrefs
+    if (const esp_err_t opened = useDedicatedBackendPrefs()
                                  ? nvs_open_from_partition(BACKEND_PREFS_PARTITION, BACKEND_PREFS_NAMESPACE, NVS_READWRITE, &handle)
-                                 : nvs_open("myPrefs", NVS_READWRITE, &handle);
-    if (opened != ESP_OK)
+                                 : nvs_open("myPrefs", NVS_READWRITE, &handle); opened != ESP_OK)
     {
         Serial.printf("[BACKEND][NVS] Open failed: %s (0x%x)\n", esp_err_to_name(opened), opened);
         return false;

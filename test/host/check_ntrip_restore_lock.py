@@ -8,14 +8,14 @@ method = source[source.index('bool BackendAgent::restartConfiguredNtrip('):sourc
 harness = r'''
 #include <cassert>
 constexpr int pdTRUE=1, MUTEX_TIMEOUT_MS=1500;
-int tcpStreamMutex=1; bool held=false; int takes=0, gives=0, stops=0, setups=0, connects=0;
+int &tcpStreamMutex() { static int mutex = 1; return mutex; } bool held=false; int takes=0, gives=0, stops=0, setups=0, connects=0;
 int pdMS_TO_TICKS(int value) { return value; }
 int xSemaphoreTake(int, int) { ++takes; if (held) return 0; held=true; return pdTRUE; }
 void xSemaphoreGive(int) { assert(held); held=false; ++gives; }
 void stopNtripRover() { assert(held); ++stops; }
 void setupNTRIP() { assert(held); ++setups; }
 void connectNTRIP() { assert(held); ++connects; }
-struct BackendAgent { bool restartConfiguredNtrip(bool transportLocked=false); };
+struct BackendAgent { bool restartConfiguredNtrip(bool transportLocked=false) const; };
 '''
 checks = r'''
 int main() {

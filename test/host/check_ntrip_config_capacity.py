@@ -22,13 +22,14 @@ constexpr uint8_t NTRIP_SERVER_COUNT = 2;
 struct NtripEndpoint { String host, mountpoint, username, password; uint16_t port = 0; uint8_t version = 0; bool enabled = true; } endpoints[2];
 NtripEndpoint &endpointFor(uint8_t i) { return endpoints[i]; }
 struct LocalNtripConfig { String host = "legacy", mountpoint = "/LEGACY", password = "legacy-password"; uint16_t port = 2101; };
-LocalNtripConfig loadLocalNtripConfig() { return {}; }
+void loadLocalNtripConfig(LocalNtripConfig &) {}
 bool locked = false, licensed = true, provisioned = true, configured = true;
 struct BackendAgent {
     String config;
     String serviceConfigJson() { return config; }
     static bool effectiveStreamActive(JsonObjectConst service, int, bool) { return service["stream_active"] | false; }
-} backendAgent;
+} backendAgentStub;
+BackendAgent &backendAgent() { return backendAgentStub; }
 bool backendDeviceLocked(int) { return locked; }
 bool backendLicenseValid() { return licensed; }
 bool backendDeviceProvisioned() { return provisioned; }
@@ -45,22 +46,22 @@ int main() {
     config["stream_active"] = false;
     config["padding"] = String(std::string(4500, 'x'));
     assert(!config.overflowed());
-    serializeJson(config, backendAgent.config);
+    serializeJson(config, backendAgentStub.config);
     loadEndpoints();
     assert(endpoints[0].enabled && endpoints[0].host == "expected-caster" && endpoints[0].mountpoint == "ONE");
     assert(endpoints[1].enabled && endpoints[1].host == "second" && endpoints[1].port == 2201 && endpoints[1].version == 2);
     assert(!streamActive(0));
-    backendAgent.config = String("{\"legacy\":\"") + String(std::string(7000, 'x')) + "\"}";
+    backendAgentStub.config = String("{\"legacy\":\"") + String(std::string(7000, 'x')) + "\"}";
     loadEndpoints();
     assert(!endpoints[0].enabled && !endpoints[1].enabled && !streamActive(0));
-    backendAgent.config = "bad"; loadEndpoints();
+    backendAgentStub.config = "bad"; loadEndpoints();
     assert(endpoints[0].enabled && endpoints[0].host == "legacy" && endpoints[0].mountpoint == "LEGACY" && !endpoints[1].enabled);
     assert(streamActive(0) && !streamActive(1));
     locked = true; assert(!streamActive(0)); locked = false;
     licensed = false; assert(!streamActive(0)); licensed = true;
     provisioned = false; assert(!streamActive(0)); provisioned = true;
     configured = false; assert(!streamActive(0)); configured = true;
-    backendAgent.config = "{}"; loadEndpoints(); assert(!endpoints[0].enabled && !endpoints[1].enabled);
+    backendAgentStub.config = "{}"; loadEndpoints(); assert(!endpoints[0].enabled && !endpoints[1].enabled);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='ntrip-config-capacity-') as directory:

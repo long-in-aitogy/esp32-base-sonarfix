@@ -21,9 +21,10 @@ struct Mqtt {
     String payload; unsigned count = 0;
     bool publish(const char *, const char *value, bool) { payload = value; ++count; return true; }
 } mqtt;
+auto &mqttClient() { return mqtt; }
 struct BackendAgent {
     String serialNumber_ = "station", baseConfig_, serviceConfig_;
-    void publishConfigState(const char *);
+    void publishConfigState(const char *) const;
 };
 '''
 checks = r'''

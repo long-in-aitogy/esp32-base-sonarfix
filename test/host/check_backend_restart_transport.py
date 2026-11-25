@@ -21,6 +21,7 @@ void delay(int) {}
 void shutdownTcpTransportBeforeRestart() { events += 'T'; }
 struct { void restart() { events += 'R'; throw 1; } } ESP;
 struct Preferences { void begin(const char *, bool) {} void clear() { events += 'C'; } void end() {} } prefs, backend;
+Preferences &appPrefs() { return prefs; }
 bool beginBackendPreferences(bool) { return true; }
 Preferences &backendPreferences() { return backend; }
 struct BackendAgent {

@@ -15,7 +15,8 @@ harness = r'''
 using esp_err_t = int; using nvs_handle_t = int;
 constexpr int ESP_OK = 0, NVS_READWRITE = 1;
 constexpr const char *BACKEND_PREFS_PARTITION = "agent_state", *BACKEND_PREFS_NAMESPACE = "backend";
-bool useDedicatedBackendPrefs = false, openOk = true, commitOk = true;
+bool &useDedicatedBackendPrefs() { static bool enabled = false; return enabled; }
+bool openOk = true, commitOk = true;
 int opened = 0, closed = 0, commits = 0; String failedKey, partition;
 std::map<String, String> saved;
 const char *esp_err_to_name(int) { return "simulated"; }
@@ -38,7 +39,7 @@ struct BackendAgent {
     String baseConfig_ = "base", serviceConfig_ = "service", licenseToken_ = "token";
     String lastCommandResult_ = "command", autoBaseProgress_ = "progress", surveyInResult_ = "survey";
     bool provisioned_ = true; struct { bool all = true; uint8_t servers = 2; } stationLock_;
-    bool saveStatePreferences();
+    bool saveStatePreferences() const;
 };
 '''
 checks = r'''
@@ -62,7 +63,7 @@ int main() {
     }
     failedKey.clear(); commitOk = false; assert(!agent.saveStatePreferences());
     assert(opened == 15 && closed == 14 && commits == 14);
-    commitOk = true; useDedicatedBackendPrefs = true;
+    commitOk = true; useDedicatedBackendPrefs() = true;
     assert(agent.saveStatePreferences() && partition == BACKEND_PREFS_PARTITION);
     assert(opened == 16 && closed == 15 && commits == 15);
 }

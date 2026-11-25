@@ -18,7 +18,6 @@
 
 using namespace BackendAgentInternal;
 
-extern SemaphoreHandle_t rtcmBufferMutex;
 
 namespace
 {
@@ -159,7 +158,7 @@ void BackendAgent::recordCommandResult(const String &command, const String &sour
                   command.c_str(), commandId.c_str(), source.c_str(), status.c_str(), saveResult);
 }
 
-void BackendAgent::publishConfigState(const char *kind)
+void BackendAgent::publishConfigState(const char *kind) const
 {
     if (!mqttConnected())
         return;
@@ -167,8 +166,8 @@ void BackendAgent::publishConfigState(const char *kind)
     doc["serial"] = serialNumber_;
     doc["timestamp"] = epochString().toInt();
     doc["type"] = kind;
-    const String &config = strcmp(kind, "base_config_state") == 0 ? baseConfig_ : serviceConfig_;
-    if (!copyJsonObject(doc, "config", config) || doc.overflowed())
+    if (const String &config = strcmp(kind, "base_config_state") == 0 ? baseConfig_ : serviceConfig_;
+        !copyJsonObject(doc, "config", config) || doc.overflowed())
     {
         Serial.printf("[BACKEND][ERROR] Cannot publish %s: invalid configuration or insufficient memory\n", kind);
         return;
@@ -176,7 +175,7 @@ void BackendAgent::publishConfigState(const char *kind)
     String output;
     serializeJson(doc, output);
     const auto topic = String("pi/devices/") + serialNumber_ + "/" + kind;
-    mqtt.publish(topic.c_str(), output.c_str(), true);
+    mqttClient().publish(topic.c_str(), output.c_str(), true);
 }
 
 bool BackendAgent::applyServiceStreamCommand(JsonObject payload, String &error)
@@ -203,9 +202,8 @@ bool BackendAgent::applyServiceStreamCommand(JsonObject payload, String &error)
     if (address.isEmpty())
         address = payload["host"] | String();
     address = normalizedStreamValue(address, false);
-    const auto serverId = streamServerId(payload);
-
-    if (!applyTargetedStreamState(service, serverId, active, address, mountpoint))
+    if (const auto serverId = streamServerId(payload);
+        !applyTargetedStreamState(service, serverId, active, address, mountpoint))
         applyGlobalStreamState(service, active, mountpoint);
     service["stream_active"] = BackendAgent::effectiveStreamActive(service, 1, false) || BackendAgent::effectiveStreamActive(service, 2, false);
     if (serviceDoc.overflowed())
@@ -304,8 +302,7 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
     {
         const auto encoded = item.as<String>();
         auto length = decodeBase64(encoded, decoded.data(), decoded.size());
-        uint32_t delayMs = 0;
-        if (delayMarker(decoded.data(), length, delayMs))
+        if (uint32_t delayMs = 0; delayMarker(decoded.data(), length, delayMs))
         {
             delay(delayMs);
             continue;
@@ -314,18 +311,17 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
             length = routeUnicoreOutput(decoded.data(), length, GNSS_UNICORE_PORT);
         else if (sensorType == "Ublox" || (sensorType.isEmpty() && sensorType_ == "Ublox"))
             GnssCmdBuilder::routeUbloxOutput(decoded.data(), length);
-        const auto unicore = sensorType == "Unicorecomm" || (sensorType.isEmpty() && sensorType_ == "Unicorecomm");
-        if (unicore)
+        if (const auto unicore = sensorType == "Unicorecomm" || (sensorType.isEmpty() && sensorType_ == "Unicorecomm"); unicore)
         {
             if (!writeUnicoreCommand(decoded.data(), length, error))
                 return false;
             continue;
         }
-        if (rtcmBufferMutex && xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE)
+        if (rtcmBufferMutex() && xSemaphoreTake(rtcmBufferMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE)
         {
             const auto written = Serial1.write(decoded.data(), length);
             Serial1.flush();
-            xSemaphoreGive(rtcmBufferMutex);
+            xSemaphoreGive(rtcmBufferMutex());
             if (written != length)
             {
                 error = "GNSS serial write incomplete";
@@ -345,7 +341,7 @@ bool BackendAgent::executeRawCommands(JsonArray commands, String &error, const S
 void BackendAgent::handleCommand(const String &source, const String &message)
 {
     Serial.printf("[BACKEND][RX] Nhan goi lenh qua %s (%u bytes).\n",
-                  source.c_str(), static_cast<unsigned>(message.length()));
+                  source.c_str(), message.length());
     DynamicJsonDocument doc(COMMAND_DOCUMENT_SIZE);
     if (deserializeJson(doc, message) != DeserializationError::Ok || !doc.is<JsonObject>())
     {
@@ -370,8 +366,8 @@ void BackendAgent::handleCommand(const String &source, const String &message)
         return;
     }
 
-    const auto allowed = command == "LOCK_DEVICE" || command == "UNLOCK_DEVICE" || command == "PROVISION_DEVICE" || command == "DEPLOY_LICENSE" || command == "TRIGGER_AUTO_BASE" || command == "TRIGGER_BASE_REFERENCE_CHECK" || command == "STOP_AUTO_BASE" || command == "APPLY_VN2000_PROVINCE" || command == "EXECUTE_RAW_COMMANDS" || command == "DEPLOY_SERVICE_CONFIG" || command == "SET_RTCM_STREAM_ACTIVE" || command == "DELETE_DEVICE" || command == "CHECK_BASE_STATUS" || command == "VERIFY_GNSS_CONFIG" || command == "CHECK_STORAGE_STATUS" || command == "CLEAR_NVS_DATA" || command == "REBOOT_DEVICE";
-    if (!allowed)
+    if (const auto allowed = command == "LOCK_DEVICE" || command == "UNLOCK_DEVICE" || command == "PROVISION_DEVICE" || command == "DEPLOY_LICENSE" || command == "TRIGGER_AUTO_BASE" || command == "TRIGGER_BASE_REFERENCE_CHECK" || command == "STOP_AUTO_BASE" || command == "APPLY_VN2000_PROVINCE" || command == "EXECUTE_RAW_COMMANDS" || command == "DEPLOY_SERVICE_CONFIG" || command == "SET_RTCM_STREAM_ACTIVE" || command == "DELETE_DEVICE" || command == "CHECK_BASE_STATUS" || command == "VERIFY_GNSS_CONFIG" || command == "CHECK_STORAGE_STATUS" || command == "CLEAR_NVS_DATA" || command == "REBOOT_DEVICE";
+        !allowed)
     {
         recordCommandResult(command, source, "rejected", "unsupported command", commandId);
         publishStatus(true);
@@ -478,8 +474,8 @@ bool BackendAgent::executeServiceConfigCommand(JsonObject payload, String &error
     for (uint8_t id = 1; id <= 2; ++id)
     {
         const auto prefix = String("server") + String(id);
-        const auto onDemandKey = prefix + "_stream_on_demand";
-        const auto activeKey = prefix + "_stream_active";
+        const auto &onDemandKey = prefix + "_stream_on_demand";
+        const auto &activeKey = prefix + "_stream_active";
         const auto serverOnDemand = jsonBool(service, onDemandKey, onDemand);
         service[onDemandKey] = serverOnDemand;
         if (!serverOnDemand)
@@ -839,7 +835,7 @@ bool BackendAgent::executeReferenceCheckCommand(JsonObject payload, String &erro
 }
 
 bool BackendAgent::executeProvinceCommand([[maybe_unused]] JsonObject payload, String &error,
-                                          [[maybe_unused]] String &detail)
+                                          [[maybe_unused]] String &detail) const
 {
     error = "Review Auto Base results and apply Fixed LLA; province overrides no longer write the receiver";
     return false;
@@ -1052,9 +1048,9 @@ void BackendAgent::finishCommand(const String &source, const String &command,
 {
     const bool workflowState = command == "TRIGGER_AUTO_BASE" || command == "TRIGGER_BASE_REFERENCE_CHECK"
         || (command == "STOP_AUTO_BASE" && workflowActive());
-    const bool normalCompletion = command != "REBOOT_DEVICE" && command != "DELETE_DEVICE"
-        && command != "DEPLOY_LICENSE" && !workflowState;
-    if (!workflowActive() && (!success || normalCompletion))
+    if (const bool normalCompletion = command != "REBOOT_DEVICE" && command != "DELETE_DEVICE"
+            && command != "DEPLOY_LICENSE" && !workflowState;
+        !workflowActive() && (!success || normalCompletion))
     {
         setAgentState(normalAgentState());
     }
@@ -1154,9 +1150,9 @@ void BackendAgent::executeCommand(const String &source, const String &command,
         saveStatePreferences();
         publishStatus(true);
         delay(500);
-        prefs.begin("myPrefs", false);
-        prefs.clear();
-        prefs.end();
+        appPrefs().begin("myPrefs", false);
+        appPrefs().clear();
+        appPrefs().end();
         if (beginBackendPreferences(false))
         {
             backendPreferences().clear();

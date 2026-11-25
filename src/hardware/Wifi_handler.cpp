@@ -7,14 +7,14 @@
 #include <nvs.h>
 #include <memory>
 
-static bool connectWifi(const String &ssid, const String &password, 
-        std::function<bool()> validateConnection) {
+static bool connectWifi(const String &ssid, const String &password,
+        const std::function<bool()> &validateConnection) {
     if (!validWifiSsid(ssid) || !validWifiPassword(password)) return false;
     WiFi.disconnect(false, false);
     WiFi.begin(ssid.c_str(), password.c_str());
     const uint32_t started = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - started < 6000UL) delay(100);
-    if (WiFi.status() == WL_CONNECTED && (!validateConnection || validateConnection())) {
+    while (WiFiClass::status() != WL_CONNECTED && millis() - started < 6000UL) delay(100);
+    if (WiFiClass::status() == WL_CONNECTED && (!validateConnection || validateConnection())) {
         Serial.println("[WIFI] Ket noi thanh cong! IP: " + WiFi.localIP().toString());
         return true;
     }
@@ -22,13 +22,11 @@ static bool connectWifi(const String &ssid, const String &password,
     return false;
 }
 
-static bool tryLegacyWifi(std::function<bool()> validateConnection) {
+static bool tryLegacyWifi(const std::function<bool()> &validateConnection) {
     // Upgrade only: select a working old profile before retiring the list.
     String profiles;
-    nvs_handle_t legacy;
-    if (nvs_open("wifi_config", NVS_READONLY, &legacy) == ESP_OK) {
-        size_t length = 0;
-        if (nvs_get_str(legacy, "profiles", nullptr, &length) == ESP_OK && length > 0 && length <= 3072) {
+    if (nvs_handle_t legacy; nvs_open("wifi_config", NVS_READONLY, &legacy) == ESP_OK) {
+        if (size_t length = 0; nvs_get_str(legacy, "profiles", nullptr, &length) == ESP_OK && length > 0 && length <= 3072) {
             auto value = std::make_unique<char[]>(length);
             if (nvs_get_str(legacy, "profiles", value.get(), &length) == ESP_OK) profiles = value.get();
         }
@@ -48,9 +46,9 @@ static bool tryLegacyWifi(std::function<bool()> validateConnection) {
     return false;
 }
 
-bool setupWiFi(std::function<bool()> validateConnection) {
+bool setupWiFi(const std::function<bool()> &validateConnection) {
     WiFi.persistent(false);
-    WiFi.mode(WIFI_STA);
+    WiFiClass::mode(WIFI_STA);
     if (tryLegacyWifi(validateConnection)) return true;
     Preferences store;
     if (!store.begin("myPrefs", true)) return false;

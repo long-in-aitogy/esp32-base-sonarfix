@@ -43,6 +43,7 @@ uint32_t millis() { return now; }
 struct { unsigned baudRate() { return 115200; } } Serial1;
 struct { int RSSI() { return -50; } } WiFi;
 struct { int getSignalQuality() { return 20; } } modem;
+auto &getModem() { return modem; }
 struct {
     unsigned getHeapSize() { return 300000; }
     unsigned getFreeHeap() { return 150000; }
@@ -70,7 +71,7 @@ BackendAgent::BackendAgent() = default;
 BackendAgent::~BackendAgent() = default;
 bool BackendAgent::mqttConnected() const { return true; }
 bool BackendAgent::websocketConnected() const { return false; }
-bool BackendAgent::saveStatePreferences() { ++saves; return true; }
+bool BackendAgent::saveStatePreferences() const { ++saves; return true; }
 int main() {
     for (const char *state : {"online", "configuring", "rebooting", "rebooting_for_reset", "auto_setup_base", "reference_check_queued"})
         for (unsigned flags = 0; flags < 8; ++flags)

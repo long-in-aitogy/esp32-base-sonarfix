@@ -17,21 +17,11 @@
 #include <array>
 #include <cstring>
 
-    extern Preferences prefs;
-extern TinyGsm modem;
 
 using namespace ntrip_common;
 
 namespace
 {
-  class ntripConfig
-  {
-  public:
-    inline static bool isIcyOk = false;
-    inline static unsigned long lastReconnect = 0;
-    inline static bool isNmeaSent = false;
-  };
-
   inline constexpr std::array<uint8_t, 8> ubxMonVerPoll = {
       0xB5, 0x62, 0x0A, 0x04, 0x00, 0x00, 0x0E, 0x34};
 
@@ -223,8 +213,7 @@ bool connectEndpoint(uint8_t index)
     return false;
   }
 
-  String responseLine;
-  if (!waitForNtripResponse(client, &responseLine))
+  if (String responseLine; !waitForNtripResponse(client, &responseLine))
   {
     if (!endpoint.password.isEmpty())
       responseLine.replace(endpoint.password, "[redacted]");
@@ -433,9 +422,9 @@ int connectNTRIP()
 }
 
 /** @brief Implements loopNTRIP. */
-int loopNTRIP(String &rtcmData)
+int loopNTRIP(const String &rtcmData)
 {
-  if (ntripRoverSessionStarted() || backendAgent.workflowActive())
+  if (ntripRoverSessionStarted() || backendAgent().workflowActive())
     return 504;
 
   auto returnCode = NTRIP_MODE;

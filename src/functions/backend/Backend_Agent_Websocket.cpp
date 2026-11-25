@@ -215,12 +215,12 @@ void BackendAgentWebsocket::connectNow()
     std::array<unsigned char, 20> digest{};
     std::array<unsigned char, 32> encoded{};
     size_t encodedLength = 0;
-    const bool valid = mbedtls_sha1_ret(reinterpret_cast<const unsigned char *>(challenge.c_str()),
+    if (const bool valid = mbedtls_sha1_ret(reinterpret_cast<const unsigned char *>(challenge.c_str()),
                                         challenge.length(), digest.data()) == 0
         && mbedtls_base64_encode(encoded.data(), encoded.size(), &encodedLength, digest.data(), digest.size()) == 0
         && WebsocketProtocol::validUpgrade(std::string_view(response.c_str(), response.length()),
                                            std::string_view(reinterpret_cast<const char *>(encoded.data()), encodedLength));
-    if (!valid)
+        !valid)
     {
         client_->stop();
         return;
@@ -280,7 +280,8 @@ bool BackendAgentWebsocket::readFrame(uint8_t &opcode, String &payload)
     payload.reserve(static_cast<size_t>(payloadLength));
     for (size_t i = 0; i < payloadLength; ++i)
         payload += static_cast<char>(rx_[headerLength + i]);
-    rx_.erase(rx_.begin(), rx_.begin() + headerLength + payloadLength);
+    const auto frameLength = headerLength + static_cast<size_t>(payloadLength);
+    rx_.erase(rx_.begin(), rx_.begin() + static_cast<std::ptrdiff_t>(frameLength));
     return true;
 }
 
@@ -326,11 +327,10 @@ void BackendAgentWebsocket::sendControl(uint8_t opcode, const uint8_t *payload, 
         static_cast<uint8_t>((mask >> 8) & 0xFF),
         static_cast<uint8_t>(mask & 0xFF),
     };
-    const std::array<uint8_t, 2> header = {
+    if (const std::array<uint8_t, 2> header = {
         static_cast<uint8_t>(0x80 | opcode),
         static_cast<uint8_t>(0x80 | length),
-    };
-    if (client_->write(header.data(), header.size()) != header.size() ||
+    }; client_->write(header.data(), header.size()) != header.size() ||
         client_->write(maskBytes.data(), maskBytes.size()) != maskBytes.size())
     {
         disconnect(false);

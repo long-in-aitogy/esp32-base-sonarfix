@@ -8,9 +8,7 @@
 #include "hardware/Wifi_Credentials.h"
 #include <cstring>
 
-extern SemaphoreHandle_t rtcmBufferMutex;
 
-extern Preferences prefs;
 
 namespace cmd_helper {
 
@@ -102,27 +100,27 @@ namespace cmd_helper {
 /** @brief Implements saveStringPreference. */
     inline cmd_action_t saveStringPreference(const char *key, const String &value)
     {
-        prefs.begin("myPrefs", false);
-        prefs.putString(key, value);
-        prefs.end();
+        appPrefs().begin("myPrefs", false);
+        appPrefs().putString(key, value);
+        appPrefs().end();
         return cmd_action_t::CMD_ACTION_HANDLED;
     }
 
 /** @brief Implements saveUShortPreference. */
     inline cmd_action_t saveUShortPreference(const char *key, uint16_t value)
     {
-        prefs.begin("myPrefs", false);
-        prefs.putUShort(key, value);
-        prefs.end();
+        appPrefs().begin("myPrefs", false);
+        appPrefs().putUShort(key, value);
+        appPrefs().end();
         return cmd_action_t::CMD_ACTION_HANDLED;
     }
 
 /** @brief Implements saveIntPreference. */
     inline cmd_action_t saveIntPreference(const char *key, int value)
     {
-        prefs.begin("myPrefs", false);
-        prefs.putInt(key, value);
-        prefs.end();
+        appPrefs().begin("myPrefs", false);
+        appPrefs().putInt(key, value);
+        appPrefs().end();
         return cmd_action_t::CMD_ACTION_HANDLED;
     }
 
@@ -141,8 +139,8 @@ namespace cmd_helper {
     inline void sendGnssCommands(const GnssCmdBuilder::CommandList &commands)
     {
         const GnssCmdBuilder::Command commandBytes = GnssCmdBuilder::commandListToBytes(commands);
-        if (gnssSerialMutex == nullptr ||
-            !xSemaphoreTake(gnssSerialMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS))) {
+        if (gnssSerialMutex() == nullptr ||
+            !xSemaphoreTake(gnssSerialMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS))) {
             Serial.println("[GNSS COMMAND][ERROR] Khong lay duoc mutex Serial1.");
             return;
         }
@@ -151,7 +149,7 @@ namespace cmd_helper {
         }
         Serial1.flush();
         readGnssResponse();
-        xSemaphoreGive(gnssSerialMutex);
+        xSemaphoreGive(gnssSerialMutex());
     }
 
 } // namespace cmd_helper
@@ -187,18 +185,18 @@ cmd_action_t handleGnssBaseCommand(const std::vector<String> &cmdWords) {
     options.ports = {"UART1"};
     options.outputMode = GnssCmdBuilder::OutputMode::RtcmOnly;
     GnssCmdBuilder::CommandList commands;
-    prefs.begin("myPrefs", true);
-    const auto configuredSensorType = prefs.isKey("GNSS_MDL_TYPE")
-        ? prefs.getString("GNSS_MDL_TYPE")
+    appPrefs().begin("myPrefs", true);
+    const auto configuredSensorType = appPrefs().isKey("GNSS_MDL_TYPE")
+        ? appPrefs().getString("GNSS_MDL_TYPE")
         : "UBLOX";
     const GnssCmdBuilder::GnssSensorType sensorType =
         GnssCmdBuilder::sensorTypeFromString(configuredSensorType);
     if (sensorType == GnssCmdBuilder::GnssSensorType::Invalid) {
-        prefs.end();
+        appPrefs().end();
         Serial.println("[MQTT COMMAND DOWNLINK] LOI - Chip GNSS dang o trang thai INVALID.");
         return cmd_action_t::CMD_ACTION_NONE;
     }
-    prefs.end();
+    appPrefs().end();
 
     if (cmdWords.empty()) {
         Serial.println("[MQTT COMMAND DOWNLINK] Error: Lenh GNSS BASE khong day du.");
@@ -419,10 +417,10 @@ cmd_action_t handleGnssCommand(std::vector<String> &cmdWords) {
         return cmd_action_t::CMD_ACTION_NONE;
     }
     if (cmdWords.size() == 3 && cmdWords[2] == "ROVER") {
-        if (backendAgent.workflowActive()) {
+        if (backendAgent().workflowActive()) {
             Serial.println("[GNSS ROVER][ERROR] Dung workflow hien tai truoc khi thu lai");
         } else {
-            const auto confirmed = backendAgent.applyRoverMode();
+            const auto confirmed = backendAgent().applyRoverMode();
             Serial.println(confirmed ? "[GNSS ROVER] Rover va GGA da xac nhan"
                                      : "[GNSS ROVER][ERROR] Chua xac nhan Rover/GGA");
         }
@@ -444,9 +442,9 @@ cmd_action_t handleGnssCommand(std::vector<String> &cmdWords) {
 cmd_action_t handleConfigCommand(const std::vector<String> &cmdWords) {
     if (cmdWords.size() < 3 || cmdWords[2] != "RESET") return cmd_action_t::CMD_ACTION_NONE;
     Serial.println("[MQTT COMMAND DOWNLINK] Lenh yeu cau reset ve cau hinh mac dinh");
-    prefs.begin("myPrefs", false);
-    prefs.putBool("NEED_RESET", true);
-    prefs.end();
+    appPrefs().begin("myPrefs", false);
+    appPrefs().putBool("NEED_RESET", true);
+    appPrefs().end();
     return cmd_action_t::CMD_ACTION_ESP_RESTART;
 }
 

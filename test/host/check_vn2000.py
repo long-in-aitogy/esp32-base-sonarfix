@@ -87,30 +87,30 @@ int main(int argc, char **argv) {
     FIXED_PROJECTIONS
     assert(!transformVn2000(21, 105, 0, session.datum(), result));
     session.feed(shortFrame.data(), shortFrame.size());
-    assert(!session.datum().has1021); // Valid CRC cannot authorize truncated parameters.
+    assert(!session.datum().messages.has1021); // Valid CRC cannot authorize truncated parameters.
     auto corrupt = bytes; corrupt[10] ^= 1;
     session.reset(); session.feed(corrupt.data(), corrupt.size());
-    assert(!session.datum().has1021);
+    assert(!session.datum().messages.has1021);
     session.reset();
     const uint8_t noise[] = {0, 0xD3, 0xFF, 0xD3, 0, 0, 7};
     session.feed(noise, sizeof(noise));
     // One-byte fragmentation and coalesced records both occur over NTRIP.
     for (uint8_t byte : bytes) session.feed(&byte, 1);
     const auto decoded = session.datum();
-    assert(decoded.has1021 && decoded.has1023 && decoded.has1025);
-    assert(decoded.count1021 == 1 && decoded.count1023 == 1 && decoded.count1025 == 1);
+    assert(decoded.messages.has1021 && decoded.messages.has1023 && decoded.messages.has1025);
+    assert(decoded.messages.count1021 == 1 && decoded.messages.count1023 == 1 && decoded.messages.count1025 == 1);
     assert(session.validFrames() == 3);
     assert(transformVn2000(21.08499, 105.786656, -8.0624, decoded, result));
-    auto wrongZone = decoded; wrongZone.scale = 0.9999;
+    auto wrongZone = decoded; wrongZone.projection.scale = 0.9999;
     assert(transformVn2000(21, 105, 0, wrongZone, result));
-    auto invalid = decoded; invalid.centralMeridianDeg = 0;
+    auto invalid = decoded; invalid.projection.centralMeridianDeg = 0;
     assert(!transformVn2000(21, 105, 0, invalid, result));
     assert(!transformVn2000(NAN, 105, 0, decoded, result));
     // Both projection widths and the optional shifts must follow the reference chain.
     for (double scale : {0.9996, 0.9999}) {
         auto shifted = decoded;
-        shifted.scale = scale;
-        shifted.resN = 0.25; shifted.resE = -0.75; shifted.resHS = 1.5;
+        shifted.projection.scale = scale;
+        shifted.residuals.resN = 0.25; shifted.residuals.resE = -0.75; shifted.residuals.resHS = 1.5;
         assert(transformVn2000(21.08499, 105.786656, -8.0624, shifted, result));
         std::cout << std::setprecision(16) << result.north << ' ' << result.east << ' ' << result.h << ' '
             << result.latitude << ' ' << result.longitude << ' ' << result.altitude << ' ';
@@ -119,11 +119,11 @@ int main(int argc, char **argv) {
     std::cout << std::setprecision(16) << result.north << ' ' << result.east << ' ' << result.h << ' '
         << result.latitude << ' ' << result.longitude << ' ' << result.altitude << '\n';
     session.reset();
-    assert(!session.datum().has1021 && !session.datum().has1023 && !session.datum().has1025);
+    assert(!session.datum().messages.has1021 && !session.datum().messages.has1023 && !session.datum().messages.has1025);
     assert(session.validFrames() == 0);
-    assert(session.datum().count1021 == 0); // A new caster cannot reuse prior-session parameters.
+    assert(session.datum().messages.count1021 == 0); // A new caster cannot reuse prior-session parameters.
     session.feed(bytes.data(), bytes.size());
-    assert(session.datum().has1021 && session.datum().count1021 == 1);
+    assert(session.datum().messages.has1021 && session.datum().messages.count1021 == 1);
 }
 '''
 checks = []
@@ -133,11 +133,11 @@ for encoded, raw_scale, scale in projection_vectors:
         const uint8_t packet[] = {%s};
         session.reset(); session.feed(packet, sizeof(packet));
         const auto projection = session.datum();
-        assert(projection.has1025 && projection.projectionScaleRaw == %d);
-        assert(std::abs(projection.scale - %.4f) < 1e-12);
-        assert(projection.projectionLongitudeRaw == 9545454545LL && projection.projectionType == 1);
-        assert(projection.projectionFrameBytes == sizeof(packet));
-        assert(std::string(projection.projectionFrameHex.data()) == "%s");
+        assert(projection.messages.has1025 && projection.projection.scaleRaw == %d);
+        assert(std::abs(projection.projection.scale - %.4f) < 1e-12);
+        assert(projection.projection.longitudeRaw == 9545454545LL && projection.projection.type == 1);
+        assert(projection.projection.frameBytes == sizeof(packet));
+        assert(std::string(projection.projection.frameHex.data()) == "%s");
     }''' % (data, raw_scale, scale, encoded))
 harness = harness.replace('FIXED_PROJECTIONS', '\n'.join(checks) + '\n    session.reset();')
 with tempfile.TemporaryDirectory(prefix='esp-vn2000-') as directory:

@@ -14,8 +14,6 @@
 #include <cstdlib>
 #include <cstring>
 
-extern Preferences prefs;
-extern TinyGsm modem;
 
 /** @brief Implements jsonBool. */
 bool jsonBool(JsonObjectConst object, const String &key, bool fallback = false)
@@ -58,16 +56,14 @@ struct LocalNtripConfig
 };
 
 /** @brief Implements loadLocalNtripConfig. */
-LocalNtripConfig loadLocalNtripConfig()
+void loadLocalNtripConfig(LocalNtripConfig &localConfig)
 {
-    LocalNtripConfig legacy;
-    prefs.begin("myPrefs", true);
-    legacy.host = prefs.getString("NTRIP_SERVER", String(NTRIP_CASTER_ADDRESS));
-    legacy.port = prefs.getUShort("NTRIP_PORT", NTRIP_CASTER_PORT);
-    legacy.mountpoint = prefs.getString("NTRIP_MPT", String(NTRIP_MOUNTPOINT));
-    legacy.password = prefs.getString("NT_AUTH_BS", String(NTRIP_AUTH_BASE_STATION));
-    prefs.end();
-    return legacy;
+    appPrefs().begin("myPrefs", true);
+    localConfig.host = appPrefs().getString("NTRIP_SERVER", String(NTRIP_CASTER_ADDRESS));
+    localConfig.port = appPrefs().getUShort("NTRIP_PORT", NTRIP_CASTER_PORT);
+    localConfig.mountpoint = appPrefs().getString("NTRIP_MPT", String(NTRIP_MOUNTPOINT));
+    localConfig.password = appPrefs().getString("NT_AUTH_BS", String(NTRIP_AUTH_BASE_STATION));
+    appPrefs().end();
 }
 
 /** @brief Implements endpointHost. */
@@ -83,11 +79,11 @@ String endpointHost(JsonObjectConst service, uint8_t index)
 }
 
 /** @brief Implements endpointPort. */
-uint16_t endpointPort(JsonObjectConst service, uint8_t index, uint16_t legacyPort)
+uint16_t endpointPort(JsonObjectConst service, uint8_t index, uint16_t localPort)
 {
     const auto suffix = String(index + 1);
     const auto generic = index == 0 ? "port" : "port2";
-    const uint16_t fallback = index == 0 ? legacyPort : 2101;
+    const uint16_t fallback = index == 0 ? localPort : 2101;
     JsonVariantConst value = service["port" + suffix];
     if (value.isNull()) value = service["serverport" + suffix];
     if (value.isNull()) value = service[generic];
@@ -128,10 +124,31 @@ String base64Encode(const String &plain)
 namespace ntrip_common
 {
     constexpr size_t CONFIG_DOCUMENT_SIZE = BackendAgentInternal::CONFIG_DOCUMENT_SIZE;
-    WiFiClient wifiNtripClient1;
-    WiFiClient wifiNtripClient2;
-    TinyGsmClient gsmNtripClient1(modem, 0);
-    TinyGsmClient gsmNtripClient2(modem, 2);
+    WiFiClient &wifiNtripClient1()
+    {
+        static WiFiClient client;
+        return client;
+    }
+    WiFiClient &wifiNtripClient2()
+    {
+        static WiFiClient client;
+        return client;
+    }
+    TinyGsmClient &gsmNtripClient1()
+    {
+        static TinyGsmClient client(getModem(), 0);
+        return client;
+    }
+    TinyGsmClient &gsmNtripClient2()
+    {
+        static TinyGsmClient client(getModem(), 2);
+        return client;
+    }
+    void initializeGsmClients()
+    {
+        (void)gsmNtripClient1();
+        (void)gsmNtripClient2();
+    }
     NtripEndpoint &endpointFor(uint8_t index)
     {
         static std::array<NtripEndpoint, NTRIP_SERVER_COUNT> endpoints;
@@ -143,12 +160,12 @@ namespace ntrip_common
         if (index == 0)
         {
             return isWifiConnection()
-                       ? static_cast<Client &>(wifiNtripClient1)
-                       : static_cast<Client &>(gsmNtripClient1);
+                       ? static_cast<Client &>(wifiNtripClient1())
+                       : static_cast<Client &>(gsmNtripClient1());
         }
         return isWifiConnection()
-                   ? static_cast<Client &>(wifiNtripClient2)
-                   : static_cast<Client &>(gsmNtripClient2);
+                   ? static_cast<Client &>(wifiNtripClient2())
+                   : static_cast<Client &>(gsmNtripClient2());
     }
 
 /** @brief Implements clearEndpointState. */
@@ -171,32 +188,32 @@ namespace ntrip_common
 
 /** @brief Implements loadEndpoint. */
     void loadEndpoint(NtripEndpoint &endpoint, uint8_t index, JsonObjectConst service,
-                      bool hasServiceConfig, const LocalNtripConfig &legacy)
+                      bool hasServiceConfig, const LocalNtripConfig &localConfig)
     {
         const auto suffix = String(index + 1);
         auto genericUser = "user2";
         auto genericPassword = "password2";
         auto genericMountpoint = "mountpoint2";
-        String legacyHost;
-        String legacyMountpoint;
-        String legacyPassword;
-        uint16_t legacyPort = 2101;
+        String localHost;
+        String localMountpoint;
+        String localPassword;
+        uint16_t localPort = 2101;
         if (index == 0)
         {
             genericUser = "user";
             genericPassword = "password";
             genericMountpoint = "mountpoint";
-            legacyHost = legacy.host;
-            legacyMountpoint = legacy.mountpoint;
-            legacyPassword = legacy.password;
-            legacyPort = legacy.port;
+            localHost = localConfig.host;
+            localMountpoint = localConfig.mountpoint;
+            localPassword = localConfig.password;
+            localPort = localConfig.port;
         }
 
         if (hasServiceConfig)
         {
             endpoint.enabled = jsonBool(service, "server" + suffix + "_enabled", false);
             endpoint.host = endpointHost(service, index);
-            endpoint.port = endpointPort(service, index, legacy.port);
+            endpoint.port = endpointPort(service, index, localConfig.port);
             endpoint.mountpoint = jsonString(service, "mountpoint" + suffix,
                                              jsonString(service, "mp" + suffix,
                                                         jsonString(service, genericMountpoint, String())));
@@ -205,17 +222,17 @@ namespace ntrip_common
                                                       jsonString(service, genericUser, "source")));
             endpoint.password = jsonString(service, "password" + suffix,
                                            jsonString(service, "pass" + suffix,
-                                                      jsonString(service, genericPassword, legacyPassword)));
+                                                      jsonString(service, genericPassword, localPassword)));
             endpoint.version = static_cast<uint8_t>(service["ntrip_version" + suffix] | 1);
         }
         else
         {
-            endpoint.enabled = index == 0 && !legacy.host.isEmpty();
-            endpoint.host = legacyHost;
-            endpoint.port = legacyPort;
-            endpoint.mountpoint = legacyMountpoint;
+            endpoint.enabled = index == 0 && !localConfig.host.isEmpty();
+            endpoint.host = localHost;
+            endpoint.port = localPort;
+            endpoint.mountpoint = localMountpoint;
             endpoint.username = "source";
-            endpoint.password = legacyPassword;
+            endpoint.password = localPassword;
             endpoint.version = 1;
         }
         normalizeEndpoint(endpoint);
@@ -225,7 +242,7 @@ namespace ntrip_common
     void loadEndpoints()
     {
         DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
-        const auto serialized = backendAgent.serviceConfigJson();
+        const auto serialized = backendAgent().serviceConfigJson();
         const auto parseError = deserializeJson(serviceDoc, serialized);
         if (parseError == DeserializationError::NoMemory)
         {
@@ -236,11 +253,12 @@ namespace ntrip_common
         const auto hasServiceConfig = parseError == DeserializationError::Ok && serviceDoc.is<JsonObject>();
         const JsonObjectConst service = serviceDoc.as<JsonObjectConst>();
 
-        const LocalNtripConfig legacy = loadLocalNtripConfig();
+        LocalNtripConfig localConfig;
+        loadLocalNtripConfig(localConfig);
 
         for (uint8_t index = 0; index < NTRIP_SERVER_COUNT; ++index)
         {
-            loadEndpoint(endpointFor(index), index, service, hasServiceConfig, legacy);
+            loadEndpoint(endpointFor(index), index, service, hasServiceConfig, localConfig);
         }
     }
 
@@ -250,7 +268,7 @@ namespace ntrip_common
         if (index >= NTRIP_SERVER_COUNT || backendDeviceLocked(index + 1) || !backendLicenseValid() || !backendDeviceProvisioned() || !backendBaseStartupConfigured())
             return false;
         DynamicJsonDocument serviceDoc(CONFIG_DOCUMENT_SIZE);
-        const auto parseError = deserializeJson(serviceDoc, backendAgent.serviceConfigJson());
+        const auto parseError = deserializeJson(serviceDoc, backendAgent().serviceConfigJson());
         if (parseError == DeserializationError::NoMemory)
             return false;
         if (parseError != DeserializationError::Ok || !serviceDoc.is<JsonObject>())
@@ -319,8 +337,7 @@ namespace ntrip_common
             const int end = response.indexOf('\r', start);
             if (end <= start)
                 break;
-            const int colon = response.indexOf(':', start);
-            if (colon > start && colon < end
+            if (const int colon = response.indexOf(':', start); colon > start && colon < end
                 && response.substring(start, colon).equalsIgnoreCase("X-NTRIP-Selected-Mountpoint"))
             {
                 if (found)

@@ -16,8 +16,6 @@
 #include <array>
 #include <cstring>
 
-extern Preferences prefs;
-extern TinyGsm modem;
 
 using namespace ntrip_common;
 
@@ -58,8 +56,8 @@ void sendRoverGgaIfAvailable(Client &client, const bool force = false)
         }
         return;
     }
-    const auto outbound = String(snapshot.lastGga.data()) + "\r\n";
-    if (client.print(outbound) != outbound.length())
+    if (const auto outbound = String(snapshot.lastGga.data()) + "\r\n";
+        client.print(outbound) != outbound.length())
     {
         Serial.println("[NTRIP ROVER] Loi ghi GGA len socket caster");
         roverSession().lastGgaMs = millis();
@@ -103,8 +101,8 @@ String buildNtripRoverRequest(const String &host, const uint16_t port, const Str
                          "Connection: close\r\n\r\n";
     }
 
-    const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
-    if (snapshot.lastGga[0] != '\0' && snapshot.lastGgaMs != 0
+    if (const GnssTelemetrySnapshot snapshot = getGnssTelemetrySnapshot();
+        snapshot.lastGga[0] != '\0' && snapshot.lastGgaMs != 0
         && millis() - snapshot.lastGgaMs <= 3000UL)
     {
         String gga = snapshot.lastGga.data();
@@ -134,8 +132,7 @@ bool sendNtripRoverRequest(Client &client, const String &request,
         return false;
     }
 
-    String responseLine;
-    if (!waitForNtripResponse(client, &responseLine, selectedMountpoint))
+    if (String responseLine; !waitForNtripResponse(client, &responseLine, selectedMountpoint))
     {
         for (const char *reason : {"ERROR - NO STATION WITHIN 20 KM",
                                    "ERROR - FIXED STATION IN RANGE UNAVAILABLE",
@@ -197,8 +194,8 @@ bool startNtripRover(const String &host, const uint16_t port, const String &user
     }
 
     const auto user = username.isEmpty() ? String("source") : username;
-    const auto request = buildNtripRoverRequest(host, port, user, password, mountpoint, options);
-    if (!sendNtripRoverRequest(client, request, options.selectedMountpoint))
+    if (const auto request = buildNtripRoverRequest(host, port, user, password, mountpoint, options);
+        !sendNtripRoverRequest(client, request, options.selectedMountpoint))
         return false;
     roverSession().authenticated = true;
     roverSession().lastError = "CORS rover connection lost";
@@ -237,14 +234,13 @@ int loopNtripRover()
         return 200;
 
     std::array<uint8_t, 512> buffer{};
-    if (!rtcmBufferMutex || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+    if (!rtcmBufferMutex() || xSemaphoreTake(rtcmBufferMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
     {
         return 200;
     }
     const auto available = client.available();
     const auto bytesToRead = min(static_cast<size_t>(available), sizeof(buffer));
-    const auto bytesRead = client.read(buffer.data(), bytesToRead);
-    if (bytesRead > 0)
+    if (const auto bytesRead = client.read(buffer.data(), bytesToRead); bytesRead > 0)
     {
         roverSession().datum.feed(buffer.data(), static_cast<size_t>(bytesRead));
         const size_t written = Serial1.write(buffer.data(), static_cast<size_t>(bytesRead));
@@ -256,11 +252,11 @@ int loopNtripRover()
             roverSession().lastError = "GNSS UART did not accept all CORS bytes";
             Serial.printf("[NTRIP ROVER][ERROR] UART accepted %u/%u bytes\n",
                           static_cast<unsigned>(written), static_cast<unsigned>(bytesRead));
-            xSemaphoreGive(rtcmBufferMutex);
+            xSemaphoreGive(rtcmBufferMutex());
             return 504;
         }
     }
-    xSemaphoreGive(rtcmBufferMutex);
+    xSemaphoreGive(rtcmBufferMutex());
     // Return status, not byte count: a valid 504-byte read is not a disconnect.
     return 200;
 }

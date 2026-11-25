@@ -16,7 +16,7 @@ uint32_t millis() { return now; }
 unsigned pdMS_TO_TICKS(unsigned ms) { return ms; }
 struct Snapshot { uint32_t lastGgaMs = 0; std::array<char, 8> lastGga = {}; };
 Snapshot getGnssTelemetrySnapshot() { Snapshot s; if (ggaAt && now >= ggaAt) s.lastGgaMs = ggaAt; return s; }
-struct BackendAgent { bool workflowCancelRequested_ = false; bool waitForRoverGga(uint32_t); };
+struct BackendAgent { bool workflowCancelRequested_ = false; bool waitForRoverGga(uint32_t) const; };
 BackendAgent *active;
 void vTaskDelay(unsigned ms) { now += ms; if (cancelAt && now >= cancelAt) active->workflowCancelRequested_ = true; }
 '''

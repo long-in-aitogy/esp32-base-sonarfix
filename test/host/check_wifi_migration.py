@@ -15,6 +15,7 @@ harness = r'''
 #include <ArduinoJson.h>
 #include <cassert>
 #include <cstring>
+#include <functional>
 #include <map>
 #include <memory>
 constexpr int WIFI_STA=1, ESP_OK=0, NVS_READONLY=1;
@@ -23,7 +24,8 @@ using nvs_handle_t=int;
 String profiles, tried, triedPassword;
 std::map<String, String> saved;
 bool writeOk=true, connected=true, cleanupOk=true, failPasswordOnce=false; unsigned cleaned=0;
-struct { void persistent(bool) {} void mode(int) {} } WiFi;
+struct WiFiClass { static void mode(int) {} };
+struct { void persistent(bool) {} } WiFi;
 struct Preferences {
     bool begin(const char *, bool) { return true; }
     void end() {}
@@ -41,7 +43,7 @@ void nvs_close(nvs_handle_t) {}
 bool validWifiSsid(const String &ssid) { return !ssid.isEmpty() && ssid.size()<=32; }
 bool validWifiPassword(const String &password) { return password.isEmpty() || (password.size()>=8 && password.size()<=63); }
 bool clearUnusedWifi(String &) { ++cleaned; if (cleanupOk) profiles.clear(); return cleanupOk; }
-bool connectWifi(const String &ssid, const String &password, bool (*validate)()) {
+bool connectWifi(const String &ssid, const String &password, const std::function<bool()> &validate) {
     tried=ssid; triedPassword=password; return connected && ssid!="bad" && (!validate || validate());
 }
 '''

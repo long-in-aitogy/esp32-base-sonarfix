@@ -10,8 +10,6 @@
 #include <cmath>
 #include <cstdlib>
 
-extern SemaphoreHandle_t rtcmBufferMutex;
-extern SemaphoreHandle_t gnssSerialMutex;
 
 namespace UnicoreReadback
 {
@@ -112,14 +110,14 @@ namespace UnicoreReadback
 /** @brief Implements queryUnicoreLine. */
         bool queryUnicoreLine(const char *query, const char *prefix, String &response, String &error, bool multiline = false)
         {
-            if (!rtcmBufferMutex || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+            if (!rtcmBufferMutex() || xSemaphoreTake(rtcmBufferMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
             {
                 error = "GNSS command port is busy";
                 return false;
             }
-            if (!gnssSerialMutex || xSemaphoreTake(gnssSerialMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+            if (!gnssSerialMutex() || xSemaphoreTake(gnssSerialMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
             {
-                xSemaphoreGive(rtcmBufferMutex);
+                xSemaphoreGive(rtcmBufferMutex());
                 error = "GNSS reader is busy";
                 return false;
             }
@@ -139,12 +137,12 @@ namespace UnicoreReadback
             const uint32_t started = millis();
             if (written)
                 collectUnicoreResponse(prefix, reply, response, error, receivedBytes, multiline);
-            xSemaphoreGive(gnssSerialMutex);
-            xSemaphoreGive(rtcmBufferMutex);
+            xSemaphoreGive(gnssSerialMutex());
+            xSemaphoreGive(rtcmBufferMutex());
 
             Serial.printf("[GNSS][READBACK][RX] query=%s; bytes=%lu; elapsed_ms=%lu; reply=%u\n",
                           query, static_cast<unsigned long>(receivedBytes),
-                          static_cast<unsigned long>(millis() - started), static_cast<unsigned int>(reply.state));
+                          millis() - started, static_cast<unsigned int>(reply.state));
 
             if (!error.isEmpty())
                 return false;
@@ -198,8 +196,7 @@ namespace UnicoreReadback
             return false;
         }
         mode = response.substring(separator + 1);
-        const auto checksum = mode.indexOf('*');
-        if (checksum >= 0)
+        if (const auto checksum = mode.indexOf('*'); checksum >= 0)
             mode.remove(checksum);
         mode.trim();
         if (mode.endsWith(","))
@@ -277,8 +274,7 @@ namespace UnicoreReadback
             return false;
         }
         auto payload = response.substring(separator + 1);
-        const auto checksum = payload.indexOf('*');
-        if (checksum >= 0)
+        if (const auto checksum = payload.indexOf('*'); checksum >= 0)
             payload.remove(checksum);
         std::array<String, 10> fields;
         if (!parseBestNavFields(payload, fields))

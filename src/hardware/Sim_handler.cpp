@@ -3,11 +3,18 @@
 
 #ifdef DUMP_AT_COMMANDS
 #include <StreamDebugger.h>
-StreamDebugger debugger(SerialAT, SerialMon);
-TinyGsm modem(debugger);
-#else
-TinyGsm modem(SerialAT);
 #endif
+
+TinyGsm &getModem()
+{
+#ifdef DUMP_AT_COMMANDS
+    static StreamDebugger debugger(SerialAT, SerialMon);
+    static TinyGsm modem(debugger);
+#else
+    static TinyGsm modem(SerialAT);
+#endif
+    return modem;
+}
 
 /** @brief Implements startSIM. */
 bool startSIM()
@@ -27,10 +34,10 @@ bool startSIM()
     SerialMon.println("[GSM] Khoi tao modem... So lan thu: " + String(retrys));
 
 #ifndef NATIVE_BUILD
-    modem.init();
+    getModem().init();
 #endif
 
-    auto modemInfo = modem.getModemInfo();
+    auto modemInfo = getModem().getModemInfo();
     while (modemInfo.isEmpty())
     {
         if (retrys > 10)
@@ -41,9 +48,9 @@ bool startSIM()
         SerialMon.println("[GSM] Lay thong tin modem that bai ! So lan thu: " + String(retrys));
         delay(1000);
 #ifndef NATIVE_BUILD
-        modem.restart();
+        getModem().restart();
 #endif
-        modemInfo = modem.getModemInfo();
+        modemInfo = getModem().getModemInfo();
         retrys++;
     }
     SerialMon.print("[GSM] Khoi dong modem thanh cong.Thong tin modem: ");
@@ -60,13 +67,13 @@ bool connectGSM(uint8_t maxAttempts)
     while (retries < maxAttempts)
     {
         retries++;
-        auto simOperator = modem.getProvider();
+        auto simOperator = getModem().getProvider();
         SerialMon.println("[GSM] Nha mang GSM: " + simOperator);
-        prefs.begin("myPrefs", true);
-        String apn = prefs.getString("APN", String(APN));
-        auto gprsUser = prefs.getString("GPRS_USER", String(GPRS_USER));
-        auto gprsPass = prefs.getString("GPRS_PASS", String(GPRS_PASS));
-        prefs.end();
+        appPrefs().begin("myPrefs", true);
+        String apn = appPrefs().getString("APN", String(APN));
+        auto gprsUser = appPrefs().getString("GPRS_USER", String(GPRS_USER));
+        auto gprsPass = appPrefs().getString("GPRS_PASS", String(GPRS_PASS));
+        appPrefs().end();
         if (apn.isEmpty() || apn.equalsIgnoreCase("auto"))
         {
             if (simOperator.indexOf("VIETTEL") >= 0)
@@ -80,10 +87,10 @@ bool connectGSM(uint8_t maxAttempts)
         }
 
         SerialMon.println("[GSM] Dang ket noi mang GSM...");
-        if (modem.isNetworkConnected())
+        if (getModem().isNetworkConnected())
         {
             SerialMon.println("[GSM] Mang GSM da ket noi.");
-            if (modem.gprsConnect(apn.c_str(), gprsUser.c_str(), gprsPass.c_str()) && modem.isGprsConnected())
+            if (getModem().gprsConnect(apn.c_str(), gprsUser.c_str(), gprsPass.c_str()) && getModem().isGprsConnected())
             {
                 SerialMon.println("[GSM] GPRS da ket noi.");
                 return true;
@@ -94,11 +101,11 @@ bool connectGSM(uint8_t maxAttempts)
             }
         }
         SerialMon.println("[GSM] Chua ket noi duoc mang GSM ngay lap tuc. Dang doi...");
-        if (modem.waitForNetwork(30000))
+        if (getModem().waitForNetwork(30000))
         {
             delay(1000);
             SerialMon.println("[GSM] Mang GSM da ket noi.");
-            if (modem.gprsConnect(apn.c_str(), gprsUser.c_str(), gprsPass.c_str()) && modem.isGprsConnected())
+            if (getModem().gprsConnect(apn.c_str(), gprsUser.c_str(), gprsPass.c_str()) && getModem().isGprsConnected())
             {
                 SerialMon.println("[GSM] GPRS da ket noi.");
                 return true;

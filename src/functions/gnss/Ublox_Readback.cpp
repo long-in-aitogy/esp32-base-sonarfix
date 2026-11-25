@@ -11,22 +11,20 @@
 #include <array>
 #include <cstring>
 
-extern SemaphoreHandle_t rtcmBufferMutex;
-extern SemaphoreHandle_t gnssSerialMutex;
 
 namespace
 {
 
     bool acquireQueryLocks(String &error)
     {
-        if (!rtcmBufferMutex || xSemaphoreTake(rtcmBufferMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+        if (!rtcmBufferMutex() || xSemaphoreTake(rtcmBufferMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
         {
             error = "GNSS command port is busy";
             return false;
         }
-        if (!gnssSerialMutex || xSemaphoreTake(gnssSerialMutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
+        if (!gnssSerialMutex() || xSemaphoreTake(gnssSerialMutex(), pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) != pdTRUE)
         {
-            xSemaphoreGive(rtcmBufferMutex);
+            xSemaphoreGive(rtcmBufferMutex());
             error = "GNSS reader is busy";
             return false;
         }
@@ -35,8 +33,8 @@ namespace
 
     void releaseQueryLocks()
     {
-        xSemaphoreGive(gnssSerialMutex);
-        xSemaphoreGive(rtcmBufferMutex);
+        xSemaphoreGive(gnssSerialMutex());
+        xSemaphoreGive(rtcmBufferMutex());
     }
 
     bool sendQuery(uint8_t cls, uint8_t id, const uint8_t *payload, size_t length)
@@ -112,7 +110,7 @@ namespace
             result = matched ? "OK" : "TIMEOUT";
         Serial.printf("[GNSS][READBACK][RX] UBX %02X/%02X; bytes=%lu; elapsed_ms=%lu; reply=%s\n",
                       cls, id, static_cast<unsigned long>(receivedBytes),
-                      static_cast<unsigned long>(millis() - started), result);
+                      millis() - started, result);
 #if PROGRAM_DEBUG
         if (matched)
         {

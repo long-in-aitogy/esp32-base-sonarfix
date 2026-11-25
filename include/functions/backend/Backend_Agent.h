@@ -17,6 +17,7 @@
 #include <vector>
 
 class BackendAgentWebsocket;
+void initializeBackendGsmClient();
 struct GnssTelemetrySnapshot;
 struct Vn2000Datum;
 
@@ -41,7 +42,7 @@ public:
     void onMqttMessage(const char *topic, const uint8_t *payload, size_t length);
 
     void enqueueNmea(const uint8_t *data, size_t length);
-    void enqueueRtcm(const uint8_t *data, size_t length);
+    void enqueueRtcm(const uint8_t *data, size_t length) const;
 
     void publishStatus(bool force = false);
     void setAgentState(const String &state);
@@ -142,16 +143,16 @@ private:
     String workflowPayload_;
 
     void loadPreferences();
-    bool saveStatePreferences();
+    bool saveStatePreferences() const;
     void saveDetectedChip(const char *chipType);
-    bool probeUnicore(Stream &stream, String &identityLine);
-    bool probeUblox(Stream &stream);
-    bool probePassiveUblox(Stream &stream);
+    bool probeUnicore(Stream &stream, String &identityLine) const;
+    bool probeUblox(Stream &stream) const;
+    bool probePassiveUblox(Stream &stream) const;
     void ensureDefaultServiceConfig();
     String normalAgentState() const;
-    void setupWebsocket();
+    void setupWebsocket() const;
     void refreshWebsocket();
-    void loopWebsocket();
+    void loopWebsocket() const;
     void drainDataQueues();
     void retryUnknownChipProbe();
     void evaluateControlPlaneFailover();
@@ -161,21 +162,59 @@ private:
     void requestWorkflowStop();
     bool writeGnssCommands(const GnssCmdBuilder::CommandList &commands);
     bool writeUnicoreCommand(const uint8_t *data, size_t length, String &error);
-    bool waitForUnicoreReply(UnicoreReply &reply, bool written);
+    bool waitForUnicoreReply(UnicoreReply &reply, bool written) const;
     void handleUnicoreAck(const UnicoreReply &reply, const uint8_t *data, size_t length);
-    bool exchangeUbloxRoverCommand(const GnssCmdBuilder::Command &command, bool poll);
-    bool configureUbloxRover();
-    bool waitForRoverGga(uint32_t startedMs);
+    bool exchangeUbloxRoverCommand(const GnssCmdBuilder::Command &command, bool poll) const;
+    bool configureUbloxRover() const;
+    bool waitForRoverGga(uint32_t startedMs) const;
     void setWorkflowProgress(const String &phase, uint8_t step, uint8_t total,
                              const String &details = String());
+    struct AutoBaseConfig {
+        String host;
+        uint16_t port = 0;
+        String username;
+        String password;
+        String mountpoint;
+        uint8_t ntripVersion = 0;
+        uint32_t timeoutSeconds = 0;
+        uint8_t fixedStreakRequired = 0;
+    };
+    struct AutoBaseResultInput {
+        double finalLatitude = 0;
+        double finalLongitude = 0;
+        double finalAltitude = 0;
+        double rawLatitude = 0;
+        double rawLongitude = 0;
+        double rawAltitude = 0;
+        bool transformed = false;
+        bool transportRestored = false;
+        size_t sampleCount = 0;
+        const char *projectionSource = "";
+        const char *provinceCode = "";
+        const char *provinceName = "";
+        double centralMeridianDeg = 0;
+        double scale = 0;
+    };
+    struct ReferenceCheckConfig {
+        JsonObject reference;
+        double referenceLatitude = 0;
+        double referenceLongitude = 0;
+        double referenceAltitude = 0;
+        double restoreLatitude = 0;
+        double restoreLongitude = 0;
+        double restoreAltitude = 0;
+        String host;
+        uint16_t port = 0;
+        String username;
+        String password;
+        String mountpoint;
+        uint32_t timeoutSeconds = 0;
+        uint16_t requestedSamples = 0;
+    };
     bool runAutoBaseWorkflow(JsonObject payload);
-    bool prepareAutoBaseConfig(JsonObject payload, String &host, uint16_t &port,
-                               String &username, String &password, String &mountpoint,
-                               uint8_t &ntripVersion, uint32_t &timeoutSeconds,
-                               uint8_t &fixedStreakRequired);
-    bool startAutoBaseRover(const String &host, uint16_t port, const String &username,
-                            const String &password, const String &mountpoint,
-                            uint8_t ntripVersion, String &error, String *selectedMountpoint = nullptr);
+    bool prepareAutoBaseConfig(JsonObject payload, AutoBaseConfig &config) const;
+    bool startAutoBaseRover(const AutoBaseConfig &config, String &error,
+                            String *selectedMountpoint = nullptr) const;
     bool waitForAutoBaseFix(uint32_t timeoutSeconds, uint8_t fixedStreakRequired,
                             bool &cancelled, String &failureReason, const String &sourceMountpoint);
     bool collectAutoBaseSamples(int configuredSamples, std::vector<double> &latitudes,
@@ -186,50 +225,38 @@ private:
                                const std::vector<double> &longitudes,
                                const std::vector<double> &altitudes,
                                String &resultJson, String &failureReason, const String &sourceMountpoint);
-    String buildAutoBaseResult(double finalLatitude, double finalLongitude,
-                               double finalAltitude, double rawLatitude,
-                               double rawLongitude, double rawAltitude,
-                               bool transformed, bool transportRestored,
-                               size_t sampleCount, const String &projectionSource,
-                               const String &provinceCode, const String &provinceName,
-                               double centralMeridianDeg, double scale, JsonObjectConst report);
+    String buildAutoBaseResult(const AutoBaseResultInput &input, JsonObjectConst report) const;
     bool resolveAutoBaseLocation(double latitude, double longitude, double altitude,
                                  JsonDocument &location, String &failureReason);
     bool restoreAutoBaseAfterReview(JsonDocument &previousBase);
-    bool prepareAutoBaseSnapshot(JsonDocument &previousBase);
-    bool waitForAutoNearestPosition(uint32_t timeoutSeconds);
+    bool prepareAutoBaseSnapshot(JsonDocument &previousBase) const;
+    bool waitForAutoNearestPosition(uint32_t timeoutSeconds) const;
     bool startSurveyInFallback(JsonObject payload, JsonDocument &previousBase,
                                const String &startedBootId, const String &startedRequestId, String &failureReason);
     void finishAutoBaseWorkflow(JsonDocument &previousBase, bool hasSavedPrevious,
                                 const String &selectedMountpoint, bool success,
                                 bool cancelled, const String &reason);
     bool runReferenceCheckWorkflow(JsonObject payload);
-    bool prepareReferenceCheckConfig(JsonObject payload, JsonObject &reference,
-                                     double &referenceLatitude, double &referenceLongitude,
-                                     double &referenceAltitude, double &restoreLatitude,
-                                     double &restoreLongitude, double &restoreAltitude,
-                                     String &host, uint16_t &port, String &username,
-                                     String &password, String &mountpoint,
-                                     uint32_t &timeoutSeconds, uint16_t &requestedSamples);
+    bool prepareReferenceCheckConfig(JsonObject payload, ReferenceCheckConfig &config);
     bool startReferenceRover(const String &host, uint16_t port, const String &username,
-                                    const String &password, const String &mountpoint, String &error);
+                                    const String &password, const String &mountpoint, String &error) const;
     bool waitForReferenceFix(uint32_t timeoutSeconds, String &failureReason);
     bool collectReferenceSamples(uint16_t requestedSamples, std::vector<double> &latitudes,
                                  std::vector<double> &longitudes,
                                  std::vector<double> &altitudes, String &failureReason);
     String buildReferenceCheckResult(JsonObject reference, double measuredLatitude,
                                      double measuredLongitude, double measuredAltitude,
-                                     size_t sampleCount);
-    bool restartConfiguredNtrip(bool transportLocked = false);
-    int loopNtripRoverLocked();
-    bool stopNtripRoverLocked();
+                                     size_t sampleCount) const;
+    bool restartConfiguredNtrip(bool transportLocked = false) const;
+    int loopNtripRoverLocked() const;
+    bool stopNtripRoverLocked() const;
     bool restoreWorkflowBase(JsonObjectConst base);
     bool restoreSurveyInBase(JsonObjectConst base, GnssCmdBuilder::GnssSensorType chip, String &error);
     void reconcileBaseStartupReadback();
     bool refreshReceiverReadback(String &error);
     bool refreshUbloxReadback(String &error);
     void updateUbloxSurveyState(const UbxBaseStatus &status);
-    void logUbloxReadback(const UbxBaseStatus &status);
+    void logUbloxReadback(const UbxBaseStatus &status) const;
     void appendUbloxPosition(JsonDocument &doc, const UbxBaseStatus &status,
                              const String &mode);
     bool refreshUnicoreReadback(String &error);
@@ -243,7 +270,7 @@ private:
                               bool restoreFixed, GnssCmdBuilder::CommandList &commands,
                               StartupPosition &position, String &error);
     bool verifyStartupReadback(GnssCmdBuilder::GnssSensorType detected, bool restoreFixed,
-                               const StartupPosition &expected, String &error);
+                               const StartupPosition &expected, String &error) const;
     void saveSurveyResult(JsonObjectConst bestPosition, const String &mode);
     void pollGnssStatus();
     void startBootAutoBaseWhenReady();
@@ -257,7 +284,7 @@ private:
     };
     void appendAutoBaseReport(JsonDocument &report, JsonObject payload, const ProjectedPosition &result,
                               double rawLatitude, double rawLongitude, double rawAltitude,
-                              const String &sourceMountpoint);
+                              const String &sourceMountpoint) const;
     bool applyAutoBasePosition(JsonDocument &report, const ProjectedPosition &result, size_t sampleCount,
                                const char *projectionSource, const String &provinceCode,
                                const String &provinceName, String &failureReason);
@@ -308,7 +335,7 @@ private:
     bool verifyGnssConfig(JsonObjectConst payload, const String &commandId, String &error);
     bool verifyUnicoreConfig(JsonObjectConst payload, const String &commandId, String &error);
     bool executeReferenceCheckCommand(JsonObject payload, String &error, String &detail);
-    bool executeProvinceCommand(JsonObject payload, String &error, String &detail);
+    bool executeProvinceCommand(JsonObject payload, String &error, String &detail) const;
     bool executeBasicCommand(const String &command, JsonObject payload,
                              String &error, String &detail);
     bool executeStreamCommand(JsonObject payload, String &error, String &detail);
@@ -326,14 +353,14 @@ private:
     void recordCommandResult(const String &command, const String &source,
                              const String &status, const String &detail,
                              const String &commandId);
-    void publishConfigState(const char *kind);
+    void publishConfigState(const char *kind) const;
     bool applyServiceStreamCommand(JsonObject payload, String &error);
     bool executeRawCommands(JsonArray commands, String &error, const String &sensorType = String());
 
     friend class BackendAgentWebsocket;
 };
 
-extern BackendAgent backendAgent;
+BackendAgent &backendAgent();
 
 // Expose device permissions and fail-open state to network transports.
 bool backendDeviceLocked(uint8_t serverId = 0);

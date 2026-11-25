@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <cinttypes>
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
 
@@ -55,8 +56,10 @@ bool readUnicoreExpectations(JsonObjectConst payload, std::array<double, 3> &wan
     return true;
 }
 bool containsExpectedLog(JsonArrayConst expectedLogs, const char *name) {
-    for (JsonVariantConst item : expectedLogs)
-        if (std::strcmp(item.as<const char *>(), name) == 0) return true;
+    for (JsonVariantConst item : expectedLogs) {
+        const char *itemName = item.as<const char *>();
+        if (itemName && std::strcmp(itemName, name) == 0) return true;
+    }
     return false;
 }
 void appendObservedUnicoreLogs(JsonArray observedLogs, const std::vector<UnicoreConfigVerification::Log> &logs) {
@@ -202,7 +205,7 @@ void describeTmode(JsonObject object, const uint8_t *raw) {
     if (raw[2] == 2) mode = "Fixed";
     else if (raw[2] == 1) mode = "Survey-In";
     object["mode"] = mode;
-    object["coordinate_type"] = raw[3] & 1 ? "LLA" : "ECEF";
+    object["coordinate_type"] = (std::byte{raw[3]} & std::byte{1}) != std::byte{} ? "LLA" : "ECEF";
     object["accuracy_m"] = UbxBaseStatus::u32(raw + 20) * 0.0001;
     UbxBaseStatus status;
     if (status.tmode(raw, 40) && status.hasPosition) {
@@ -236,7 +239,7 @@ void appendUbxPortBaud(JsonObject port, int portIndex) {
     if (portIndex != 1 && portIndex != 2) return;
     uint32_t baud = 0;
     String error;
-    if (UbloxReadback::readBaud(portIndex, baud, error)) port["baud"] = baud;
+    if (UbloxReadback::readBaud(static_cast<uint8_t>(portIndex), baud, error)) port["baud"] = baud;
     else port["baud"] = nullptr;
 }
 bool matchUbxOutputValues(const uint8_t *expected, size_t expectedLength,
@@ -465,7 +468,7 @@ void BackendAgent::updateUbloxSurveyState(const UbxBaseStatus &status)
         surveyInTargetSeconds_ = status.targetSeconds;
 }
 
-void BackendAgent::logUbloxReadback(const UbxBaseStatus &status)
+void BackendAgent::logUbloxReadback(const UbxBaseStatus &status) const
 {
     if (status.mode == 1)
     {
@@ -535,8 +538,7 @@ bool BackendAgent::refreshUnicoreReadback(String &error)
             surveyInMonitoring_ = false;
         }
         JsonObject bestPosition = readbackDoc["bestpos"].to<JsonObject>();
-        String positionError;
-        if (!UnicoreReadback::readBestPosition(bestPosition, positionError))
+        if (String positionError; !UnicoreReadback::readBestPosition(bestPosition, positionError))
         {
             surveyInReadbackHasPosition_ = false;
             bestPosition["state"] = "unavailable";
@@ -581,14 +583,12 @@ void BackendAgent::pollGnssStatus()
 {
     if ((sensorType_ != "Unicorecomm" && sensorType_ != "Ublox") || workflowActive() || stationLock_.all)
         return;
-    const uint32_t now = millis();
-    if (lastReceiverPollMs_ == 0 ? now < 5000UL : now - lastReceiverPollMs_ < 30000UL)
+    if (const uint32_t now = millis(); lastReceiverPollMs_ == 0 ? now < 5000UL : now - lastReceiverPollMs_ < 30000UL)
         return;
     String error;
     refreshReceiverReadback(error);
     if (sensorType_ != "Ublox") return;
-    UbxNavigation navigation;
-    if (UbloxReadback::readNavigation(navigation, error))
+    if (UbxNavigation navigation; UbloxReadback::readNavigation(navigation, error))
     {
         navigation_ = navigation;
         navigationMs_ = millis();
@@ -603,8 +603,7 @@ void BackendAgent::pollGnssStatus()
         receiverInfoMs_ = millis();
         markStatusDirty();
     }
-    String satellites;
-    if (UbloxReadback::readSatellites(satellites, error))
+    if (String satellites; UbloxReadback::readSatellites(satellites, error))
     {
         satelliteReadback_ = satellites;
         satelliteReadbackMs_ = millis();
